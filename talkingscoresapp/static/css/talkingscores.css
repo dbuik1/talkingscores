@@ -1,65 +1,217 @@
+/* ============================================= */
+/* FINAL CLEAN STYLESHEET                    */
+/* ============================================= */
+
+/* --- CSS Variables --- */
+:root {
+    /* General */
+    --background-color: #ffffff;
+    --text-color: #333333;
+    --link-color: #0056b3; /* Standard blue link for light mode */
+    --link-hover-decoration: none;
+
+    /* Navbar & Footer */
+    --navbar-bg: #343a40;
+    --navbar-link-color: rgba(255, 255, 255, 0.9);
+    --navbar-link-hover-color: #ffffff;
+    --footer-bg: #343a40;
+
+    /* Active Nav Link */
+    --tsactive-bg: yellow;
+    --tsactive-border: red;
+    --tsactive-color: black;
+    --tsactive-hover-color: white;
+
+    /* Theme Switch */
+    --switch-track-bg: #f1ebeb;
+    --switch-thumb-bg: #2F48CC;
+    --switch-icon-inactive: #8f8f8f;
+    --switch-icon-active-light: #f0db4f;
+}
+
+html[data-theme="dark"] {
+    /* General */
+    --background-color: #282c34;
+    --text-color: #f8f8f2;
+    --link-color: #90cfff; /* Bright blue for dark mode */
+    --link-hover-decoration: underline;
+
+    /* Navbar & Footer */
+    --navbar-bg: #1a1e24;
+    --footer-bg: #1a1e24;
+
+    /* Active Nav Link */
+    --tsactive-bg: #61dafb;
+    --tsactive-border: #f8f8f2;
+    --tsactive-color: #282c34;
+    --tsactive-hover-color: #282c34;
+    
+    /* Theme Switch */
+    --switch-track-bg: #333333;
+    --switch-thumb-bg: #526be9;
+    --switch-icon-inactive: #a0a0a0;
+    --switch-icon-active-dark: #61dafb;
+}
+
+/* --- General & Typography Styles --- */
 body {
-  padding-top: 50px;
-}
-.talking-scores {
-  padding: 40px 15px;
-  text-align: center;
-}
-
-.bold-heading {
-	font-size: 21px;
-	font-weight: bold;
-}
-
-.navbar-nav li:hover {
-	background-color: blue !important;
-}
-
-.tsactive {
-	color:black !important;
-	background-color:yellow !important;
-	border-bottom:3px solid red !important;
-}
-
-.tsactive:hover {
-	color:white !important;
-	background-color:yellow !important;
-	border-bottom:3px solid red !important;
-}
-
-.tsactive a {
-	color:black !important;
-}
-
-.tsactive a:hover {
-	color:white !important;
+    padding-top: 50px;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .tsp {
-	font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
-	font-size: 26px;
-	line-height: 1.4; 
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 26px;
+    line-height: 1.4; 
 }
 
-.bold {
-	font-weight: bold;
+/* --- Clean Link Styling (No Overrides Needed) --- */
+
+/* Rule for links on main site pages (homepage, etc.) */
+.talking-scores a {
+    color: var(--link-color);
+    text-decoration: underline;
 }
 
+/* Rule for links on the simple generated score pages */
+.score-page a {
+    color: var(--link-color);
+}
+
+/* Common hover effect for both types of pages */
+.talking-scores a:hover,
+.score-page a:hover {
+    text-decoration: var(--link-hover-decoration);
+}
+
+/* --- Layout, Navbar & Footer --- */
+.talking-scores {
+    padding: 40px 15px;
+    text-align: center;
+}
+
+.navbar, .footer {
+    background-color: var(--navbar-bg) !important; /* Bootstrap override */
+}
+
+/* Default navbar link colors (works for both light and dark themes) */
+.navbar-dark .navbar-nav .nav-link {
+    color: var(--navbar-link-color);
+}
+
+.navbar-dark .navbar-nav .nav-link:hover {
+    color: var(--navbar-link-hover-color);
+}
+
+/* Active page link styling */
+.tsactive {
+    background-color: var(--tsactive-bg) !important;
+    border-bottom: 3px solid var(--tsactive-border) !important;
+}
+.tsactive a.nav-link {
+    color: var(--tsactive-color) !important;
+}
+.tsactive a.nav-link:hover {
+    color: var(--tsactive-hover-color) !important;
+}
+
+/* --- Theme Switch --- */
+#theme-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    outline: none;
+    position: relative;
+    width: 60px;
+    height: 32px;
+    border-radius: 16px;
+    background-color: var(--switch-track-bg);
+    transition: background-color 0.3s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#theme-toggle::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: var(--switch-thumb-bg);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease;
+    z-index: 1;
+}
+
+html[data-theme="dark"] #theme-toggle::before {
+    transform: translateX(28px);
+}
+
+#theme-toggle .sun-icon,
+#theme-toggle .moon-icon {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%) scale(0.7); /* Scale for Bootstrap Icons */
+    pointer-events: none;
+    transition: color 0.3s ease;
+    z-index: 2;
+}
+
+#theme-toggle .sun-icon {
+    left: 4px;
+}
+
+#theme-toggle .moon-icon {
+    right: 4px;
+}
+
+/* --- Keyboard Accessibility for Theme Switch --- */
+#theme-toggle:focus-visible {
+    /* Creates a 3px blue glow around the switch when focused */
+    box-shadow: 0 0 0 3px rgb(255, 255, 255);
+}
+
+/* Icon colors for light mode */
+html[data-theme="light"] #theme-toggle .sun-icon {
+    color: var(--switch-icon-active-light);
+}
+html[data-theme="light"] #theme-toggle .moon-icon {
+    color: var(--switch-icon-inactive);
+}
+
+/* Icon colors for dark mode */
+html[data-theme="dark"] #theme-toggle .sun-icon {
+    color: var(--switch-icon-inactive);
+}
+html[data-theme="dark"] #theme-toggle .moon-icon {
+    color: var(--switch-icon-active-dark);
+}
+/* --- Loading Animation --- */
 .loading {
-	-webkit-animation:spin 2s linear infinite;
-	-moz-animation:spin 2s linear infinite;
-	animation:spin 2s linear infinite;
+    -webkit-animation: spin 2s linear infinite;
+    -moz-animation: spin 2s linear infinite;
+    animation: spin 2s linear infinite;
 }
-@-moz-keyframes spin { 100% {
-	-moz-transform:rotate(360deg);
-	}
+
+@-moz-keyframes spin {
+    100% {
+        -moz-transform: rotate(360deg);
+    }
 }
-@-webkit-keyframes spin { 100% {
-	-webkit-transform:rotate(360deg);
-	}
+
+@-webkit-keyframes spin {
+    100% {
+        -webkit-transform: rotate(360deg);
+    }
 }
-@keyframes spin { 100% {
-	-webkit-transform:rotate(360deg);
-	transform:rotate(360deg);
-	}
+
+@keyframes spin {
+    100% {
+        -webkit-transform: rotate(360deg);
+        transform: rotate(360deg);
+    }
 }
