@@ -1,5 +1,5 @@
 /* ============================================= */
-/* FINAL CLEAN STYLESHEET                    */
+/* FINAL STYLESHEET V5 - FINAL TS_ACTIVE & FORM FIX */
 /* ============================================= */
 
 /* --- CSS Variables --- */
@@ -7,23 +7,34 @@
     /* General */
     --background-color: #ffffff;
     --text-color: #333333;
-    --link-color: #0056b3; /* Standard blue link for light mode */
+    --link-color: #0056b3;
     --link-hover-decoration: none;
+    --focus-outline-color: #FFC107; /* Yellow for global focus */
+
+    /* Components */
+    --form-control-bg: #ffffff;
+    --form-control-color: #212529;
+    --form-control-border: #ced4da;
+    --btn-primary-bg: #0d6efd;
+    --btn-primary-color: #ffffff;
+    --btn-primary-hover-bg: #0b5ed7;
+    --alert-warning-bg: #fff3cd;
+    --alert-warning-color: #664d03;
+    --alert-warning-border: #ffecb5;
 
     /* Navbar & Footer */
     --navbar-bg: #343a40;
-    --navbar-link-color: rgba(255, 255, 255, 0.9);
+    --navbar-link-color: #ffffff;
     --navbar-link-hover-color: #ffffff;
-    --footer-bg: #343a40;
+    --navbar-hover-bg: #0a58ca;
 
     /* Active Nav Link */
-    --tsactive-bg: yellow;
-    --tsactive-border: red;
-    --tsactive-color: black;
-    --tsactive-hover-color: white;
+    --tsactive-bg: #f8f9fa;
+    --tsactive-border: var(--focus-outline-color); /* Use yellow for the border */
+    --tsactive-color: #212529;
 
     /* Theme Switch */
-    --switch-track-bg: #f1ebeb;
+    --switch-track-bg: #E0E0E0;
     --switch-thumb-bg: #2F48CC;
     --switch-icon-inactive: #8f8f8f;
     --switch-icon-active-light: #f0db4f;
@@ -33,18 +44,28 @@ html[data-theme="dark"] {
     /* General */
     --background-color: #282c34;
     --text-color: #f8f8f2;
-    --link-color: #90cfff; /* Bright blue for dark mode */
+    --link-color: #90cfff;
     --link-hover-decoration: underline;
+
+    /* Components */
+    --form-control-bg: #3b4049;
+    --form-control-color: #f8f8f2;
+    --form-control-border: #5c636a;
+    --btn-primary-bg: #0d6efd;
+    --btn-primary-color: #ffffff;
+    --btn-primary-hover-bg: #3385fd;
+    --alert-warning-bg: #4d3c0c;
+    --alert-warning-color: #ffda6a;
+    --alert-warning-border: #856404;
 
     /* Navbar & Footer */
     --navbar-bg: #1a1e24;
     --footer-bg: #1a1e24;
 
     /* Active Nav Link */
-    --tsactive-bg: #61dafb;
-    --tsactive-border: #f8f8f2;
-    --tsactive-color: #282c34;
-    --tsactive-hover-color: #282c34;
+    --tsactive-bg: #343a40;
+    --tsactive-border: var(--focus-outline-color); /* Use yellow for the border */
+    --tsactive-color: #ffffff;
     
     /* Theme Switch */
     --switch-track-bg: #333333;
@@ -67,24 +88,74 @@ body {
     line-height: 1.4; 
 }
 
-/* --- Clean Link Styling (No Overrides Needed) --- */
-
-/* Rule for links on main site pages (homepage, etc.) */
-.talking-scores a {
-    color: var(--link-color);
-    text-decoration: underline;
+/* --- Global Keyboard Focus Style --- */
+*:focus-visible {
+    outline: 3px solid var(--focus-outline-color) !important;
+    outline-offset: 2px;
+    box-shadow: none !important;
 }
 
-/* Rule for links on the simple generated score pages */
+/* --- Link Styling --- */
+.talking-scores a,
 .score-page a {
     color: var(--link-color);
+    text-decoration: underline;
+    outline-offset: 2px;
 }
-
-/* Common hover effect for both types of pages */
 .talking-scores a:hover,
 .score-page a:hover {
     text-decoration: var(--link-hover-decoration);
 }
+
+/* --- Component Styles (Alerts, Forms, Buttons) --- */
+.alert.alert-warning {
+    background-color: var(--alert-warning-bg);
+    color: var(--alert-warning-color);
+    border-color: var(--alert-warning-border);
+}
+
+.form-control {
+    background-color: var(--form-control-bg);
+    color: var(--form-control-color);
+    border: 1px solid var(--form-control-border);
+}
+
+.form-control:focus {
+    background-color: var(--form-control-bg);
+    color: var(--form-control-color);
+    border-color: var(--form-control-border);
+}
+
+/* FIX 2: Remove the focus outline from the file input's outer box */
+input[type="file"].form-control:focus-visible {
+    outline: none !important;
+}
+
+/* Apply focus ONLY to the inner "Choose File" button */
+.form-control:focus-visible::file-selector-button {
+     outline: 3px solid var(--focus-outline-color) !important;
+     outline-offset: -3px;
+}
+
+html[data-theme="dark"] .form-control::file-selector-button {
+    background-color: #495057;
+    color: #f8f8f2;
+    border-color: var(--form-control-border);
+}
+
+.btn.btn-primary {
+    background-color: var(--btn-primary-bg);
+    color: var(--btn-primary-color);
+    border-color: var(--btn-primary-bg);
+}
+.btn.btn-primary:hover {
+    background-color: var(--btn-primary-hover-bg);
+    border-color: var(--btn-primary-hover-bg);
+}
+.btn.btn-primary:focus {
+    box-shadow: none;
+}
+
 
 /* --- Layout, Navbar & Footer --- */
 .talking-scores {
@@ -93,125 +164,84 @@ body {
 }
 
 .navbar, .footer {
-    background-color: var(--navbar-bg) !important; /* Bootstrap override */
+    background-color: var(--navbar-bg) !important;
 }
 
-/* Default navbar link colors (works for both light and dark themes) */
+/* Default state for inactive links */
 .navbar-dark .navbar-nav .nav-link {
     color: var(--navbar-link-color);
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
 }
-
-.navbar-dark .navbar-nav .nav-link:hover {
+/* Hover and focus for inactive links */
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link:focus-visible {
     color: var(--navbar-link-hover-color);
+    background-color: var(--navbar-hover-bg);
 }
 
-/* Active page link styling */
-.tsactive {
-    background-color: var(--tsactive-bg) !important;
-    border-bottom: 3px solid var(--tsactive-border) !important;
+
+/* --- Active Page Link Styling (tsactive) --- */
+
+/* 1. Reset the parent <li> to prevent any style conflicts */
+li.tsactive {
+    background-color: transparent !important;
+    border-bottom: none !important;
+    padding: 0;
 }
+
+/* 2. Style the <a> link itself with the default grey background */
 .tsactive a.nav-link {
+    background-color: var(--tsactive-bg) !important;
     color: var(--tsactive-color) !important;
 }
-.tsactive a.nav-link:hover {
-    color: var(--tsactive-hover-color) !important;
+
+/* 3. On hover or focus, SWAP the background to the blue highlight */
+.tsactive a.nav-link:hover,
+.tsactive a.nav-link:focus-visible {
+    background-color: var(--navbar-hover-bg) !important;
+    color: var(--navbar-link-hover-color) !important;
 }
 
 /* --- Theme Switch --- */
 #theme-toggle {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    outline: none;
-    position: relative;
-    width: 60px;
-    height: 32px;
-    border-radius: 16px;
+    background: none; border: none; cursor: pointer; padding: 0;
+    position: relative; width: 60px; height: 32px; border-radius: 16px;
     background-color: var(--switch-track-bg);
     transition: background-color 0.3s ease;
     -webkit-tap-highlight-color: transparent;
 }
-
 #theme-toggle::before {
-    content: '';
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
+    content: ''; position: absolute; top: 4px; left: 4px;
+    width: 24px; height: 24px; border-radius: 50%;
     background-color: var(--switch-thumb-bg);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    transition: transform 0.3s ease;
-    z-index: 1;
+    transition: transform 0.3s ease; z-index: 1;
 }
-
 html[data-theme="dark"] #theme-toggle::before {
     transform: translateX(28px);
 }
-
 #theme-toggle .sun-icon,
 #theme-toggle .moon-icon {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%) scale(0.7); /* Scale for Bootstrap Icons */
-    pointer-events: none;
-    transition: color 0.3s ease;
+    position: absolute; top: 50%;
+    transform: translateY(-50%) scale(0.7);
+    pointer-events: none; transition: color 0.3s ease;
     z-index: 2;
 }
+#theme-toggle .sun-icon { left: 4px; }
+#theme-toggle .moon-icon { right: 4px; }
+html[data-theme="light"] #theme-toggle .sun-icon { color: var(--switch-icon-active-light); }
+html[data-theme="light"] #theme-toggle .moon-icon { color: var(--switch-icon-inactive); }
+html[data-theme="dark"] #theme-toggle .sun-icon { color: var(--switch-icon-inactive); }
+html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-active-dark); }
 
-#theme-toggle .sun-icon {
-    left: 4px;
-}
-
-#theme-toggle .moon-icon {
-    right: 4px;
-}
-
-/* --- Keyboard Accessibility for Theme Switch --- */
-#theme-toggle:focus-visible {
-    /* Creates a 3px blue glow around the switch when focused */
-    box-shadow: 0 0 0 3px rgb(255, 255, 255);
-}
-
-/* Icon colors for light mode */
-html[data-theme="light"] #theme-toggle .sun-icon {
-    color: var(--switch-icon-active-light);
-}
-html[data-theme="light"] #theme-toggle .moon-icon {
-    color: var(--switch-icon-inactive);
-}
-
-/* Icon colors for dark mode */
-html[data-theme="dark"] #theme-toggle .sun-icon {
-    color: var(--switch-icon-inactive);
-}
-html[data-theme="dark"] #theme-toggle .moon-icon {
-    color: var(--switch-icon-active-dark);
-}
 /* --- Loading Animation --- */
 .loading {
     -webkit-animation: spin 2s linear infinite;
     -moz-animation: spin 2s linear infinite;
     animation: spin 2s linear infinite;
 }
-
-@-moz-keyframes spin {
-    100% {
-        -moz-transform: rotate(360deg);
-    }
-}
-
-@-webkit-keyframes spin {
-    100% {
-        -webkit-transform: rotate(360deg);
-    }
-}
-
-@keyframes spin {
-    100% {
-        -webkit-transform: rotate(360deg);
-        transform: rotate(360deg);
-    }
-}
+@-moz-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
+@-webkit-keyframes spin { 100% { -webkit-transform: rotate(360deg); } }
+@keyframes spin { 100% { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
