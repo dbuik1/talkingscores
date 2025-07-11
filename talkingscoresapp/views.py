@@ -177,7 +177,41 @@ def options(request, id, filename):
         form = TalkingScoreGenerationOptionsForm(request.POST)
         if (form.is_valid() and form.cleaned_data["instruments"] != ''):
             instruments = list(map(int, eval(form.cleaned_data["instruments"])))
-            # Write out the options
+            
+            # --- START: NEW COLOR PROFILE LOGIC ---
+
+            # 1. Define the preset color profiles
+            color_profiles = {
+                "default": {
+                    "C": "#FF0000", "D": "#A52A2A", "E": "#808080", "F": "#0000FF",
+                    "G": "#000000", "A": "#FFFF00", "B": "#008000"
+                },
+                "classic": {
+                    "C": "#FF0000", "D": "#FFA500", "E": "#FFFF00", "F": "#008000",
+                    "G": "#0000FF", "A": "#4B0082", "B": "#EE82EE"
+                }
+            }
+            
+            # 2. Determine which profile the user selected
+            selected_profile = request.POST.get("colorProfile", "default")
+            
+            figure_note_colours = {}
+            if selected_profile == "custom":
+                # If custom, build the dictionary from the color picker inputs
+                figure_note_colours = {
+                    "C": request.POST.get("color_C"), "D": request.POST.get("color_D"),
+                    "E": request.POST.get("color_E"), "F": request.POST.get("color_F"),
+                    "G": request.POST.get("color_G"), "A": request.POST.get("color_A"),
+                    "B": request.POST.get("color_B"),
+                }
+            else:
+                # Otherwise, use one of the preset profiles
+                figure_note_colours = color_profiles.get(selected_profile)
+
+            # --- END: NEW COLOR PROFILE LOGIC ---
+
+
+            # Write out all the options, including the new color dictionary
             options = {}
             options["bars_at_a_time"] = int(form.cleaned_data["bars_at_a_time"])
             options["play_all"] = form.cleaned_data["chk_playAll"]
@@ -197,6 +231,9 @@ def options(request, id, filename):
             options["colour_pitch"] = form.cleaned_data["chk_colourPitch"]
             options["colour_rhythm"] = form.cleaned_data["chk_colourRhythm"]
             options["colour_octave"] = form.cleaned_data["chk_colourOctave"]
+            
+            # 3. Add the chosen color dictionary to the options file
+            options["figureNoteColours"] = figure_note_colours
 
             with open(options_path, "w") as options_fh:
                 json.dump(options, options_fh)
@@ -213,7 +250,6 @@ def options(request, id, filename):
     template = loader.get_template('options.html')
     context = {'form': form, 'score_info': score_info}
     return HttpResponse(template.render(context, request))
-
 
 # View for the main page
 def index(request):

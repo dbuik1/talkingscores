@@ -16,12 +16,59 @@ import logging.handlers
 import logging.config
 from music21 import *
 from lib.musicAnalyser import *
+import re
 us = environment.UserSettings()
 us['warnings'] = 0
 logger = logging.getLogger("TSScore")
 
 global settings
 
+def get_contrast_color(hex_color):
+    """
+    Calculates whether black or white text has a better contrast against a given hex color.
+    """
+    try:
+        hex_color = hex_color.lstrip('#')
+        rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        # Formula for luminance
+        luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255
+        # Return black for light backgrounds, white for dark backgrounds
+        return 'black' if luminance > 0.5 else 'white'
+    except ValueError:
+        # Fallback for invalid hex codes
+        return 'white'
+
+# Place this at the top of your talkingscoreslib.py file
+
+def render_colourful_output(text, pitchLetter, elementType, settings):
+    """
+    Wraps text in a styled <span> based on the current theme settings.
+    """
+    toRender = text
+
+    # Use the 'settings' dictionary that was passed in as a parameter
+    figureNoteColours = settings.get("figureNoteColours", {})
+
+    if settings.get("colourPosition") != "None" and figureNoteColours:
+        doColours = False
+        if (elementType == "pitch" and settings.get("colourPitch") == True):
+            doColours = True
+        if (elementType == "rhythm" and settings.get("colourRhythm") == True):
+            doColours = True
+        if (elementType == "octave" and settings.get("colourOctave") == True):
+            doColours = True
+
+        if doColours and pitchLetter in figureNoteColours:
+            chosen_color = figureNoteColours.get(pitchLetter) # Use .get for safety
+            
+            if chosen_color and settings.get("colourPosition") == "background":
+                contrast_color = get_contrast_color(chosen_color)
+                toRender = f"<span style='color:{contrast_color}; background-color:{chosen_color};'>{text}</span>"
+            
+            elif chosen_color and settings.get("colourPosition") == "text":
+                toRender = f"<span style='color:{chosen_color};'>{text}</span>"
+
+    return toRender
 
 class TSEvent(object, metaclass=ABCMeta):
     duration = None
@@ -32,34 +79,12 @@ class TSEvent(object, metaclass=ABCMeta):
     part = None
     tie = None
 
-    def render_colourful_output(self, text, pitchLetter, elementType):
-        figureNoteColours = {"C": "red", "D": "brown", "E": "grey", "F": "blue", "G": "black", "A": "yellow", "B": "green"}
-        figureNoteContrastTextColours = {"C": "white", "D": "white", "E": "white", "F": "white", "G": "white", "A": "black", "B": "white"}
-        toRender = text
-
-        if settings["colourPosition"] != "None":
-            doColours = False
-            if (elementType == "pitch" and settings["colourPitch"] == True):
-                doColours = True
-            if (elementType == "rhythm" and settings["colourRhythm"] == True):
-                doColours = True
-            if (elementType == "octave" and settings["colourOctave"] == True):
-                doColours = True
-
-            if doColours == True:
-                if settings["colourPosition"] == "background":
-                    toRender = "<span style='color:" + figureNoteContrastTextColours[pitchLetter] + "; background-color:" + figureNoteColours[pitchLetter] + ";'>" + text + "</span>"
-                elif settings["colourPosition"] == "text":
-                    toRender = "<span style='color:" + figureNoteColours[pitchLetter] + ";'>" + text + "</span>"
-
-        return toRender
-
-    def render(self, context=None, noteLetter=None):
+    def render(self, settings, context=None, noteLetter=None):
         rendered_elements = []
         if (context is None or context.duration != self.duration or self.tuplets != "" or settings['rhythmAnnouncement'] == "everyNote"):
             rendered_elements.append(self.tuplets)
             if (noteLetter != None):
-                rendered_elements.append(self.render_colourful_output(self.duration, noteLetter, "rhythm"))
+                rendered_elements.append(render_colourful_output(self.duration, noteLetter, "rhythm", settings))
             else:
                 rendered_elements.append(self.duration)
         rendered_elements.append(self.endTuplets)
@@ -81,7 +106,7 @@ class TSDynamic(TSEvent):
 
         self.short_name = short_name
 
-    def render(self, context=None):
+    def render(self, settings, context=None):
         return [self.long_name]
 
 
@@ -96,18 +121,17 @@ class TSPitch(TSEvent):
         self.pitch_number = pitch_number
         self.pitch_letter = pitch_letter
 
-    def render(self, context=None):
-        global settings
+    def render(self, settings, context=None):
         rendered_elements = []
         if settings['octavePosition'] == "before":
-            rendered_elements.append(self.render_octave(context))
-        rendered_elements.append(self.render_colourful_output(self.pitch_name, self.pitch_letter, "pitch"))
+            rendered_elements.append(self.render_octave(settings, context))
+        rendered_elements.append(render_colourful_output(self.pitch_name, self.pitch_letter, "pitch", settings))
         if settings['octavePosition'] == "after":
-            rendered_elements.append(self.render_octave(context))
+            rendered_elements.append(self.render_octave(settings, context))
 
         return rendered_elements
 
-    def render_octave(self, context=None):
+    def render_octave(self, settings, context=None):
         show_octave = False
         if settings['octaveAnnouncement'] == "brailleRules":
             if context == None:
@@ -133,7 +157,7 @@ class TSPitch(TSEvent):
                 show_octave = True
 
         if show_octave:
-            return self.render_colourful_output(self.octave, self.pitch_letter, "octave")
+            return render_colourful_output(self.octave, self.pitch_letter, "octave", settings)
         else:
             return ""
 
@@ -141,10 +165,10 @@ class TSPitch(TSEvent):
 class TSUnpitched(TSEvent):
     pitch = None
 
-    def render(self, context=None):
+    def render(self, settings, context=None):
         rendered_elements = []
         # Render the duration
-        rendered_elements.append(' '.join(super(TSUnpitched, self).render(context)))
+        rendered_elements.append(' '.join(super(TSUnpitched, self).render(settings, context)))
         # Render the pitch
         rendered_elements.append(' unpitched')
         return rendered_elements
@@ -153,10 +177,10 @@ class TSUnpitched(TSEvent):
 class TSRest(TSEvent):
     pitch = None
 
-    def render(self, context=None):
+    def render(self, settings, context=None):
         rendered_elements = []
         # Render the duration
-        rendered_elements.append(' '.join(super(TSRest, self).render(context)))
+        rendered_elements.append(' '.join(super(TSRest, self).render(settings, context)))
         # Render the pitch
         rendered_elements.append(' rest')
         return rendered_elements
@@ -166,15 +190,16 @@ class TSNote(TSEvent):
     pitch = None
     expressions = []
 
-    def render(self, context=None):
+    def render(self, settings, context=None):
         rendered_elements = []
-        # Render the expressions
         for exp in self.expressions:
             rendered_elements.append(exp.name + ', ')
-        # Render the duration
-        rendered_elements.append(' '.join(super(TSNote, self).render(context, self.pitch.pitch_letter)))
-        # Render the pitch
-        rendered_elements.append(' '.join(self.pitch.render(getattr(context, 'pitch', None))))
+
+         # This now correctly calls the parent render with settings
+        rendered_elements.append(' '.join(super().render(settings, context, self.pitch.pitch_letter)))
+
+        # This now correctly calls the pitch render with settings
+        rendered_elements.append(' '.join(self.pitch.render(settings, getattr(context, 'pitch', None))))
         return rendered_elements
 
 
@@ -184,12 +209,12 @@ class TSChord(TSEvent):
     def name(self):
         return ''
 
-    def render(self, context=None):
+    def render(self, settings, context=None):
         rendered_elements = [f'{len(self.pitches)}-note chord']
-        rendered_elements.append(' '.join(super(TSChord, self).render(context)))
+        rendered_elements.append(' '.join(super(TSChord, self).render(settings, context)))
         previous_pitch = None
         for pitch in sorted(self.pitches, key=lambda TSPitch: TSPitch.pitch_number):
-            rendered_elements.append(' '.join(pitch.render(previous_pitch)))
+            rendered_elements.append(' '.join(pitch.render(settings, previous_pitch)))
             previous_pitch = pitch
         return [', '.join(rendered_elements)]
 

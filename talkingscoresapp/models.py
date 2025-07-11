@@ -71,19 +71,29 @@ class TSScore(object):
             return TSScoreState.PROCESSED
 
     def info(self):
-        data_filepath = self.get_data_file_path()
-        score = Music21TalkingScore(data_filepath)
+        try:
+             data_filepath = self.get_data_file_path()
+             score = Music21TalkingScore(data_filepath)
 
-        return {
-            'title': score.get_title(),
-            'composer': score.get_composer(),
-            'time_signature': score.get_initial_time_signature(),
-            'key_signature': score.get_initial_key_signature(),
-            'tempo': score.get_initial_tempo(),
-            'instruments': score.get_instruments(),
-            'number_of_bars': score.get_number_of_bars(),
-            'number_of_parts': score.get_number_of_parts(),
+             return {
+                'title': score.get_title(),
+                'composer': score.get_composer(),
+                'time_signature': score.get_initial_time_signature(),
+                'key_signature': score.get_initial_key_signature(),
+                'tempo': score.get_initial_tempo(),
+                'instruments': score.get_instruments(),
+                'number_of_bars': score.get_number_of_bars(),
+                'number_of_parts': score.get_number_of_parts(),
         }
+        except Exception as e:
+            self.logger.exception(f"Failed to parse MusicXML info from {data_filepath}: {e}")
+            # Return a dictionary with default/error values
+            return {
+            'title': 'Error reading title',
+            'composer': 'Unknown',
+            'instruments': ['Error'],
+            # ... etc ...
+         }
 
     def store(self, src_filepath, filename):
 
@@ -141,22 +151,41 @@ class TSScore(object):
                 temporary_file.flush()
         temporary_file.close()
         return temporary_file.name
-
+   
     def html(self):
         data_path = self.get_data_file_path()
         html_path = self.get_data_file_path(root=os.path.join(BASE_DIR, STATIC_ROOT, 'data')) + '.html'
         web_path = os.path.dirname(self.get_data_file_path(root="/scores", createDirs=False))
-        if not os.path.exists(html_path):
+        
+        html_content = None
+
+        # First, check if a valid cached file already exists.
+        if os.path.exists(html_path):
+            self.logger.info(f"Cache hit. Reading existing HTML from {html_path}")
+            with open(html_path, 'r', encoding='utf-8') as html_fh:
+                html_content = html_fh.read()
+            
+            # If the file was empty, discard the content so it gets regenerated.
+            if not html_content or not html_content.strip():
+                self.logger.warning(f"Cached file at {html_path} was empty. Regenerating.")
+                html_content = None
+                os.remove(html_path) # Delete the corrupt empty file
+
+        # If there was no valid cached content, generate the file now.
+        if html_content is None:
+            self.logger.info(f"Generating new HTML for {html_path}")
             mxmlScore = Music21TalkingScore(data_path)
             tsf = HTMLTalkingScoreFormatter(mxmlScore)
-            html = tsf.generateHTML(output_path=os.path.dirname(html_path), web_path=web_path)
-            with open(html_path, "w") as fh:
-                fh.write(html)
-        else:
-            self.logger.info("Score already processed, fetching existing HTML")
-            with open(html_path, 'r') as html_fh:
-                html = html_fh.read()
-        return html
+            html_content = tsf.generateHTML(output_path=os.path.dirname(html_path), web_path=web_path)
+            
+            # Write the newly generated content to the cache file.
+            with open(html_path, "wb") as fh:
+                fh.write(html_content.encode('utf-8'))
+                
+        return html_content
+
+    # ... (your @classmethod methods like from_uploaded_file, etc.) ...
+
 
     @classmethod
     def from_uploaded_file(cls, uploaded_file):

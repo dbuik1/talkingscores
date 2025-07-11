@@ -174,7 +174,7 @@
                             {#  Loop over the events  #}
                             {% for event in events %}
                                 {% if not loop.first %}, {% endif %}
-                                {{ event.render(previous_event['value'])|join(' ') }}
+                                {{ event.render(settings, previous_event['value'])|join(' ') }}
                                 {#  Store the event for context next time around  #}
                                 {% set _ = previous_event.update({'value': event}) %}
                             {% endfor %} {# End loop over events #}
