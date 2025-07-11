@@ -5,86 +5,171 @@
 {% block meta-description %}Open source project to convert MusicXML files to a spoken description with audio segments - to make sheet music more accessible to print impaired musicians {% endblock %}
 
 {% block content %}
-        <div class="container">
-            <div class="talking-scores">
+<div class="container">
+    <div class="talking-scores">
+        
+        <h1>Talking Scores - making sheet music more accessible for blind and print impaired musicians</h1>
+
+        <div class="col-md-11 mx-auto text-start">
+            <p class="tsp">A Talking Scores is a spoken representation of sheet music / stave notation; often including recordings of the music being described.  Talking Scores are designed to assist blind / visually impaired / print impaired musicians to read sheet music / stave notation. </p>
+            <p class="tsp" style="font-style:italic; padding-left:50px;">
+                <b>Bar 1:</b> <br>
+                Time signature - 1 of 1 is 4 4. <br>
+                Key signature - 1 of 1 is 2 sharps. <br> <br>
+            
+                Beat 1: crotchet high D . <br>
+                Beat 2: quaver rest , mid A . <br>
+                Beat 3: crotchet high D . <br>
+                Beat 4: quaver rest , mid A . <br> <br>
+            
+                <b>Bar 2: </b> <br>
+                Beat 1: quaver high D , mid A . <br>
+                Beat 2: quaver high D , F . <br>
+                Beat 3: crotchet high A . <br>
+                Beat 4: crotchet rest . <br>
+            </p>
+            
+            <p class="tsp">End of Extract...</p>
+            
+            <p class="tsp">Producing a talking score manually can be time consuming, is often not a straightforward process and may require aspects tailored to individual musicians.</p>  
+            
+            <p class="tsp">This website can automatically produce a talking score from a MusicXML file.  It will produce a representation of the score as text (well formatted HTML), along with audio for the music; but you will need to use a screen reader to get the "talking" aspect of the Talking Score.</p> 
                 
-                <h1>Talking Scores - making sheet music more accessible for blind and print impaired musicians</h1>
+            <p class="tsp">This website also attempts to replicate some of the benefits of print music - ie the ease of navigation and freedom to choose what aspects are important to you as you progress through learning the score.  For example, the talking score begins with a summary that highlights what might "jump out" from a printed score - eg key changes / repeated sections / common rhythms etc.  You can change which parts (ie instruments) are played or described and other aspects such as section length.  The formatting allows for easy screen reader navigation between sections / bars / parts etc.  You can also customise how various aspects of the score are described - eg when to announce the octave and whether to use octave numbers or words.  </p>
         
-                <div class="col-md-11 mx-auto text-start">
-                    <p class="tsp">A Talking Scores is a spoken representation of sheet music / stave notation; often including recordings of the music being described.  Talking Scores are designed to assist blind / visually impaired / print impaired musicians to read sheet music / stave notation. </p>
-        
-                    <p class="tsp">This is a two bar extract from Eine kleine Nachtmusik by Mozart to demonstrate what a talking score is...</p>
-                    <p class="tsp" style="font-style:italic; padding-left:50px;">
-                        <b>Bar 1:</b> <br>
-                        Time signature - 1 of 1 is 4 4. <br>
-                        Key signature - 1 of 1 is 2 sharps. <br> <br>
-        
-                        Beat 1: crotchet high D . <br>
-                        Beat 2: quaver rest , mid A . <br>
-                        Beat 3: crotchet high D . <br>
-                        Beat 4: quaver rest , mid A . <br> <br>
-        
-                        <b>Bar 2: </b> <br>
-                        Beat 1: quaver high D , mid A . <br>
-                        Beat 2: quaver high D , F . <br>
-                        Beat 3: crotchet high A . <br>
-                        Beat 4: crotchet rest . <br>
-                    </p>
-        
-                    <p class="tsp">End of Extract...</p>
-        
-                    <p class="tsp">Producing a talking score manually can be time consuming, is often not a straightforward process and may require aspects tailored to individual musicians.</p>  
-                    
-                    <p class="tsp">This website can automatically produce a talking score from a MusicXML file.  It will produce a representation of the score as text (well formatted HTML), along with audio for the music; but you will need to use a screen reader to get the "talking" aspect of the Talking Score.</p> 
-                        
-                    <p class="tsp">This website also attempts to replicate some of the benefits of print music - ie the ease of navigation and freedom to choose what aspects are important to you as you progress through learning the score.  For example, the talking score begins with a summary that highlights what might "jump out" from a printed score - eg key changes / repeated sections / common rhythms etc.  You can change which parts (ie instruments) are played or described and other aspects such as section length.  The formatting allows for easy screen reader navigation between sections / bars / parts etc.  You can also customise how various aspects of the score are described - eg when to announce the octave and whether to use octave numbers or words.  </p>
-        
-                    <p class="tsp">This is an <a href="https://github.com/bentimms/talkingscores" target="_blank">open source project</a> - currently undertaken by a very small team; working in our spare time.  It is a work in progress and therefore may not always work correctly.  Please see the <a href="/change-log">Change Log</a> for latest updates or <a href="/contact-us">contact us</a> with questions / problems / feature requests etc. </p>      
+            <p class="tsp">This is an <a href="https://github.com/bentimms/talkingscores" target="_blank">open source project</a> - currently undertaken by a very small team; working in our spare time.  It is a work in progress and therefore may not always work correctly.  Please see the <a href="/change-log">Change Log</a> for latest updates or <a href="/contact-us">contact us</a> with questions / problems / feature requests etc. </p>      
+        </div>
+                
+        <hr>
+
+        <div id="drop-zone">
+            <h3><b>Upload or provide a URL to a MusicXML file.</b></h3>
+
+            <form class="form-horizontal text-center mx-auto" action="/" method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="form-group mx-auto">
+                    <label for="id_filename" class="col-sm-3 control-label">Upload</label>
+                    <div class="col-sm-6 mx-auto">
+                        <div class="custom-file-upload">
+                            <input type="file" id="id_filename" name="filename">
+                            <label for="id_filename" class="btn btn-secondary btn-lg" tabindex="0" id="id_filename_label">Choose File</label>
+                            <span id="file-chosen-name">No file selected</span>
+
+                            <button type="button" id="clear-file-button" class="clear-file-btn" aria-label="Clear selected file" hidden>&times;</button>
+                        </div>
+                    </div>
                 </div>
-                        
-                <hr>
-        
-                <h3><b>Upload or provide a URL to a MusicXML file.</b></h3>
-        
-                <form class="form-horizontal text-center mx-auto" action="/" method="post" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    
-                    <div class="form-group mx-auto">
-                        <label for="id_filename" class="col-sm-3 control-label">Upload</label>
-        
-                        <div class="col-sm-6 mx-auto">
-                            <input type="file" class="form-control input-lg mx-auto" id="id_filename" name="filename">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="col-sm-offset-3 col-sm-6 mx-auto"><p class="tsp">or</p></div>
-                    </div>
-                    <div class="form-group">
-                        <label for="id_url" class="col-sm-3 control-label">URL</label>
-        
-                        <div class="col-sm-6 mx-auto">
-                            <input type="url" class="form-control input-lg " id="id_url" name="url">
-                        </div>
-                    </div>
-                    <br>
-                    <div class="form-group">
-                        <div class="col-sm-offset-3 col-sm-6 mx-auto">
-                            <button type="submit" class="btn btn-primary btn-lg">Generate Talking Score</button>
-                        </div>
-                    </div>
-                </form>
-        
-                <hr>
-                <h3><b>Example scores</b></h3>
-                <p class="tsp">These example scores have been produced by this website and should give a good idea of what a Talking Score is.  They might not have been produced by the latest version of the code.</p>
-                <ul class="list-unstyled">
-                    
-                        <li class="tsp"><a href="/static/data/Faure-Sicilienne-cello-010323.html">Faure-Sicilienne-cello-010323.html</a></li> <br>
-                    
-                        <li class="tsp"><a href="/static/data/macdowell-to-a-wild-rose-010323.html">macdowell-to-a-wild-rose-010323.html</a></li> <br>
-                    
-                </ul>
+
+                <div class="form-group">
+                    <div class="col-sm-offset-3 col-sm-6 mx-auto"><p class="tsp">or</p></div>
                 </div>
-        
-            </div>
+
+                <div class="form-group">
+                    <label for="id_url" class="col-sm-3 control-label">URL</label>
+                    <div class="col-sm-6 mx-auto">
+                        <input type="url" class="form-control input-lg " id="id_url" name="url">
+                    </div>
+                </div>
+                <br>
+                <div class="form-group">
+                    <div class="col-sm-offset-3 col-sm-6 mx-auto">
+                        <button type="submit" class="btn btn-primary btn-lg">Generate Talking Score</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <hr>
+
+        <h3><b>Example scores</b></h3>
+        <p class="tsp">These example scores have been produced by this website...</p>
+        <ul class="list-unstyled">
+            <li class="tsp"><a href="/static/data/Faure-Sicilienne-cello-010323.html">Faure-Sicilienne-cello-010323.html</a></li> <br>
+            <li class="tsp"><a href="/static/data/macdowell-to-a-wild-rose-010323.html">macdowell-to-a-wild-rose-010323.html</a></li> <br>
+        </ul>
+    </div>
+</div>
 {% endblock content %}
+
+{% block javascript %}
+<script>
+// This script only runs on the homepage
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('id_filename');
+    const fileChosenSpan = document.getElementById('file-chosen-name');
+    const fileInputLabel = document.getElementById('id_filename_label');
+    const dropZone = document.getElementById('drop-zone');
+    const clearFileButton = document.getElementById('clear-file-button'); // Get the new button
+
+    // --- Function to update the display based on file selection ---
+    function updateFileDisplay() {
+        if (fileInput.files.length > 0) {
+            // If a file is selected:
+            fileChosenSpan.textContent = fileInput.files[0].name;
+            clearFileButton.hidden = false; // Show the clear button
+        } else {
+            // If no file is selected:
+            fileChosenSpan.textContent = 'No file selected';
+            clearFileButton.hidden = true; // Hide the clear button
+        }
+    }
+
+    // --- Function to handle file selection (from click OR drop) ---
+    function handleFileSelect(file) {
+        if (file) {
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            fileInput.files = dataTransfer.files;
+            updateFileDisplay(); // Update the UI
+        }
+    }
+
+    if (fileInput) {
+        // Update display when a file is chosen via the button
+        fileInput.addEventListener('change', updateFileDisplay);
+    }
+
+    if (fileInputLabel) {
+        // Allow 'Enter' key to activate the file input button
+        fileInputLabel.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                fileInput.click();
+            }
+        });
+    }
+
+    // --- NEW: Logic for the 'Clear File' button ---
+    if (clearFileButton) {
+        clearFileButton.addEventListener('click', function() {
+            fileInput.value = ''; // This is the standard way to clear a file input
+            updateFileDisplay(); // Update the UI to show "No file selected"
+        });
+    }
+
+    if (dropZone) {
+        // Drag-and-Drop event listeners...
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, e => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
+        });
+        // Handle the dropped file and update the display
+        dropZone.addEventListener('drop', e => {
+            const droppedFile = e.dataTransfer.files[0];
+            handleFileSelect(droppedFile);
+        }, false);
+    }
+
+    // Set the initial state when the page loads
+    updateFileDisplay();
+});
+</script>
+{% endblock %}

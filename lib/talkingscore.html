@@ -7,7 +7,7 @@
     
     <script type='text/javascript' src='//www.midijs.net/lib/midi.js'></script> 
 
-    <link href="../static/css/talkingscores.css" rel="stylesheet">
+    <link href="http://127.0.0.1:8000/static/css/talkingscores.css" rel="stylesheet">
 
     <script>
       (function() {
@@ -24,6 +24,14 @@
             margin-block-end:1rem;
         }
     </style>
+    <script>
+        (function() {
+          // Check for a saved theme in localStorage, or default to light
+          const theme = localStorage.getItem('theme-preference') || 'light';
+          // Apply the theme to the root <html> element
+          document.documentElement.setAttribute('data-theme', theme);
+        })();
+      </script>
 </head>
 <body class="score-page">
 

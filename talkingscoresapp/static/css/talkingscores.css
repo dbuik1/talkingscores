@@ -1,15 +1,20 @@
 /* ============================================= */
-/* FINAL STYLESHEET V5 - FINAL TS_ACTIVE & FORM FIX */
+/* TALKING SCORES STYLESHEET (FINAL)             */
 /* ============================================= */
 
-/* --- CSS Variables --- */
+
+/* --- 1. CSS Variables --- */
 :root {
     /* General */
     --background-color: #ffffff;
     --text-color: #333333;
     --link-color: #0056b3;
     --link-hover-decoration: none;
-    --focus-outline-color: #FFC107; /* Yellow for global focus */
+    --focus-outline-color: #FFC107;
+
+    /* Accent & Highlight Colors */
+    --accent-highlight-bg: #0a58ca;
+    --accent-highlight-color: #ffffff;
 
     /* Components */
     --form-control-bg: #ffffff;
@@ -21,16 +26,14 @@
     --alert-warning-bg: #fff3cd;
     --alert-warning-color: #664d03;
     --alert-warning-border: #ffecb5;
+    --clear-btn-color: #dc3545;
 
     /* Navbar & Footer */
     --navbar-bg: #343a40;
     --navbar-link-color: #ffffff;
-    --navbar-link-hover-color: #ffffff;
-    --navbar-hover-bg: #0a58ca;
 
     /* Active Nav Link */
     --tsactive-bg: #f8f9fa;
-    --tsactive-border: var(--focus-outline-color); /* Use yellow for the border */
     --tsactive-color: #212529;
 
     /* Theme Switch */
@@ -51,12 +54,11 @@ html[data-theme="dark"] {
     --form-control-bg: #3b4049;
     --form-control-color: #f8f8f2;
     --form-control-border: #5c636a;
-    --btn-primary-bg: #0d6efd;
-    --btn-primary-color: #ffffff;
     --btn-primary-hover-bg: #3385fd;
     --alert-warning-bg: #4d3c0c;
     --alert-warning-color: #ffda6a;
     --alert-warning-border: #856404;
+    --clear-btn-color: #ff8a8a;
 
     /* Navbar & Footer */
     --navbar-bg: #1a1e24;
@@ -64,7 +66,6 @@ html[data-theme="dark"] {
 
     /* Active Nav Link */
     --tsactive-bg: #343a40;
-    --tsactive-border: var(--focus-outline-color); /* Use yellow for the border */
     --tsactive-color: #ffffff;
     
     /* Theme Switch */
@@ -74,7 +75,8 @@ html[data-theme="dark"] {
     --switch-icon-active-dark: #61dafb;
 }
 
-/* --- General & Typography Styles --- */
+
+/* --- 2. General & Typography --- */
 body {
     padding-top: 50px;
     background-color: var(--background-color);
@@ -88,14 +90,14 @@ body {
     line-height: 1.4; 
 }
 
-/* --- Global Keyboard Focus Style --- */
+
+/* --- 3. Accessibility & Global Styles --- */
 *:focus-visible {
     outline: 3px solid var(--focus-outline-color) !important;
     outline-offset: 2px;
     box-shadow: none !important;
 }
 
-/* --- Link Styling --- */
 .talking-scores a,
 .score-page a {
     color: var(--link-color);
@@ -107,104 +109,57 @@ body {
     text-decoration: var(--link-hover-decoration);
 }
 
-/* --- Component Styles (Alerts, Forms, Buttons) --- */
+
+/* --- 4. Main Layout & Components --- */
+.talking-scores {
+    padding: 40px 15px;
+    text-align: center;
+}
+
 .alert.alert-warning {
     background-color: var(--alert-warning-bg);
     color: var(--alert-warning-color);
     border-color: var(--alert-warning-border);
 }
 
-.form-control {
-    background-color: var(--form-control-bg);
-    color: var(--form-control-color);
-    border: 1px solid var(--form-control-border);
-}
-
-.form-control:focus {
-    background-color: var(--form-control-bg);
-    color: var(--form-control-color);
-    border-color: var(--form-control-border);
-}
-
-/* FIX 2: Remove the focus outline from the file input's outer box */
-input[type="file"].form-control:focus-visible {
-    outline: none !important;
-}
-
-/* Apply focus ONLY to the inner "Choose File" button */
-.form-control:focus-visible::file-selector-button {
-     outline: 3px solid var(--focus-outline-color) !important;
-     outline-offset: -3px;
-}
-
-html[data-theme="dark"] .form-control::file-selector-button {
-    background-color: #495057;
-    color: #f8f8f2;
-    border-color: var(--form-control-border);
-}
-
-.btn.btn-primary {
-    background-color: var(--btn-primary-bg);
-    color: var(--btn-primary-color);
-    border-color: var(--btn-primary-bg);
-}
-.btn.btn-primary:hover {
-    background-color: var(--btn-primary-hover-bg);
-    border-color: var(--btn-primary-hover-bg);
-}
-.btn.btn-primary:focus {
-    box-shadow: none;
+.footer {
+    background-color: var(--footer-bg) !important;
 }
 
 
-/* --- Layout, Navbar & Footer --- */
-.talking-scores {
-    padding: 40px 15px;
-    text-align: center;
-}
-
-.navbar, .footer {
+/* --- 5. Navbar Styling --- */
+.navbar {
     background-color: var(--navbar-bg) !important;
 }
 
-/* Default state for inactive links */
 .navbar-dark .navbar-nav .nav-link {
     color: var(--navbar-link-color);
     padding: 0.5rem 0.75rem;
     border-radius: 4px;
     transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
 }
-/* Hover and focus for inactive links */
 .navbar-dark .navbar-nav .nav-link:hover,
 .navbar-dark .navbar-nav .nav-link:focus-visible {
-    color: var(--navbar-link-hover-color);
-    background-color: var(--navbar-hover-bg);
+    color: var(--accent-highlight-color);
+    background-color: var(--accent-highlight-bg);
 }
 
-
-/* --- Active Page Link Styling (tsactive) --- */
-
-/* 1. Reset the parent <li> to prevent any style conflicts */
+/* Active Nav Link (.tsactive) */
 li.tsactive {
     background-color: transparent !important;
-    border-bottom: none !important;
     padding: 0;
 }
-
-/* 2. Style the <a> link itself with the default grey background */
 .tsactive a.nav-link {
     background-color: var(--tsactive-bg) !important;
     color: var(--tsactive-color) !important;
 }
-
-/* 3. On hover or focus, SWAP the background to the blue highlight */
 .tsactive a.nav-link:hover,
 .tsactive a.nav-link:focus-visible {
-    background-color: var(--navbar-hover-bg) !important;
-    color: var(--navbar-link-hover-color) !important;
+    background-color: var(--accent-highlight-bg) !important;
+    color: var(--accent-highlight-color) !important;
 }
 
-/* --- Theme Switch --- */
+/* Theme Toggle Switch */
 #theme-toggle {
     background: none; border: none; cursor: pointer; padding: 0;
     position: relative; width: 60px; height: 32px; border-radius: 16px;
@@ -236,7 +191,119 @@ html[data-theme="light"] #theme-toggle .moon-icon { color: var(--switch-icon-ina
 html[data-theme="dark"] #theme-toggle .sun-icon { color: var(--switch-icon-inactive); }
 html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-active-dark); }
 
-/* --- Loading Animation --- */
+
+/* --- 6. Forms & Buttons --- */
+
+/* Standard Form Controls */
+.form-control {
+    background-color: var(--form-control-bg);
+    color: var(--form-control-color);
+    border: 1px solid var(--form-control-border);
+}
+.form-control:focus {
+    background-color: var(--form-control-bg);
+    color: var(--form-control-color);
+    border-color: var(--form-control-border);
+    /* This next line is the crucial part that was missing */
+    box-shadow: none; 
+}
+
+/* Primary Button */
+.btn.btn-primary {
+    background-color: var(--btn-primary-bg);
+    color: var(--btn-primary-color);
+    border-color: var(--btn-primary-bg);
+}
+.btn.btn-primary:hover {
+    background-color: var(--btn-primary-hover-bg);
+    border-color: var(--btn-primary-hover-bg);
+}
+.btn.btn-primary:focus {
+    box-shadow: none;
+}
+
+/* Drag and Drop Zone */
+#drop-zone {
+    position: relative;
+    padding: 2rem;
+    border: 3px dashed transparent;
+    border-radius: 0.5rem;
+    transition: border-color 0.3s ease-in-out;
+}
+#drop-zone.drag-over {
+    border-color: var(--accent-highlight-bg);
+}
+
+/* Custom File Input */
+.custom-file-upload {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    text-align: left;
+    /* REMOVED: justify-content: center; to fix alignment */
+}
+.custom-file-upload input[type="file"] {
+    display: none;
+}
+.custom-file-upload .btn {
+    background-color: #6c757d;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+}
+.custom-file-upload .btn:hover,
+.custom-file-upload .btn:focus-visible {
+    background-color: var(--accent-highlight-bg);
+}
+#file-chosen-name {
+    font-size: 1rem;
+    font-style: italic;
+    color: var(--text-color);
+}
+
+/* Styling for the new 'clear file' button */
+#clear-file-button {
+    /* Use Bootstrap's built-in close button styles */
+    background-color: transparent;
+    border: none;
+    font-size: 1.25rem;
+    opacity: 0.7;
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+#clear-file-button:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+/* Make the file name span shrink to make room for the button */
+#file-chosen-name {
+    flex-shrink: 1;
+    min-width: 0; /* Allows the text to truncate with ellipsis if needed */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Styling for the custom 'clear file' button */
+.clear-file-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 0.5rem;
+    font-size: 1.5rem;
+    font-weight: bold;
+    line-height: 1;
+    color: var(--clear-btn-color);
+    opacity: 0.7;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.clear-file-btn:hover {
+    opacity: 1;
+}
+
+
+/* --- 7. Animations --- */
 .loading {
     -webkit-animation: spin 2s linear infinite;
     -moz-animation: spin 2s linear infinite;
