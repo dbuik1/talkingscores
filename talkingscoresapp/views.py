@@ -251,15 +251,18 @@ def options(request, id, filename):
             "octave_description": request.POST.get("octave_description", "name"),
             "octave_position": request.POST.get("octave_position", "before"),
             "octave_announcement": request.POST.get("octave_announcement", "onChange"),
+            "repetition_mode": request.POST.get("repetition_mode", "learning"),
             "colour_position": request.POST.get("colour_style", "none"),
-            "colour_pitch": "chk_colourPitch" in request.POST,
-            "advanced_colouring": "chk_advancedColour" in request.POST,
             
+            # --- FIX: Independent colouring settings ---
+            "colour_pitch": "chk_colourPitch" in request.POST,
+            "rhythm_colour_mode": request.POST.get("rhythm_colour_mode", "none"),
+            "octave_colour_mode": request.POST.get("octave_colour_mode", "none"),
+            
+            # --- FIX: Keep advanced dictionaries ---
             "advanced_rhythm_colours": advanced_rhythm_colours,
             "advanced_octave_colours": advanced_octave_colours,
-
-            "figureNoteColours": figure_note_colours,
-            "repetition_announcement": "chk_repetition_detailed" in request.POST,
+            "figureNoteColours": figure_note_colours
         }
 
         # 4. Write the new options to the .opts file.

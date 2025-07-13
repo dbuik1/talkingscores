@@ -49,26 +49,34 @@ def get_contrast_color(hex_color):
 
 def render_colourful_output(text, pitchLetter, elementType, settings):
     """
-    Wraps text in a styled <span> based on the current theme settings.
+    Wraps text in a styled <span>. Supports independent and inherited colouring.
     """
     toRender = text
     color_to_use = None
+    pitch_color = settings.get("figureNoteColours", {}).get(pitchLetter)
 
-    # Determine the correct color based on element type and settings
     if elementType == "pitch" and settings.get("colourPitch"):
-        color_to_use = settings.get("figureNoteColours", {}).get(pitchLetter)
+        color_to_use = pitch_color
 
-    elif settings.get("advanced_colouring"):
-        if elementType == "rhythm":
+    elif elementType == "rhythm":
+        mode = settings.get("rhythm_colour_mode", "none")
+        if mode == 'inherit' and settings.get("colourPitch"):
+            color_to_use = pitch_color
+        elif mode == 'custom':
             rhythm_colours = settings.get("advanced_rhythm_colours", {})
-            for rhythm_name, color in rhythm_colours.items():
-                if rhythm_name in text.lower():
+            slug_text = text.lower().replace(" ", "-")
+            for rhythm_slug, color in rhythm_colours.items():
+                if rhythm_slug in slug_text:
                     color_to_use = color
                     break
-        elif elementType == "octave":
+    
+    elif elementType == "octave":
+        mode = settings.get("octave_colour_mode", "none")
+        if mode == 'inherit' and settings.get("colourPitch"):
+            color_to_use = pitch_color
+        elif mode == 'custom':
             octave_colours = settings.get("advanced_octave_colours", {})
             octave_text = text.lower()
-            # Check for high, mid, or low categories for all octave description types
             if any(term in octave_text for term in ["high", "top", "5", "6", "7"]):
                 color_to_use = octave_colours.get("high")
             elif any(term in octave_text for term in ["mid", "4"]):
@@ -76,13 +84,9 @@ def render_colourful_output(text, pitchLetter, elementType, settings):
             elif any(term in octave_text for term in ["low", "bottom", "1", "2", "3"]):
                 color_to_use = octave_colours.get("low")
     
-    # If not in advanced mode, rhythm and octave inherit the pitch color
-    elif elementType in ["rhythm", "octave"] and settings.get("colourPitch"):
-         color_to_use = settings.get("figureNoteColours", {}).get(pitchLetter)
-
-    # Final check before rendering the span
-    if settings.get("colourPosition") != "None" and color_to_use:
-        if settings.get("colourPosition") == "background":
+    if settings.get("colourPosition") != "none" and color_to_use:
+        style_type = settings.get("colourPosition")
+        if style_type == "background":
             contrast_color = get_contrast_color(color_to_use)
             toRender = f"<span style='color:{contrast_color}; background-color:{color_to_use};'>{text}</span>"
         else: # 'text'
@@ -948,9 +952,12 @@ class HTMLTalkingScoreFormatter():
             'octaveAnnouncement': self.options.get("octave_announcement", "onChange"),
             'colourPosition': self.options.get("colour_position", "none"),
             'colourPitch': self.options.get("colour_pitch", False),
-            'colourRhythm': self.options.get("colour_rhythm", False),
-            'colourOctave': self.options.get("colour_octave", False),
+            'rhythm_colour_mode': self.options.get("rhythm_colour_mode", "none"),
+            'octave_colour_mode': self.options.get("octave_colour_mode", "none"),
             'figureNoteColours': self.options.get("figureNoteColours", {}),
+            'advanced_rhythm_colours': self.options.get("advanced_rhythm_colours", {}),
+            'advanced_octave_colours': self.options.get("advanced_octave_colours", {}),
+            'repetition_mode': self.options.get('repetition_mode', 'learning')
         }
 
     def generateHTML(self, output_path="", web_path=""):
@@ -1004,6 +1011,7 @@ class HTMLTalkingScoreFormatter():
             'general_summary': self.music_analyser.general_summary,
             'repetition_in_contexts': self.music_analyser.repetition_in_contexts,
             'selected_part_names': self.score.selected_part_names,
+            'immediate_repetition_contexts': self.music_analyser.immediate_repetition_contexts,
         })
     def _trigger_midi_generation(self, start_bar, end_bar):
             # Local imports to prevent circular dependency at startup

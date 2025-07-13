@@ -84,6 +84,8 @@ class MusicAnalyser:
         self.summary_parts = []
         self.repetition_in_contexts = {}  # key = part index
         self.general_summary = ""
+        # FIX: Initialize the new context dictionary
+        self.immediate_repetition_contexts = {} 
 
         analyse_index = 0
         for ins in ts.part_instruments:
@@ -97,6 +99,9 @@ class MusicAnalyser:
                     summary += self.analyse_parts[analyse_index].describe_repetition_summary()
                     self.repetition_in_contexts[part_index] = (self.analyse_parts[analyse_index].describe_repetition_in_context())
                     self.summary_parts.append(summary)
+
+                    # FIX: Call the new method to get "Learning Mode" repetition info
+                    self.immediate_repetition_contexts[part_index] = self.analyse_parts[analyse_index].describe_immediate_repetition()
 
                     # self.repetition_parts.append(self.analyse_parts[analyse_index].describe_repetition())
                     analyse_index = analyse_index + 1
@@ -205,6 +210,23 @@ class AnalysePart:
         0.0625: 'hemi-demi-semi-quavers',
         0.0: 'grace notes',
     }
+
+    def describe_immediate_repetition(self):
+        context = {}
+        bar_numbers = sorted(self.measure_indexes.keys())
+        for i, current_bar in enumerate(bar_numbers):
+            # Can only compare if it's not the very first bar of the part
+            if i > 0:
+                previous_bar = bar_numbers[i-1]
+                # We only want to announce for immediately sequential bars
+                if current_bar == previous_bar + 1:
+                    # Check for an exact match first (highest priority)
+                    if self.is_measure_used_at(self.measure_analyse_indexes_all, previous_bar, current_bar):
+                        context[current_bar] = {'type': 'exact', 'text': 'Same as previous bar.'}
+                    # If not an exact match, check for a rhythm-only match
+                    elif self.is_measure_used_at(self.measure_rhythm_analyse_indexes_all, previous_bar, current_bar):
+                        context[current_bar] = {'type': 'rhythm', 'text': 'Same rhythm as previous bar.'}
+        return context
 
     def compare_sections(self, s1: AnalyseSection, s2: AnalyseSection, compare_type):
         to_return = True

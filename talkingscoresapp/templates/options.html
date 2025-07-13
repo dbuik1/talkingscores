@@ -52,194 +52,146 @@
     <h1 class="text-center">Options</h1>
     
     <div class="tsp">
-        <form class="form-horizontal" method="post">
-            {% csrf_token %}
+<form class="form-horizontal" method="post">
+    {% csrf_token %}
 
-            <h2 class="bold">Playback &amp; Instruments</h2>
-            <div class="form-group">
+    <fieldset class="mb-4">
+        <legend class="h2 bold">Playback &amp; Instruments</legend>
+        <div class="form-group">
+            <div class="checkbox">
+                <input type="checkbox" name="chk_playAll" id="chk_playAll" value="checked" checked="checked" aria-label="Play all parts together"/>
+                <label for="chk_playAll">Play all parts together</label>
+            </div>
+            <div class="checkbox">
+                <input type="checkbox" name="chk_playSelected" id="chk_playSelected" value="checked" checked="checked" aria-label="Play all selected parts together"/>
+                <label for="chk_playSelected">Play all selected parts together</label>
+            </div>
+            <div class="checkbox">
+                <input type="checkbox" name="chk_playUnselected" id="chk_playUnselected" value="checked" checked="checked" aria-label="Play all unselected parts together"/>
+                <label for="chk_playUnselected">Play all unselected parts together</label>
+            </div>
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="instruments" class="h4">Instruments to Describe:</label>
+            {% for instrument in score_info.instruments %}
                 <div class="checkbox">
-                    <input type="checkbox" name="chk_playAll" id="chk_playAll" value="checked" checked="checked" aria-label="Play all parts together"/>
-                    <label for="chk_playAll">Play all parts together</label>
+                    <input type="checkbox" name="instruments" id="instrument_{{ forloop.counter }}" value="{{ forloop.counter }}" checked="checked" aria-label="{{ instrument }}">
+                    <label for="instrument_{{ forloop.counter }}">{{ instrument }}</label>
                 </div>
-                <div class="checkbox">
-                    <input type="checkbox" name="chk_playSelected" id="chk_playSelected" value="checked" checked="checked" aria-label="Play all selected parts together"/>
-                    <label for="chk_playSelected">Play all selected parts together</label>
-                </div>
-                <div class="checkbox">
-                    <input type="checkbox" name="chk_playUnselected" id="chk_playUnselected" value="checked" checked="checked" aria-label="Play all unselected parts together"/>
-                    <label for="chk_playUnselected">Play all unselected parts together</label>
-                </div>
-            </div>
-            <br>
-            <div class="form-group">
-                <label for="instruments" class="h4">Selected instruments:</label>
-                {% for instrument in score_info.instruments %}
-                    <div class="checkbox">
-                        <input type="checkbox" name="instruments" id="instrument_{{ forloop.counter }}" value="{{ forloop.counter }}" checked="checked" aria-label="{{ instrument }}">
-                        <label for="instrument_{{ forloop.counter }}">
-                            {{ instrument }}
-                        </label>
-                    </div>
-                {% endfor %}
-            </div>
-            <hr>
+            {% endfor %}
+        </div>
+    </fieldset>
 
-            <h2 class="bold">Description Content</h2>
-            <div class="form-group">
-                <label for="bars_at_a_time">Bars at a time</label>
-                <select name="bars_at_a_time" id="bars_at_a_time" class="form-control">
-                    <option>1</option>
-                    <option selected>2</option>
-                    <option>4</option>
-                    <option>8</option>
-                </select>
-                <br/>
+    <fieldset class="mb-4">
+        <legend class="h2 bold">Description Content</legend>
+        <div class="form-group">
+            <label for="bars_at_a_time">Bars at a time</label>
+            <select name="bars_at_a_time" id="bars_at_a_time" class="form-control">
+                <option>1</option>
+                <option selected>2</option>
+                <option>4</option>
+                <option>8</option>
+            </select>
+            <br/>
 
-                <label for="pitch_description">Pitch description</label>
-                <select name="pitch_description" id="pitch_description" class="form-control">
-                    <option value="colourNotes">Coloured Notes (red / brown)</option>
-                    <option value="noteName" selected>Note names (C / D)</option>
-                    <option value="none">None</option>
-                    <option value="phonetic">Phonetic (Charlie / Delta)</option>
-                </select>
-                <br/>
+            <label for="pitch_description">Pitch Description</label>
+            <select name="pitch_description" id="pitch_description" class="form-control">
+                <option value="noteName" selected>Note Names (e.g., C, D, E)</option>
+                <option value="colourNotes">Coloured Notes (e.g., red, brown)</option>
+                <option value="phonetic">Phonetic Alphabet (e.g., Charlie, Delta)</option>
+                <option value="none">None</option>
+            </select>
+            <br/>
 
-                <label for="rhythm_description">Rhythm description</label>
-                <select name="rhythm_description" id="rhythm_description" class="form-control">
-                    <option value="american">American (quarter note etc)</option>
-                    <option value="british" selected>British (crotchet etc)</option>
-                    <option value="none">None</option>
-                </select>
-                <br/>
-                
-                <div class="form-group">
-                    <div class="checkbox">
-                        <input type="checkbox" name="chk_repetition_detailed" id="chk_repetition_detailed" value="checked" checked aria-label="Display repetition announcements"/>
-                        <label for="chk_repetition_detailed">Repetition Description e.g. "The rhythm in bar 1 is used 2 more times."</label>
-                    </div>
-                </div>
-                <br/>
-            </div>
-            <hr>
-
-            <h2 class="bold">Advanced Formatting</h2>
-            <div class="form-group">
-                <label for="dot_position">Position of dot in dotted rhythms</label>
-                <select name="dot_position" id="dot_position" class="form-control">
-                    <option value="before" selected>Before rhythm</option>
-                    <option value="after">After rhythm</option>
-                </select>
-                <br/>
-
-                <label for="rhythm_announcement">Rhythm announcement</label>
-                <select name="rhythm_announcement" id="rhythm_announcement" class="form-control">
-                    <option value="everyNote">Every note</option>
-                    <option value="onChange" selected>On change</option>
-                </select>
-                <br/>
-
-                <label for="octave_description">Octave description</label>
-                <select name="octave_description" id="octave_description" class="form-control">
-                    <option value="name" selected>Name (mid / high)</option>
-                    <option value="none">None</option>
-                    <option value="number">Number (4 / 5)</option>
-                </select>
-                <br/>
-
-                <label for="octave_position">Octave position</label>
-                <select name="octave_position" id="octave_position" class="form-control">
-                    <option value="before" selected>Before pitch</option>
-                    <option value="after">After pitch</option>
-                </select>
-                <br/>
-
-                <label for="octave_announcement">Octave announcement</label>
-                <select name="octave_announcement" id="octave_announcement" class="form-control">
-                    <option value="brailleRules">Braille rules</option>
-                    <option value="everyNote">Every note</option>
-                    <option value="firstNote">First note of section</option>
-                    <option value="onChange" selected>On change</option>
-                </select>
-                <br/>
-            </div>
+            <label for="rhythm_description">Rhythm Description</label>
+            <select name="rhythm_description" id="rhythm_description" class="form-control">
+                <option value="british" selected>British (e.g., crotchet, minim)</option>
+                <option value="american">American (e.g., quarter note, half note)</option>
+                <option value="none">None</option>
+            </select>
+            <br/>
             
-            <fieldset class="mt-4 p-3 border rounded">
-                <legend class="h2 bold px-2">Note Colouring</legend>
-                <div class="form-group">
-                    <label for="colour_style" class="h4">Colouring Style</label>
-                    <select name="colour_style" id="colour_style" class="form-control">
-                        <option value="none" selected>Off</option>
-                        <option value="text">Colour the text</option>
-                        <option value="background">Colour the background</option>
-                    </select>
+            <label for="repetition_mode">Repetition Description</label>
+            <select name="repetition_mode" id="repetition_mode" class="form-control">
+                <option value="none">None</option>
+                <option value="learning" selected>Learning Mode (e.g., "Same as previous bar")</option>
+                <option value="detailed">Detailed Analysis (e.g., "The rhythm in bar 2 is used 2 more times.")</option>
+            </select>
+            <br/>
+        </div>
+    </fieldset>
+
+    <fieldset class="mb-4">
+        <legend class="h2 bold">Description Detailing</legend>
+        <div class="form-group">
+            <label for="dot_position">Position of dot in dotted rhythms</label>
+            <select name="dot_position" id="dot_position" class="form-control">
+                <option value="before" selected>Before rhythm (e.g., dotted crotchet)</option>
+                <option value="after">After rhythm (e.g., crotchet dotted)</option>
+            </select>
+            <br/>
+
+            <label for="rhythm_announcement">Rhythm Announcement</label>
+            <select name="rhythm_announcement" id="rhythm_announcement" class="form-control">
+                <option value="onChange" selected>On change</option>
+                <option value="everyNote">Every note</option>
+            </select>
+            <br/>
+
+            <label for="octave_description">Octave Description</label>
+            <select name="octave_description" id="octave_description" class="form-control">
+                <option value="name" selected>Name (e.g., mid, high, low)</option>
+                <option value="number">Number (e.g., 4, 5)</option>
+                <option value="none">None</option>
+            </select>
+            <br/>
+
+            <label for="octave_position">Octave Position</label>
+            <select name="octave_position" id="octave_position" class="form-control">
+                <option value="before" selected>Before pitch</option>
+                <option value="after">After pitch</option>
+            </select>
+            <br/>
+
+            <label for="octave_announcement">Octave Announcement</label>
+            <select name="octave_announcement" id="octave_announcement" class="form-control">
+                <option value="onChange" selected>On change</option>
+                <option value="brailleRules">Braille rules</option>
+                <option value="everyNote">Every note</option>
+                <option value="firstNote">First note of section</option>
+            </select>
+            <br/>
+        </div>
+    </fieldset>
+    
+    <fieldset class="mt-4 p-3 border rounded">
+        <legend class="h2 bold px-2">Note Colouring</legend>
+        <div class="form-group">
+            <label for="colour_style" class="h4">Colouring Style</label>
+            <select name="colour_style" id="colour_style" class="form-control">
+                <option value="none" selected>Off</option>
+                <option value="text">Colour the text</option>
+                <option value="background">Colour the background</option>
+            </select>
+        </div>
+        <div id="coloring-details-panel" style="display: none;">
+            <hr>
+            <h4 class="bold">Elements to Colour</h4>
+            <div class="form-group mt-3 p-3 border rounded">
+                <div class="d-flex align-items-center">
+                    <input type="checkbox" name="chk_colourPitch" id="chk_colourPitch" value="checked" checked>
+                    <label for="chk_colourPitch" class="h5 mb-0 ml-2">Pitch</label>
+                    <span id="preview-pitch" class="color-preview ml-auto">C</span>
                 </div>
-                <div id="coloring-details-panel" style="display: none;">
-                    <hr>
-
-                    <div class="form-group mt-3">
-                        <h4 class="bold">Elements to Colour</h4>
-                        
-                        <div class="checkbox d-flex align-items-center">
-                            <input type="checkbox" name="chk_colourPitch" id="chk_colourPitch" value="checked" checked aria-label="Colour pitch description"/>
-                            <label for="chk_colourPitch">Pitch (e.g., C, D, E)</label>
-                            <span id="preview-pitch" class="color-preview">C</span>
-                        </div>
-                        
-                        <div class="checkbox d-flex align-items-center mt-2">
-                            <input type="checkbox" name="chk_advancedColour" id="chk_advancedColour" value="checked" aria-label="Enable advanced colouring for rhythm and octave"/>
-                            <label for="chk_advancedColour">Enable Advanced Colouring (for Rhythm & Octave)</label>
-                        </div>
-
-                        <div id="advanced-colour-panel" class="p-3 mt-2 border rounded" style="display: none;">
-                            <p class="small text-muted">Override the default note colour for specific rhythm and octave descriptions found in this piece.</p>
-                            
-                            {#--- RHYTHM COLOURS (DYNAMIC) ---#}
-                            {% if score_info.rhythm_range %}
-                                <h5 class="bold mt-3">Rhythm Colours</h5>
-                                {% for rhythm in score_info.rhythm_range %}
-                                    <div class="d-flex justify-content-between align-items-center my-2">
-                                        <label for="color_rhythm_{{ rhythm.id_name }}">{{ rhythm.name|title }}:</label>
-                                        <input type="color" id="color_rhythm_{{ rhythm.id_name }}" name="color_rhythm_{{ rhythm.id_name }}" value="{{ rhythm.default_color }}">
-                                    </div>
-                                {% endfor %}
-                            {% endif %}
-
-                            {#--- OCTAVE COLOURS (DYNAMIC) ---#}
-                            {% if score_info.octave_range.max > 0 %}
-                                <h5 class="bold mt-3">Octave Colours</h5>
-                                <p class="small text-muted">These categories apply to both named and numbered octave descriptions.</p>
-                                
-                                {% if score_info.octave_range.max >= 5 %}
-                                <div class="d-flex justify-content-between align-items-center my-2">
-                                    <label for="color_octave_high">High (e.g., 5, 6, 7):</label>
-                                    <input type="color" id="color_octave_high" name="color_octave_high" value="#FF4500">
-                                </div>
-                                {% endif %}
-
-                                {% if score_info.octave_range.min <= 4 and score_info.octave_range.max >= 4 %}
-                                <div class="d-flex justify-content-between align-items-center my-2">
-                                    <label for="color_octave_mid">Mid (e.g., 4):</label>
-                                    <input type="color" id="color_octave_mid" name="color_octave_mid" value="#B8860B">
-                                </div>
-                                {% endif %}
-
-                                {% if score_info.octave_range.min <= 3 %}
-                                <div class="d-flex justify-content-between align-items-center my-2">
-                                    <label for="color_octave_low">Low (e.g., 1, 2, 3):</label>
-                                    <input type="color" id="color_octave_low" name="color_octave_low" value="#4682B4">
-                                </div>
-                                {% endif %}
-                            {% endif %}
-    </div>
-                    </div>
-                    <div class="form-group mt-4">
-                        <fieldset>
-                            <legend class="h4 bold">Colour Palette</legend>
+                <div id="pitch-colour-panel" class="mt-2">
+                    <p class="small text-muted">Colour notes based on their pitch name (e.g., C, D, E).</p>
+                    <div class="palette-container">
+                        <fieldset class="palette-radios">
+                            <legend class="h5 bold">Palette</legend>
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" name="colorProfile" id="profileDefault" value="default" checked>
-                                <label class="form-check-label" for="profileDefault">
-                                    <a href="https://drakemusicscotland.org/project/figurenotes/" target="_blank">Figurenotes</a> (Default)
-                                </label>
+                                <label class="form-check-label" for="profileDefault">Figurenotes</label>
                             </div>
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" name="colorProfile" id="profileClassic" value="classic">
@@ -250,49 +202,105 @@
                                 <label class="form-check-label" for="profileCustom">Custom</label>
                             </div>
                         </fieldset>
-                    </div>
-                    <div id="custom-color-pickers" class="mt-3">
-                        <h4 class="bold">Custom Note Colours:</h4>
-                        <div class="d-flex justify-content-between align-items-center my-2">
-                            <label for="color_C">Note C:</label>
-                            <input type="color" id="color_C" name="color_C" value="#FF0000">
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center my-2">
-                            <label for="color_D">Note D:</label>
-                            <input type="color" id="color_D" name="color_D" value="#A52A2A">
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center my-2">
-                            <label for="color_E">Note E:</label>
-                            <input type="color" id="color_E" name="color_E" value="#808080">
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center my-2">
-                            <label for="color_F">Note F:</label>
-                            <input type="color" id="color_F" name="color_F" value="#0000FF">
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center my-2">
-                            <label for="color_G">Note G:</label>
-                            <input type="color" id="color_G" name="color_G" value="#000000">
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center my-2">
-                            <label for="color_A">Note A:</label>
-                            <input type="color" id="color_A" name="color_A" value="#FFFF00">
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center my-2">
-                            <label for="color_B">Note B:</label>
-                            <input type="color" id="color_B" name="color_B" value="#008000">
+                        <div id="custom-color-pickers" class="palette-pickers">
+                            <h5 class="bold">Custom Colours</h5>
+                            <div class="d-flex justify-content-between align-items-center my-1">
+                                <label for="color_C">Note C:</label><input type="color" id="color_C" name="color_C" value="#FF0000">
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center my-1">
+                                <label for="color_D">Note D:</label><input type="color" id="color_D" name="color_D" value="#A52A2A">
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center my-1">
+                                <label for="color_E">Note E:</label><input type="color" id="color_E" name="color_E" value="#808080">
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center my-1">
+                                <label for="color_F">Note F:</label><input type="color" id="color_F" name="color_F" value="#0000FF">
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center my-1">
+                                <label for="color_G">Note G:</label><input type="color" id="color_G" name="color_G" value="#000000">
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center my-1">
+                                <label for="color_A">Note A:</label><input type="color" id="color_A" name="color_A" value="#FFFF00">
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center my-1">
+                                <label for="color_B">Note B:</label><input type="color" id="color_B" name="color_B" value="#008000">
+                            </div>
                         </div>
                     </div>
-                </div>
-            </fieldset>
-            <br/>
-
-            <div class="form-group">
-                <div class="col-sm-offset-3 col-sm-6">
-                    <button type="submit" class="btn btn-primary btn-lg">Generate Talking Score</button>
                 </div>
             </div>
+            <div class="form-group mt-3">
+                 <input type="checkbox" id="chk_show_advanced_colouring">
+                 <label for="chk_show_advanced_colouring">Customize Rhythm & Octave Colours</label>
+            </div>
+            <div id="advanced-colouring-panel" class="mt-2" style="display: none;">
+                <div class="form-group mt-2 p-3 border rounded">
+                    <div class="d-flex align-items-center">
+                        <label for="rhythm_colour_mode" class="h5 mb-0">Rhythm</label>
+                        <span id="preview-rhythm" class="color-preview ml-auto">Crotchet</span>
+                    </div>
+                    <select name="rhythm_colour_mode" id="rhythm_colour_mode" class="form-control mt-2">
+                        <option value="none">Off</option>
+                        <option value="inherit" selected>Inherit colour from Pitch</option>
+                        <option value="custom">Use custom colours below</option>
+                    </select>
+                    <div id="rhythm-colour-panel" class="p-3 mt-2 border rounded" style="display: none;">
+                        <h5 class="bold">Custom Rhythm Colours</h5>
+                        <p class="small text-muted">Only rhythms found in this piece are shown below.</p>
+                        {% if score_info.rhythm_range %}
+                            {% for rhythm in score_info.rhythm_range %}
+                                <div class="d-flex justify-content-between align-items-center my-1">
+                                    <label for="color_rhythm_{{ rhythm.id_name }}">{{ rhythm.name|title }}:</label>
+                                    <input type="color" id="color_rhythm_{{ rhythm.id_name }}" name="color_rhythm_{{ rhythm.id_name }}" value="{{ rhythm.default_color }}">
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="form-group mt-3 p-3 border rounded">
+                     <div class="d-flex align-items-center">
+                        <label for="octave_colour_mode" class="h5 mb-0">Octave</label>
+                        <span id="preview-octave" class="color-preview ml-auto">High</span>
+                    </div>
+                    <select name="octave_colour_mode" id="octave_colour_mode" class="form-control mt-2">
+                        <option value="none">Off</option>
+                        <option value="inherit" selected>Inherit colour from Pitch</option>
+                        <option value="custom">Use custom colours below</option>
+                    </select>
+                    <div id="octave-colour-panel" class="p-3 mt-2 border rounded" style="display: none;">
+                        <h5 class="bold">Custom Octave Colours</h5>
+                        <p class="small text-muted">Only octaves found in this piece are shown below.</p>
+                         {% if score_info.octave_range.max >= 5 %}
+                            <div class="d-flex justify-content-between align-items-center my-2">
+                                <label for="color_octave_high">High (e.g., 5, 6, 7):</label>
+                                <input type="color" id="color_octave_high" name="color_octave_high" value="#FF4500">
+                            </div>
+                        {% endif %}
+                        {% if score_info.octave_range.min <= 4 and score_info.octave_range.max >= 4 %}
+                            <div class="d-flex justify-content-between align-items-center my-2">
+                                <label for="color_octave_mid">Mid (e.g., 4):</label>
+                                <input type="color" id="color_octave_mid" name="color_octave_mid" value="#B8860B">
+                            </div>
+                        {% endif %}
+                        {% if score_info.octave_range.min <= 3 %}
+                            <div class="d-flex justify-content-between align-items-center my-2">
+                                <label for="color_octave_low">Low (e.g., 1, 2, 3):</label>
+                                <input type="color" id="color_octave_low" name="color_octave_low" value="#4682B4">
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </fieldset>
 
-        </form>
+    <br/>
+    <div class="form-group">
+        <div class="col-sm-offset-3 col-sm-6">
+            <button type="submit" class="btn btn-primary btn-lg">Generate Talking Score</button>
+        </div>
+    </div>
+</form>
     </div>
 </div>
 {% endblock content %}
@@ -301,142 +309,150 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // --- Element References ---
-    const form = document.querySelector('form.form-horizontal');
-    const submitButton = form.querySelector('button[type="submit"]');
-    const colourStyleSelect = document.getElementById('colour_style');
-    const coloringDetailsPanel = document.getElementById('coloring-details-panel');
-    const profileRadios = document.querySelectorAll('input[name="colorProfile"]');
-    const customProfileRadio = document.getElementById('profileCustom');
-    const noteColorPickers = document.querySelectorAll('#custom-color-pickers input[type="color"]');
-    const advancedColourCheck = document.getElementById('chk_advancedColour');
-    const advancedColourPanel = document.getElementById('advanced-colour-panel');
-    const colorPitchCheck = document.getElementById('chk_colourPitch');
-    const previewElements = {
-        pitch: document.getElementById('preview-pitch'),
-        rhythm: document.getElementById('preview-rhythm'),
-        octave: document.getElementById('preview-octave')
+    const elements = {
+        form: document.querySelector('form.form-horizontal'),
+        colourStyleSelect: document.getElementById('colour_style'),
+        coloringDetailsPanel: document.getElementById('coloring-details-panel'),
+        
+        chkColourPitch: document.getElementById('chk_colourPitch'),
+        pitchColourPanel: document.getElementById('pitch-colour-panel'),
+        profileRadios: document.querySelectorAll('input[name="colorProfile"]'),
+        customProfileRadio: document.getElementById('profileCustom'),
+        customColorPickers: document.querySelectorAll('#custom-color-pickers input[type="color"]'),
+        
+        chkShowAdvanced: document.getElementById('chk_show_advanced_colouring'),
+        advancedPanel: document.getElementById('advanced-colouring-panel'),
+
+        rhythmColourModeSelect: document.getElementById('rhythm_colour_mode'),
+        rhythmColourPanel: document.getElementById('rhythm-colour-panel'),
+
+        octaveColourModeSelect: document.getElementById('octave_colour_mode'),
+        octaveColourPanel: document.getElementById('octave-colour-panel'),
+        
+        previewPitch: document.getElementById('preview-pitch'),
+        previewRhythm: document.getElementById('preview-rhythm'),
+        previewOctave: document.getElementById('preview-octave')
     };
 
-    // --- Color Data & Helper Functions ---
+    // --- Color Data & Helpers ---
     const colorProfiles = {
         default: { C: "#FF0000", D: "#A52A2A", E: "#808080", F: "#0000FF", G: "#000000", A: "#FFFF00", B: "#008000" },
         classic: { C: "#FF0000", D: "#FFA500", E: "#FFFF00", F: "#008000", G: "#0000FF", A: "#4B0082", B: "#EE82EE" }
     };
 
     function getContrastColor(hex) {
-        if (!hex) return '#000000';
+        if (!hex || hex.length < 4) return '#000000';
         const hexValue = hex.startsWith('#') ? hex.slice(1) : hex;
-        const r = parseInt(hexValue.substring(0, 2), 16);
-        const g = parseInt(hexValue.substring(2, 4), 16);
-        const b = parseInt(hexValue.substring(4, 6), 16);
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-        return luminance > 0.5 ? '#000000' : '#FFFFFF';
-    }
-
-    // --- Core UI Update Functions ---
-    function applyPreviewStyle(element, style, color) {
-        if (!element) return;
-        element.style.backgroundColor = '';
-        element.style.color = '';
-        element.style.borderColor = 'transparent';
-        if (style === 'text') {
-            element.style.color = color;
-        } else if (style === 'background') {
-            element.style.backgroundColor = color;
-            element.style.color = getContrastColor(color);
-            element.style.borderColor = '#888';
+        try {
+            const r = parseInt(hexValue.substring(0, 2), 16);
+            const g = parseInt(hexValue.substring(2, 4), 16);
+            const b = parseInt(hexValue.substring(4, 6), 16);
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            return luminance > 0.5 ? '#000000' : '#FFFFFF';
+        } catch (e) {
+            return '#FFFFFF';
         }
-    }
-
-    function updateAllPreviews() {
-        const style = colourStyleSelect.value;
-        const noteColor = document.getElementById('color_C').value;
-        
-        // Update Pitch preview based on its own checkbox
-        applyPreviewStyle(previewElements.pitch, colorPitchCheck.checked ? style : 'none', noteColor);
-
-        // Default rhythm/octave colors to inheriting from pitch
-        let rhythmColor = noteColor;
-        let octaveColor = noteColor;
-
-        if (advancedColourCheck.checked) {
-            // If advanced mode is on, find a representative color picker from the advanced panel to use for the preview
-            const rhythmPicker = document.querySelector('#advanced-colour-panel input[name^="color_rhythm"]');
-            const octavePicker = document.querySelector('#advanced-colour-panel input[name^="color_octave"]');
-            if (rhythmPicker) rhythmColor = rhythmPicker.value;
-            if (octavePicker) octaveColor = octavePicker.value;
-        }
-
-        // The rhythm and octave previews inherit the "on/off" state from the main pitch checkbox
-        const previewStyle = colorPitchCheck.checked ? style : 'none';
-        applyPreviewStyle(previewElements.rhythm, previewStyle, rhythmColor);
-        applyPreviewStyle(previewElements.octave, previewStyle, octaveColor);
-    }
-
-    function toggleAdvancedPanel() {
-        advancedColourPanel.style.display = advancedColourCheck.checked ? 'block' : 'none';
-        updateAllPreviews();
-    }
-    
-    function updateNoteColorPickersState() {
-        const isCustom = customProfileRadio.checked;
-        noteColorPickers.forEach(picker => {
-            picker.disabled = !isCustom;
-        });
     }
 
     function applyNoteColorProfile(profileName) {
         const profile = colorProfiles[profileName];
         if (!profile) return;
-        noteColorPickers.forEach(picker => {
+        elements.customColorPickers.forEach(picker => {
             const note = picker.id.split('_')[1];
             if (profile[note]) picker.value = profile[note];
         });
-        updateAllPreviews();
     }
 
-    function toggleColoringDetails() {
-        const showDetails = colourStyleSelect.value !== 'none';
-        coloringDetailsPanel.style.display = showDetails ? 'block' : 'none';
-        updateAllPreviews();
-    }
+    // --- Main UI Update Function ---
+    function updateFormDisplay() {
+    const isColoringOn = elements.colourStyleSelect.value !== 'none';
+    elements.coloringDetailsPanel.style.display = isColoringOn ? 'block' : 'none';
+
+    // Pitch Section visibility
+    const isPitchOn = elements.chkColourPitch.checked;
+    elements.pitchColourPanel.style.display = isPitchOn && isColoringOn ? 'block' : 'none';
     
-    // --- Event Listeners ---
-    form.addEventListener('keydown', function(event) {
-        if (event.key === 'Enter') {
-            const activeEl = document.activeElement;
-            if (activeEl === submitButton) return;
-            const needsEnterKey = activeEl.tagName.toLowerCase() === 'select' || activeEl.type === 'color';
-            if (!needsEnterKey) {
-                event.preventDefault();
-            }
-        }
+    // Custom Pitch Picker state (always visible, but enabled/disabled)
+    const isCustomProfile = elements.customProfileRadio.checked;
+    elements.customColorPickers.forEach(picker => {
+        picker.disabled = !isCustomProfile;
     });
+
+    // Advanced Section visibility
+    const showAdvanced = elements.chkShowAdvanced.checked;
+    elements.advancedPanel.style.display = showAdvanced && isColoringOn ? 'block' : 'none';
     
-    colourStyleSelect.addEventListener('change', toggleColoringDetails);
-    colorPitchCheck.addEventListener('change', updateAllPreviews);
-    advancedColourCheck.addEventListener('change', toggleAdvancedPanel);
+    // --- FIX: Correctly set display to 'block' or 'none' ---
+    elements.rhythmColourPanel.style.display = elements.rhythmColourModeSelect.value === 'custom' ? 'block' : 'none';
+    elements.octaveColourPanel.style.display = elements.octaveColourModeSelect.value === 'custom' ? 'block' : 'none';
     
-    document.querySelectorAll('#advanced-colour-panel input[type="color"]').forEach(picker => {
+    updateAllPreviews();
+}
+    
+    function updateAllPreviews() {
+        const style = elements.colourStyleSelect.value;
+        const pitchColor = document.getElementById('color_C').value;
+
+        const applyStyle = (el, color, isEnabled) => {
+            if (!el) return;
+            el.style.backgroundColor = ''; el.style.color = ''; el.style.borderColor = 'transparent';
+            if (style === 'none' || !isEnabled || !color) return;
+
+            if (style === 'background') {
+                el.style.backgroundColor = color;
+                el.style.color = getContrastColor(color);
+                el.style.borderColor = '#888';
+            } else { // 'text'
+                el.style.color = color;
+            }
+        };
+
+        applyStyle(elements.previewPitch, pitchColor, elements.chkColourPitch.checked);
+
+        const rhythmMode = elements.rhythmColourModeSelect.value;
+        let rhythmColor = rhythmMode === 'inherit' ? pitchColor : null;
+        if (rhythmMode === 'custom') {
+            const firstRhythmPicker = document.querySelector('#rhythm-colour-panel input[type="color"]');
+            if (firstRhythmPicker) rhythmColor = firstRhythmPicker.value;
+        }
+        applyStyle(elements.previewRhythm, rhythmColor, rhythmMode !== 'none');
+
+        const octaveMode = elements.octaveColourModeSelect.value;
+        let octaveColor = octaveMode === 'inherit' ? pitchColor : null;
+        if (octaveMode === 'custom') {
+            const firstOctavePicker = document.querySelector('#octave-colour-panel input[type="color"]');
+            if (firstOctavePicker) octaveColor = firstOctavePicker.value;
+        }
+        applyStyle(elements.previewOctave, octaveColor, octaveMode !== 'none');
+    }
+
+    // --- Event Listeners ---
+    // Add listeners to all controls that should trigger a UI update
+    [
+        elements.colourStyleSelect, elements.chkColourPitch, elements.chkShowAdvanced,
+        elements.rhythmColourModeSelect, elements.octaveColourModeSelect
+    ].forEach(el => el.addEventListener('change', updateFormDisplay));
+
+    // Listen to all color pickers for live preview updates
+    document.querySelectorAll('input[type="color"]').forEach(picker => {
         picker.addEventListener('input', updateAllPreviews);
     });
-    
-    profileRadios.forEach(radio => {
+
+    // Special handling for radio buttons
+    elements.profileRadios.forEach(radio => {
         radio.addEventListener('change', () => {
-            if (radio.value !== 'custom') applyNoteColorProfile(radio.value);
-            updateNoteColorPickersState();
+            // FIX: Apply the selected profile's colors
+            if (radio.value !== 'custom') {
+                applyNoteColorProfile(radio.value);
+            }
+            // Always update the form display and previews
+            updateFormDisplay();
         });
     });
-    
-    noteColorPickers.forEach(picker => {
-        picker.addEventListener('input', updateAllPreviews);
-    });
 
-    // --- Initial State ---
-    toggleColoringDetails();
-    toggleAdvancedPanel();
+    // --- Initial State on Page Load ---
     applyNoteColorProfile('default');
-    updateNoteColorPickersState();
+    updateFormDisplay();
 });
 </script>
 {% endblock %}

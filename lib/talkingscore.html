@@ -148,47 +148,56 @@
             {% endif %}
             {#  Loop over each bar pulling out the beat-based dictionaries #}
             {% for bar, events_for_beats in part_description.items() %}
-                {#% if not loop.first %}<br/>{% endif %#}
                 <h4>Bar: {{ bar }}</h4>
-                {% set repetition_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
 
-                                        {% if settings.repetition_announcement %}
-                                            {% set repetition_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
-                                            {% if repetition_info %}
-                                                Repetition - {{ repetition_info.text }} 
-                                                <br/><br/>
-                                            {% endif %}
-                                        {% endif %}
-                
-
+                {# Display time/key signature changes if they exist for this bar #}
                 {% if bar in time_and_keys %}
                     {% for tk in time_and_keys[bar] %}
                         {{tk}}<br/>
                     {% endfor %}
                     <br/>
                 {% endif %}
-                {#  Loop over each beat pulling out the hand-based dictionaries #}
-                {% for beat, events_per_beat in events_for_beats.items() %}
-                    {# {% if not loop.first %}<br/>{% endif %}#}
-                    <div>Beat {{ beat }}:
-                    {% set previous_event = {'value' : None} %}
-                    {#  Loop over each hand #}
-                    {% for voice, events_per_voice in events_per_beat|dictsort %}
-                        {% if not loop.first %} - together with {% endif %}
-                        {% for pitch_space, events in events_per_voice.items() %}
-                            {% if not loop.first %}, {% endif %}
-                            {#  Loop over the events  #}
-                            {% for event in events %}
+
+                {# --- START: CORRECTED REPETITION LOGIC BLOCK --- #}
+
+                {# Get the repetition info objects for the current bar #}
+                {% set detailed_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
+                {% set learning_info = immediate_repetition_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
+
+                {# --- Learning Mode --- #}
+                {% if settings.repetition_mode == 'learning' and learning_info %}
+                    <div class="repetition-info">{{ learning_info.text }}</div>
+
+                {# --- Detailed Analysis Mode --- #}
+                {% elif settings.repetition_mode == 'detailed' and detailed_info %}
+                    <div class="repetition-info"><strong>Repetition:</strong> {{ detailed_info }}</div>
+                {% endif %}
+
+                {# Only show the beat-by-beat breakdown if it's NOT an exact repetition in learning mode #}
+                {% if not (settings.repetition_mode == 'learning' and learning_info and learning_info.type == 'exact') %}
+                    {# This is the full, non-duplicated beat rendering loop #}
+                    {% for beat, events_per_beat in events_for_beats.items() %}
+                        <div>Beat {{ beat }}:
+                        {% set previous_event = {'value' : None} %}
+                        {# Loop over each hand #}
+                        {% for voice, events_per_voice in events_per_beat|dictsort %}
+                            {% if not loop.first %} - together with {% endif %}
+                            {% for pitch_space, events in events_per_voice.items() %}
                                 {% if not loop.first %}, {% endif %}
-                                {{ event.render(settings, previous_event['value'])|join(' ') }}
-                                {#  Store the event for context next time around  #}
-                                {% set _ = previous_event.update({'value': event}) %}
-                            {% endfor %} {# End loop over events #}
-                        {% endfor %} {# End loop over pitch indexes #}
-                    {% endfor %}. {# End loop over voices #}
-            
-                    </div>
-                {% endfor %} {# End loop over beats #}                    
+                                {# Loop over the events #}
+                                {% for event in events %}
+                                    {% if not loop.first %}, {% endif %}
+                                    {{ event.render(settings, previous_event['value'])|join(' ') }}
+                                    {# Store the event for context next time around #}
+                                    {% set _ = previous_event.update({'value': event}) %}
+                                {% endfor %} {# End loop over events #}
+                            {% endfor %} {# End loop over pitch indexes #}
+                        {% endfor %}. {# End loop over voices #}
+                        </div>
+                    {% endfor %} {# End loop over beats #}
+                {% endif %}
+                {# --- END: CORRECTED REPETITION LOGIC BLOCK --- #}
+
             {% endfor %} {# End loop over bars #}
 
 
