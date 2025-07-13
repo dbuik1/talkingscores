@@ -150,10 +150,16 @@
             {% for bar, events_for_beats in part_description.items() %}
                 {#% if not loop.first %}<br/>{% endif %#}
                 <h4>Bar: {{ bar }}</h4>
-                {% if bar in repetition_in_contexts[instruments[instrument_index][1] + part_index] %}
-                    Repetition - {{repetition_in_contexts[instruments[instrument_index][1] + part_index][bar]}} 
-                    <br/> <br/>
-                {% endif %}
+                {% set repetition_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
+
+                                        {% if settings.repetition_announcement %}
+                                            {% set repetition_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
+                                            {% if repetition_info %}
+                                                Repetition - {{ repetition_info.text }} 
+                                                <br/><br/>
+                                            {% endif %}
+                                        {% endif %}
+                
 
                 {% if bar in time_and_keys %}
                     {% for tk in time_and_keys[bar] %}

@@ -17,11 +17,18 @@ import logging.config
 from music21 import *
 from lib.musicAnalyser import *
 import re
+from types import SimpleNamespace
 us = environment.UserSettings()
 us['warnings'] = 0
 logger = logging.getLogger("TSScore")
 
 global settings
+settings = {
+    'rhythmDescription': 'british',
+    'dotPosition': 'before',
+    'octaveDescription': 'name',
+    'pitchDescription': 'noteName',
+}
 
 def get_contrast_color(hex_color):
     """
@@ -45,28 +52,41 @@ def render_colourful_output(text, pitchLetter, elementType, settings):
     Wraps text in a styled <span> based on the current theme settings.
     """
     toRender = text
+    color_to_use = None
 
-    # Use the 'settings' dictionary that was passed in as a parameter
-    figureNoteColours = settings.get("figureNoteColours", {})
+    # Determine the correct color based on element type and settings
+    if elementType == "pitch" and settings.get("colourPitch"):
+        color_to_use = settings.get("figureNoteColours", {}).get(pitchLetter)
 
-    if settings.get("colourPosition") != "None" and figureNoteColours:
-        doColours = False
-        if (elementType == "pitch" and settings.get("colourPitch") == True):
-            doColours = True
-        if (elementType == "rhythm" and settings.get("colourRhythm") == True):
-            doColours = True
-        if (elementType == "octave" and settings.get("colourOctave") == True):
-            doColours = True
+    elif settings.get("advanced_colouring"):
+        if elementType == "rhythm":
+            rhythm_colours = settings.get("advanced_rhythm_colours", {})
+            for rhythm_name, color in rhythm_colours.items():
+                if rhythm_name in text.lower():
+                    color_to_use = color
+                    break
+        elif elementType == "octave":
+            octave_colours = settings.get("advanced_octave_colours", {})
+            octave_text = text.lower()
+            # Check for high, mid, or low categories for all octave description types
+            if any(term in octave_text for term in ["high", "top", "5", "6", "7"]):
+                color_to_use = octave_colours.get("high")
+            elif any(term in octave_text for term in ["mid", "4"]):
+                color_to_use = octave_colours.get("mid")
+            elif any(term in octave_text for term in ["low", "bottom", "1", "2", "3"]):
+                color_to_use = octave_colours.get("low")
+    
+    # If not in advanced mode, rhythm and octave inherit the pitch color
+    elif elementType in ["rhythm", "octave"] and settings.get("colourPitch"):
+         color_to_use = settings.get("figureNoteColours", {}).get(pitchLetter)
 
-        if doColours and pitchLetter in figureNoteColours:
-            chosen_color = figureNoteColours.get(pitchLetter) # Use .get for safety
-            
-            if chosen_color and settings.get("colourPosition") == "background":
-                contrast_color = get_contrast_color(chosen_color)
-                toRender = f"<span style='color:{contrast_color}; background-color:{chosen_color};'>{text}</span>"
-            
-            elif chosen_color and settings.get("colourPosition") == "text":
-                toRender = f"<span style='color:{chosen_color};'>{text}</span>"
+    # Final check before rendering the span
+    if settings.get("colourPosition") != "None" and color_to_use:
+        if settings.get("colourPosition") == "background":
+            contrast_color = get_contrast_color(color_to_use)
+            toRender = f"<span style='color:{contrast_color}; background-color:{color_to_use};'>{text}</span>"
+        else: # 'text'
+            toRender = f"<span style='color:{color_to_use};'>{text}</span>"
 
     return toRender
 
@@ -446,10 +466,10 @@ class Music21TalkingScore(TalkingScoreBase):
         self.selected_instruments = []  # 1 based list of keys from part_instruments eg [1, 4]
         self.unselected_instruments = []  # eg [2,3]
         self.binary_selected_instruments = 1  # bitwise representation of all instruments - 0=not included, 1=included
-        self.selected_part_names = []  # eg ["recorder", "piano - left hand", "piano - right hand"]
+        self.selected_part_names = []
         for ins in self.part_instruments.keys():
             self.binary_selected_instruments = self.binary_selected_instruments << 1
-            if ins in settings['instruments']:
+            if ins in settings.get('instruments', []): # Use .get() for safety
                 self.selected_instruments.append(ins)
                 self.binary_selected_instruments += 1
             else:
@@ -464,29 +484,36 @@ class Music21TalkingScore(TalkingScoreBase):
                 for pni in range(pn1index, pn1index+self.part_instruments[ins][2]):
                     self.selected_part_names.append(ins_name + " - " + self.part_names[pni])
 
-        print("selected_part_names = " + str(self.selected_part_names))
+        # --- START: CORRECTED LOGIC ---
+        # 1. Preserve the user's original choices for pre-generation, using .get() for safety.
+        play_all_choice = settings.get('playAll', False)
+        play_selected_choice = settings.get('playSelected', False)
+        play_unselected_choice = settings.get('playUnselected', False)
 
-        if len(self.unselected_instruments) == 0:  # All instruments selected - so no unselected instruments to play
+        # 2. Apply "smart" logic to hide redundant links in the template.
+        if len(self.unselected_instruments) == 0:  # All instruments selected
             settings['playUnselected'] = False
-        if len(self.selected_instruments) == len(self.part_instruments) and settings['playAll'] == True:  # played by Play All
+        if len(self.selected_instruments) == len(self.part_instruments) and settings.get('playAll', False): # All instruments selected AND playAll is checked
             settings['playSelected'] = False
-        if len(self.selected_instruments) == 1:  # played by individual part
+        if len(self.selected_instruments) == 1: # Only one instrument selected
             settings['playSelected'] = False
-        if len(self.part_instruments) == 1:
+        if len(self.part_instruments) == 1: # Only one instrument in the whole piece
             settings['playAll'] = False
 
-        # todo - these maybe shouldn't really be part of score...
-        self.binary_play_all = 1  # placeholder,all,selected,unslected
+        # 3. Calculate the binary flags for the URL based on the *original* choices.
+        self.binary_play_all = 1  # placeholder,all,selected,unselected
         self.binary_play_all = self.binary_play_all << 1
-        if settings['playAll'] == True:
+        if play_all_choice:
             self.binary_play_all += 1
         self.binary_play_all = self.binary_play_all << 1
-        if settings['playSelected'] == True:
+        if play_selected_choice:
             self.binary_play_all += 1
         self.binary_play_all = self.binary_play_all << 1
-        if settings['playUnselected'] == True:
+        if play_unselected_choice:
             self.binary_play_all += 1
+        # --- END: CORRECTED LOGIC ---
 
+        print("selected_part_names = " + str(self.selected_part_names))
         print("selected_instruments = " + str(self.selected_instruments))
 
     def get_number_of_parts(self):
@@ -593,9 +620,14 @@ class Music21TalkingScore(TalkingScoreBase):
 
             if event is None:
                 continue
+                
+            # --- ROBUST FIX: Check for invalid beat values before processing ---
+            # First check if beat is not a number, then check if it is NaN
+            if not isinstance(element.beat, (int, float)) or math.isnan(element.beat):
+                logger.warning(f"Skipping element of type {element_type} with invalid beat value: {element.beat}")
+                continue # Skip to the next element in the measure
+            # --- END FIX ---
 
-            # This test isn't WORKING
-            # if TSEvent.__class__ in event.__class__.__bases__:
             event.duration = ""
             if (len(element.duration.tuplets) > 0):
                 if (element.duration.tuplets[0].type == "start"):
@@ -612,11 +644,12 @@ class Music21TalkingScore(TalkingScoreBase):
             if settings['dotPosition'] == "after":
                 event.duration += " " + self.map_dots(element.duration.dots)
 
-            if (math.floor(element.beat) == math.floor(previous_beat)):  # eg was 1 now 1.5 ie same beat
+            if (math.floor(element.beat) == math.floor(previous_beat)):
                 beat = previous_beat
-            elif (math.floor(element.beat) == element.beat):  # was 1.5 now 2.0 - ie start of a new beat
-                beat = math.floor(element.beat)  # strip off the point 0
-            else:  # eg was 1 now 2.5 ie part way through a new beat - mention decimal
+            elif (math.floor(element.beat) == element.beat):
+                beat = math.floor(element.beat)
+            else:
+
                 beat = element.beat
             previous_beat = beat
 
@@ -635,13 +668,14 @@ class Music21TalkingScore(TalkingScoreBase):
         return chord_pitches_by_octave
 
     # for all / selected / unselected
-    def generate_midi_filename_sel(self, prefix, range_start=None, range_end=None, output_path="", sel=""):
-        base_filename = os.path.splitext(os.path.basename(self.filepath))[0]
-        if (range_start != None):
-            midi_filename = os.path.join(output_path, f"{base_filename}.mid?sel={sel}&start={range_start}&end={range_end}&t=100&c=n")
-        else:
-            midi_filename = os.path.join(output_path, f"{base_filename}.mid?sel={sel}&t=100&c=n")
-        return (prefix+os.path.basename(midi_filename))
+    def generate_midi_filename_sel(self, base_url, range_start=None, range_end=None, sel=""):
+        """Generates a MIDI URL for a selection of parts (all, selected, unselected)."""
+        # The base_url is the complete path part, e.g., /midis/hash/file.musicxml
+        query_params = f"sel={sel}&t=100&c=n"
+        if range_start is not None:
+            # Note: using a consistent parameter order
+            query_params += f"&start={range_start}&end={range_end}"
+            return f"{base_url}?{query_params}"
 
     def generate_part_descriptions(self, instrument, start_bar, end_bar):
         part_descriptions = []
@@ -650,30 +684,30 @@ class Music21TalkingScore(TalkingScoreBase):
 
         return part_descriptions
 
-    def generate_midi_filenames(self, prefix, range_start=None, range_end=None, add_instruments=[], output_path="", postfix_filename=""):
+    def generate_midi_filenames(self, base_url, range_start=None, range_end=None, add_instruments=[]):
+        """Generates MIDI URLs for a specific instrument and its constituent parts."""
         part_midis = []
-        if range_start is None and range_end is None:
-            for ins in add_instruments:
-                for pi in range(self.part_instruments[ins][1], self.part_instruments[ins][1]+self.part_instruments[ins][2]):
-                    if self.part_instruments[ins][2] > 1:
-                        base_filename = os.path.splitext(os.path.basename(self.filepath))[0]
-                        midi_filename = os.path.join(output_path, f"{base_filename}.mid?part={pi}&t=100&c=n")
-                        part_midis.append(midi_filename)
-        else:  # specific measures
-            for ins in add_instruments:
-                for pi in range(self.part_instruments[ins][1], self.part_instruments[ins][1]+self.part_instruments[ins][2]):
-                    if self.part_instruments[ins][2] > 1:
-                        base_filename = os.path.splitext(os.path.basename(self.filepath))[0]
-                        midi_filename = os.path.join(output_path, f"{base_filename}.mid?part={pi}&start={range_start}&end={range_end}&t=100&c=n")
-                        part_midis.append(midi_filename)
+        instrument_midi = ""
+        last_ins = add_instruments[-1] if add_instruments else None
 
-        base_filename = os.path.splitext(os.path.basename(self.filepath))[0]
-        if (range_start != None):
-            midi_filename = os.path.join(output_path, f"{base_filename}.mid?ins={ins}&start={range_start}&end={range_end}&t=100&c=n")
-        else:
-            midi_filename = os.path.join(output_path, f"{base_filename}.mid?ins={ins}&t=100&c=n")
-        part_midis = [prefix + os.path.basename(s) for s in part_midis]
-        return (prefix+os.path.basename(midi_filename), part_midis)
+        # Construct the base query string
+        query_string = "t=100&c=n"
+        if range_start is not None:
+            query_string += f"&start={range_start}&end={range_end}"
+
+    # Generate URLs for individual parts (if the instrument has more than one)
+        for ins in add_instruments:
+            if self.part_instruments[ins][2] > 1:
+                start_part_index = self.part_instruments[ins][1]
+                end_part_index = start_part_index + self.part_instruments[ins][2]
+            for pi in range(start_part_index, end_part_index):
+                part_midis.append(f"{base_url}?part={pi}&{query_string}")
+
+    # Generate the URL for the whole instrument
+        if last_ins is not None:
+            instrument_midi = f"{base_url}?ins={last_ins}&{query_string}"
+
+        return (instrument_midi, part_midis)
 
     def generate_midi_for_instruments(self, prefix, range_start=None, range_end=None, add_instruments=[], output_path="", postfix_filename=""):
         part_midis = []
@@ -835,38 +869,88 @@ class Music21TalkingScore(TalkingScoreBase):
             return ""
         else:
             return self._DOTS_MAP.get(dots)
+        
+    def get_rhythm_range(self):
+        """
+        Finds all unique rhythm types present in the score.
+        """
+        # The _DURATION_MAP keys cover the rhythm names we use for descriptions.
+        valid_rhythms = self._DURATION_MAP.values()
+        found_rhythms = set()
+
+        for n in self.score.flat.notesAndRests:
+            # map_duration translates the note's type into our description term (e.g., "crotchet")
+            rhythm_name = self.map_duration(n.duration)
+            if rhythm_name in valid_rhythms:
+                found_rhythms.add(rhythm_name)
+        
+        return sorted(list(found_rhythms), key=lambda r: list(valid_rhythms).index(r))
+
+    def get_octave_range(self):
+        """
+        Finds the highest and lowest octaves used in the score,
+        correctly handling both Notes and Chords.
+        """
+        all_octaves = []
+        # Iterate through all note and chord elements in the score
+        for element in self.score.flat.notes:
+            if 'Chord' in element.classes:
+                # For a Chord, get the octave of each pitch within it
+                for p in element.pitches:
+                    all_octaves.append(p.octave)
+            elif 'Note' in element.classes:
+                # For a Note, get its single octave
+                all_octaves.append(element.pitch.octave)
+        
+        if not all_octaves:
+            return {'min': 0, 'max': 0}
+        
+        return {'min': min(all_octaves), 'max': max(all_octaves)}
 
 
 class HTMLTalkingScoreFormatter():
-
+    """
+    Handles the formatting of a Music21 score into an HTML talking score.
+    """
     def __init__(self, talking_score):
+        """
+        Initializes the formatter with the score object and sets up the configuration.
+        """
         global settings
-
         self.score: Music21TalkingScore = talking_score
+        self.options = {}  # Initialize self.options
 
         options_path = self.score.filepath + '.opts'
-        with open(options_path, "r") as options_fh:
-            options = json.load(options_fh)
+        try:
+            with open(options_path, "r") as options_fh:
+                # Load the options into the instance variable
+                self.options = json.load(options_fh)
+        except FileNotFoundError:
+            logger.warning(f"Options file not found: {options_path}. Using default settings.")
+            pass # Use default .get() values below
+
+        # Build the settings dictionary using self.options and assign it globally
         settings = {
             'pitchBeforeDuration': False,
             'describeBy': 'beat',
             'handsTogether': True,
-            'barsAtATime': int(options["bars_at_a_time"]),
-            'playAll': options["play_all"],
-            'playSelected': options["play_selected"],
-            'playUnselected': options["play_unselected"],
-            'instruments': options["instruments"],
-            'pitchDescription': options["pitch_description"],
-            'rhythmDescription': options["rhythm_description"],
-            'dotPosition': options["dot_position"],
-            'rhythmAnnouncement': options["rhythm_announcement"],
-            'octaveDescription': options["octave_description"],
-            'octavePosition': options["octave_position"],
-            'octaveAnnouncement': options["octave_announcement"],
-            'colourPosition': options["colour_position"],
-            'colourPitch': options["colour_pitch"],
-            'colourRhythm': options["colour_rhythm"],
-            'colourOctave': options["colour_octave"],
+            'barsAtATime': int(self.options.get("bars_at_a_time", 2)),
+            'playAll': self.options.get("play_all", False),
+            'playSelected': self.options.get("play_selected", False),
+            'playUnselected': self.options.get("play_unselected", False),
+            'instruments': self.options.get("instruments", []),
+            'pitchDescription': self.options.get("pitch_description", "noteName"),
+            'rhythmDescription': self.options.get("rhythm_description", "british"),
+            'dotPosition': self.options.get("dot_position", "before"),
+            'rhythmAnnouncement': self.options.get("rhythm_announcement", "onChange"),
+            'octaveDescription': self.options.get("octave_description", "name"),
+            'octavePosition': self.options.get("octave_position", "before"),
+            'octaveAnnouncement': self.options.get("octave_announcement", "onChange"),
+            'colourPosition': self.options.get("colour_position", "none"),
+            'colourPitch': self.options.get("colour_pitch", False),
+            'colourRhythm': self.options.get("colour_rhythm", False),
+            'colourOctave': self.options.get("colour_octave", False),
+            'figureNoteColours': self.options.get("figureNoteColours", {}),
         }
 
     def generateHTML(self, output_path="", web_path=""):
@@ -877,41 +961,79 @@ class HTMLTalkingScoreFormatter():
 
         self.score.get_instruments()
         self.score.compare_parts_with_selected_instruments()
-        print("Settings...")
-        print(settings)
 
         self.music_analyser = MusicAnalyser()
         self.music_analyser.setScore(self.score)
+        
         start = self.score.score.parts[0].getElementsByClass('Measure')[0].number
         end = self.score.score.parts[0].getElementsByClass('Measure')[-1].number
+
+        self._trigger_midi_generation(start, end)
+        
+        # Pass the clean web_path to all MIDI generation functions
         selected_instruments_midis = {}
         for index, ins in enumerate(self.score.selected_instruments):
-            midis = self.score.generate_midi_filenames(prefix="/midis/" + os.path.basename(web_path) + "/", range_start=start, range_end=end, output_path=output_path, add_instruments=[ins], postfix_filename="ins"+str(index))
+            # CORRECTED CALL
+            midis = self.score.generate_midi_filenames(base_url=web_path, range_start=start, range_end=end, add_instruments=[ins])
             selected_instruments_midis[ins] = {"ins": ins,  "midi": midis[0], "midi_parts": midis[1]}
 
-        midiAll = self.score.generate_midi_filename_sel(prefix="/midis/" + os.path.basename(web_path) + "/", output_path=output_path, range_start=start, range_end=end, sel="all")
-        midiSelected = self.score.generate_midi_filename_sel(prefix="/midis/" + os.path.basename(web_path) + "/", output_path=output_path, range_start=start, range_end=end, sel="sel")
-        midiUnselected = self.score.generate_midi_filename_sel(prefix="/midis/" + os.path.basename(web_path) + "/", output_path=output_path, range_start=start, range_end=end, sel="un")
+        # CORRECTED CALLS
+        midiAll = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start, range_end=end, sel="all")
+        midiSelected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start, range_end=end, sel="sel")
+        midiUnselected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start, range_end=end, sel="un")
         full_score_midis = {'selected_instruments_midis': selected_instruments_midis, 'midi_all': midiAll, 'midi_sel': midiSelected, 'midi_un': midiUnselected}
 
-        return template.render({'settings': settings,
-                                'basic_information': self.get_basic_information(),
-                                'preamble': self.get_preamble(),
-                                'full_score_midis': full_score_midis,
-                                'music_segments': self.get_music_segments(output_path, web_path, ),
-                                'instruments': self.score.part_instruments,
-                                'part_names': self.score.part_names,
-                                'binary_selected_instruments': self.score.binary_selected_instruments,
-                                'binary_play_all': self.score.binary_play_all,
-                                'play_all': settings['playAll'],
-                                'play_selected': settings['playSelected'],
-                                'play_unselected': settings['playUnselected'],
-                                'time_and_keys': self.time_and_keys,
-                                'parts_summary': self.music_analyser.summary_parts,
-                                'general_summary': self.music_analyser.general_summary,
-                                'repetition_in_contexts': self.music_analyser.repetition_in_contexts,
-                                'selected_part_names': self.score.selected_part_names,
-                                })
+        # Also pass the clean web_path here
+        music_segments = self.get_music_segments(output_path, web_path)
+
+        return template.render({
+            'settings': settings,
+            'basic_information': self.get_basic_information(),
+            'preamble': self.get_preamble(),
+            'full_score_midis': full_score_midis,
+            'music_segments': music_segments,
+            'instruments': self.score.part_instruments,
+            'part_names': self.score.part_names,
+            'binary_selected_instruments': self.score.binary_selected_instruments,
+            'binary_play_all': self.score.binary_play_all,
+            'play_all': settings['playAll'],
+            'play_selected': settings['playSelected'],
+            'play_unselected': settings['playUnselected'],
+            'time_and_keys': self.time_and_keys,
+            'parts_summary': self.music_analyser.summary_parts,
+            'general_summary': self.music_analyser.general_summary,
+            'repetition_in_contexts': self.music_analyser.repetition_in_contexts,
+            'selected_part_names': self.score.selected_part_names,
+        })
+    def _trigger_midi_generation(self, start_bar, end_bar):
+            # Local imports to prevent circular dependency at startup
+            from lib.midiHandler import MidiHandler
+            from types import SimpleNamespace
+            
+            logger.info(f"Pre-generating all MIDI files for bars {start_bar}-{end_bar}...")
+            
+            id_hash = os.path.basename(os.path.dirname(self.score.filepath))
+            xml_filename = os.path.basename(self.score.filepath)
+
+            get_params = {
+                'start': str(start_bar),
+                'end': str(end_bar),
+                'bsi': str(self.score.binary_selected_instruments),
+                'bpi': str(self.score.binary_play_all),
+                'upfront_generate': 'true'
+            }
+            dummy_request = SimpleNamespace(GET=get_params)
+            
+            try:
+                # Instantiate the handler
+                mh = MidiHandler(dummy_request, id_hash, xml_filename)
+                # --- PERFORMANCE FIX: Pass the already-parsed score object ---
+                mh.score = self.score.score
+                # Call the master generation function
+                mh.make_midi_files()
+                logger.info(f"Successfully generated MIDIs for bars {start_bar}-{end_bar}.")
+            except Exception as e:
+                logger.error(f"Failed to pre-generate MIDI files for bars {start_bar}-{end_bar}: {e}", exc_info=True)
 
     def get_basic_information(self):
         return {
@@ -929,18 +1051,13 @@ class HTMLTalkingScoreFormatter():
         }
 
     def get_music_segments(self, output_path, web_path):
-        print("web path = ")
-        print(web_path)
-        print("base name webpath = ")
-        print(os.path.basename(web_path))
-
         global settings
         logger.info("Start of get_music_segments")
+
         music_segments = []
         number_of_bars = self.score.get_number_of_bars()
 
-        t1s = time.time()
-        self.time_and_keys = {}  # index is bar number, key = "Time sig x of y - 4 4..."
+        self.time_and_keys = {}
         total = len(self.score.score.parts[0].flat.getElementsByClass('TimeSignature'))
         for count, ts in enumerate(self.score.score.parts[0].flat.getElementsByClass('TimeSignature')):
             description = "Time signature - " + str(count+1) + " of " + str(total) + " is " + self.score.describe_time_signature(ts) + ".  "
@@ -950,95 +1067,88 @@ class HTMLTalkingScoreFormatter():
         for count, ks in enumerate(self.score.score.parts[0].flat.getElementsByClass('KeySignature')):
             description = "Key signature - " + str(count+1) + " of " + str(total) + " is " + self.score.describe_key_signature(ks) + ".  "
             self.time_and_keys.setdefault(ks.measureNumber, []).append(description)
+        
+        self.score.timeSigs = {}
+        if self.score.score.parts[0].hasMeasures():
+            previous_ts = self.score.score.parts[0].getElementsByClass('Measure')[0].getTimeSignatures()[0]
+        else:
+            # Fallback if there are no measures
+            previous_ts = self.score.get_initial_time_signature()
 
-        self.score.timeSigs = {}  # key=bar number.  Value = timeSig
-        previous_ts = self.score.score.parts[0].getElementsByClass('Measure')[0].getTimeSignatures()[0]
 
         # pickup bar
         if self.score.score.parts[0].getElementsByClass('Measure')[0].number != self.score.score.parts[0].measures(1, 2).getElementsByClass('Measure')[0].number:
+            self._trigger_midi_generation(start_bar=0, end_bar=0)
+            
             previous_ts = self.score.score.parts[0].getElementsByClass('Measure')[0].getElementsByClass(meter.TimeSignature)[0]
             self.score.timeSigs[0] = previous_ts
-            # todo - where should spanners and dynamics etc go?
-            selected_instruments_descriptions = {}  # key = instrument index, {[part descriptions]}
+            selected_instruments_descriptions = {}
 
             selected_instruments_midis = {}
             for index, ins in enumerate(self.score.selected_instruments):
-                logger.debug(f"enumerate selected instruments... index = {index} and ins ={ins}")
-                midis = self.score.generate_midi_filenames(prefix="/midis/" + os.path.basename(web_path) + "/", range_start=0, range_end=0, output_path=output_path, add_instruments=[ins], postfix_filename="ins"+str(index))
+                midis = self.score.generate_midi_filenames(base_url=web_path, range_start=0, range_end=0, add_instruments=[ins])
                 selected_instruments_midis[ins] = {"ins": ins,  "midi": midis[0], "midi_parts": midis[1]}
                 selected_instruments_descriptions[ins] = self.score.generate_part_descriptions(instrument=ins, start_bar=0, end_bar=1)
-            midiAll = self.score.generate_midi_filename_sel(prefix="/midis/" + os.path.basename(web_path) + "/", output_path=output_path, range_start=0, range_end=0, sel="all")
-            midiSelected = self.score.generate_midi_filename_sel(prefix="/midis/" + os.path.basename(web_path) + "/", output_path=output_path, range_start=0, range_end=0, sel="sel")
-            midiUnselected = self.score.generate_midi_filename_sel(prefix="/midis/" + os.path.basename(web_path) + "/", output_path=output_path, range_start=0, range_end=0, sel="un")
+            
+            midiAll = self.score.generate_midi_filename_sel(base_url=web_path, range_start=0, range_end=0, sel="all")
+            midiSelected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=0, range_end=0, sel="sel")
+            midiUnselected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=0, range_end=0, sel="un")
 
             music_segment = {'start_bar': '0 - pickup', 'end_bar': '0 - pickup', 'selected_instruments_descriptions': selected_instruments_descriptions, 'selected_instruments_midis': selected_instruments_midis,  'midi_all': midiAll, 'midi_sel': midiSelected, 'midi_un': midiUnselected}
             music_segments.append(music_segment)
             number_of_bars -= 1
 
         # everything except the pickup
-        for bar_index in range(1, number_of_bars+1, settings['barsAtATime']):
+        for bar_index in range(1, number_of_bars + 1, settings['barsAtATime']):
             end_bar_index = bar_index + settings['barsAtATime'] - 1
             if end_bar_index > number_of_bars:
                 end_bar_index = number_of_bars
 
-            # cludge to not have None bars - but will actually ignore some...
-            # todo - we get the number of bars just by the length and use that as the maximum bar number.  However- sometimes bars are called "X1" for half bars next to a repeat.  Or Finale re-uses bar numbers for sections - so need a better way of getting each bar...
             if (self.score.score.parts[0].measure(bar_index) == None):
-                print("start bar is none...")
                 break
-            while (end_bar_index >= 1 and self.score.score.parts[0].measure(end_bar_index+1) == None):
+            while (end_bar_index >= 1 and self.score.score.parts[0].measure(end_bar_index + 1) == None):
                 end_bar_index = end_bar_index - 1
-                print("end bar index was too big - now " + str(end_bar_index))
-            # if there is only 1 bar - and it isn't a pickup bar
+            
             if end_bar_index == 0 and self.score.score.parts[0].measure(0) == None:
                 end_bar_index = 1
-            for checkts in range(bar_index, end_bar_index+1):
-                if (self.score.score.parts[0].measure(bar_index) == None):
-                    print("bar " + str(bar_index) + " is None...")
-                elif len(self.score.score.parts[0].measure(bar_index).getElementsByClass(meter.TimeSignature)) > 0:
+            
+            self._trigger_midi_generation(start_bar=bar_index, end_bar=end_bar_index)
+
+            for checkts in range(bar_index, end_bar_index + 1):
+                if (self.score.score.parts[0].measure(bar_index) is not None) and len(self.score.score.parts[0].measure(bar_index).getElementsByClass(meter.TimeSignature)) > 0:
                     previous_ts = self.score.score.parts[0].measure(bar_index).getElementsByClass(meter.TimeSignature)[0]
                 self.score.timeSigs[checkts] = previous_ts
 
-            # for offset, events in events_for_bar_range.iteritems():
-            # events_ordered_by_beat = OrderedDict(sorted(events_for_bar_range.items(), key=lambda t: t[0]))
-
-            # pp = pprint.PrettyPrinter(indent=4)
-            # pp.pprint(events_by_bar_and_beat)
-
-            selected_instruments_descriptions = {}  # key = instrument index,
+            selected_instruments_descriptions = {}
             selected_instruments_midis = {}
             for index, ins in enumerate(self.score.selected_instruments):
-                logger.debug(f"adding to selected_instruments_descriptions - index = {index} and ins = {ins}")
-                midis = self.score.generate_midi_filenames(prefix="/midis/" + os.path.basename(web_path) + "/", range_start=bar_index, range_end=end_bar_index, output_path=output_path, add_instruments=[ins], postfix_filename="ins"+str(index))
+                midis = self.score.generate_midi_filenames(base_url=web_path, range_start=bar_index, range_end=end_bar_index, add_instruments=[ins])
                 selected_instruments_midis[ins] = {"ins": ins,  "midi": midis[0], "midi_parts": midis[1]}
                 selected_instruments_descriptions[ins] = self.score.generate_part_descriptions(instrument=ins, start_bar=bar_index, end_bar=end_bar_index)
-
-            midiAll = self.score.generate_midi_filename_sel(prefix="/midis/" + os.path.basename(web_path) + "/", output_path=output_path, range_start=bar_index, range_end=end_bar_index, sel="all")
-            midiSelected = self.score.generate_midi_filename_sel(prefix="/midis/" + os.path.basename(web_path) + "/", output_path=output_path, range_start=bar_index, range_end=end_bar_index, sel="sel")
-            midiUnselected = self.score.generate_midi_filename_sel(prefix="/midis/" + os.path.basename(web_path) + "/", output_path=output_path, range_start=bar_index, range_end=end_bar_index, sel="un")
+            
+            midiAll = self.score.generate_midi_filename_sel(base_url=web_path, range_start=bar_index, range_end=end_bar_index, sel="all")
+            midiSelected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=bar_index, range_end=end_bar_index, sel="sel")
+            midiUnselected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=bar_index, range_end=end_bar_index, sel="un")
 
             music_segment = {'start_bar': bar_index, 'end_bar': end_bar_index,  'selected_instruments_descriptions': selected_instruments_descriptions, 'selected_instruments_midis': selected_instruments_midis, 'midi_all': midiAll, 'midi_sel': midiSelected, 'midi_un': midiUnselected}
             music_segments.append(music_segment)
 
-        logger.info("End of get_music_segments")
-        t1e = time.time()
-        print("described parts etc = " + str(t1e-t1s))
         return music_segments
 
 
-if __name__ == '__main__':
-
-    # testScoreFilePath = '../talkingscoresapp/static/data/macdowell-to-a-wild-rose.xml'
-    testScoreFilePath = '../media/172a28455fa5cfbdaa4eecd5f63a0a2ebaddd92d569980fb402811b9cd5cce4a/MozartPianoSonata.xml'
-    # testScoreFilePath = '../talkingscores/talkingscoresapp/static/data/bach-2-part-invention-no-13.xml'
-
-    testScoreOutputFilePath = testScoreFilePath.replace('.xml', '.html')
-
-    testScore = Music21TalkingScore(testScoreFilePath)
-    tsf = HTMLTalkingScoreFormatter(testScore)
-    html = tsf.generateHTML()
-
-    with open(testScoreOutputFilePath, "wb") as fh:
-        fh.write(html)
-
-    os.system(f'open http://0.0.0.0:8000/static/data/{os.path.basename(testScoreOutputFilePath)}')
+# if __name__ == '__main__':
+# 
+#     # testScoreFilePath = '../talkingscoresapp/static/data/macdowell-to-a-wild-rose.xml'
+#     testScoreFilePath = '../media/172a28455fa5cfbdaa4eecd5f63a0a2ebaddd92d569980fb402811b9cd5cce4a/MozartPianoSonata.xml'
+#     # testScoreFilePath = '../talkingscores/talkingscoresapp/static/data/bach-2-part-invention-no-13.xml'
+# 
+#     testScoreOutputFilePath = testScoreFilePath.replace('.xml', '.html')
+# 
+#     testScore = Music21TalkingScore(testScoreFilePath)
+#     tsf = HTMLTalkingScoreFormatter(testScore)
+#     html = tsf.generateHTML()
+# 
+#     with open(testScoreOutputFilePath, "wb") as fh:
+#         fh.write(html)
+# 
+#     os.system(f'open http://0.0.0.0:8000/static/data/{os.path.basename(testScoreOutputFilePath)}')

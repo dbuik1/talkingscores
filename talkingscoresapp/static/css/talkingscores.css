@@ -195,12 +195,18 @@ html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-acti
 /* --- 6. Forms & Buttons --- */
 
 /* Standard Form Controls */
-.form-control {
+.form-control,
+.score-page select{
     background-color: var(--form-control-bg);
     color: var(--form-control-color);
     border: 1px solid var(--form-control-border);
 }
-.form-control:focus {
+.score-page select option {
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+.form-control:focus,
+.score-page select:focus {
     background-color: var(--form-control-bg);
     color: var(--form-control-color);
     border-color: var(--form-control-border);
