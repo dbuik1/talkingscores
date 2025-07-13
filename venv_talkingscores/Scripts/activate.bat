@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=C:\Users\dbuik\Documents\talkingscores\venv_talkingscores
+set VIRTUAL_ENV=C:\Users\david\Documents\Talkingscores\talkingscores\venv_talkingscores
 
 if not defined PROMPT set PROMPT=$P$G
 
