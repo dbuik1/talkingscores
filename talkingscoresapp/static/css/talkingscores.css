@@ -263,7 +263,7 @@ html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-acti
 }
 #file-chosen-name {
     font-size: 1rem;
-    font-style: italic;
+    font-style: normal;
     color: var(--text-color);
 }
 
@@ -365,4 +365,46 @@ html[data-theme="dark"] .repetition-info {
 .palette-pickers {
     flex-grow: 1;
     min-width: 180px; /* Ensures pickers don't get too squished */
+}
+/* ============================================= */
+/* HOMEPAGE FORM STYLES                          */
+/* ============================================= */
+
+/* Removes italics from the "No file selected" text */
+#file-chosen-name {
+    font-style: normal;
+}
+
+/* Styles the new "Upload" and "URL" labels */
+.form-section-label {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+/* Styles the new "or" separator with lines */
+.form-separator {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: var(--text-color);
+    opacity: 0.6;
+    margin: 2rem 1rem;
+}
+
+.form-separator::before,
+.form-separator::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--form-control-border);
+}
+
+.form-separator:not(:empty)::before {
+    margin-right: 1em;
+}
+
+.form-separator:not(:empty)::after {
+    margin-left: 1em;
 }

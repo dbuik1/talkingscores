@@ -43,32 +43,29 @@
         <hr>
 
         <div id="drop-zone">
-            <h3><b>Upload or provide a URL to a MusicXML file.</b></h3>
-
+            <h3><b>Drag &amp; drop a MusicXML file, click to upload, or provide a URL.</b></h3>
+        
             <form class="form-horizontal text-center mx-auto" action="/" method="post" enctype="multipart/form-data">
                 {% csrf_token %}
                 
                 <div class="form-group mx-auto">
-                    <label for="id_filename" class="col-sm-3 control-label">Upload</label>
+                    <label class="form-section-label">Upload</label>
                     <div class="col-sm-6 mx-auto">
                         <div class="custom-file-upload">
                             <input type="file" id="id_filename" name="filename">
                             <label for="id_filename" class="btn btn-secondary btn-lg" tabindex="0" id="id_filename_label">Choose File</label>
                             <span id="file-chosen-name">No file selected</span>
-
                             <button type="button" id="clear-file-button" class="clear-file-btn" aria-label="Clear selected file" hidden>&times;</button>
                         </div>
                     </div>
                 </div>
-
+        
+                <div class="form-separator">or</div>
+        
                 <div class="form-group">
-                    <div class="col-sm-offset-3 col-sm-6 mx-auto"><p class="tsp">or</p></div>
-                </div>
-
-                <div class="form-group">
-                    <label for="id_url" class="col-sm-3 control-label">URL</label>
+                    <label for="id_url" class="form-section-label">URL</label>
                     <div class="col-sm-6 mx-auto">
-                        <input type="url" class="form-control input-lg " id="id_url" name="url">
+                        <input type="url" class="form-control input-lg" id="id_url" name="url">
                     </div>
                 </div>
                 <br>
@@ -79,16 +76,6 @@
                 </div>
             </form>
         </div>
-        <hr>
-
-        <h3><b>Example scores</b></h3>
-        <p class="tsp">These example scores have been produced by this website...</p>
-        <ul class="list-unstyled">
-            <li class="tsp"><a href="/static/data/Faure-Sicilienne-cello-010323.html">Faure-Sicilienne-cello-010323.html</a></li> <br>
-            <li class="tsp"><a href="/static/data/macdowell-to-a-wild-rose-010323.html">macdowell-to-a-wild-rose-010323.html</a></li> <br>
-        </ul>
-    </div>
-</div>
 {% endblock content %}
 
 {% block javascript %}
