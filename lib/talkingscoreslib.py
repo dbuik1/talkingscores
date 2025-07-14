@@ -532,140 +532,6 @@ class Music21TalkingScore(TalkingScoreBase):
 
         return bars_for_parts
 
-    def get_events_for_bar_range(self, start_bar, end_bar, part_index):
-        events_by_bar = {}
-
-        # using collect=('TimeSignature') is slow.  It is almost twice as fast to use a dictionary of time signatures and insert at the start of each segment.
-        measures = self.score.parts[part_index].measures(start_bar, end_bar)
-        if measures.measure(start_bar) != None and len(measures.measure(start_bar).getElementsByClass(meter.TimeSignature)) == 0:
-            measures.measure(start_bar).insert(0, self.timeSigs[start_bar])
-
-        logger.info(f'Processing part - {part_index} - bars {start_bar} to {end_bar}')
-        # Iterate over the bars one at a time
-        # pickup bar has to request measures 0 to 1 above otherwise it returns an measures just has empty parts - so now restrict it just to bar 0...
-        if start_bar == 0 and end_bar == 1:
-            end_bar = 0
-        for bar_index in range(start_bar, end_bar + 1):
-            measure = measures.measure(bar_index)
-            if measure is not None:
-                self.update_events_for_measure(measure, events_by_bar)
-
-        # Iterate over the spanners
-        # todo - mention slurs?  Make it an option?
-        # todo - this looks at spanners per part so eg crescendos are described for the right hand but not the left of a piano...
-        # todo - it is a bit inefficient.  It looks spanners from the start of the part for each segment...
-        for spanner in self.score.parts[part_index].spanners.elements:
-            first = spanner.getFirst()
-            last = spanner.getLast()
-            if first.measureNumber is None or last.measureNumber is None:
-                continue
-            elif first.measureNumber > end_bar:  # all remaining spanners are after this segment so break the for loop
-                break
-
-            spanner_type = type(spanner).__name__
-            if spanner_type == 'Crescendo' or spanner_type == 'Diminuendo':
-                description_order = 0
-                voice = 1
-
-                if first.measureNumber >= start_bar and first.measureNumber <= end_bar:
-                    event = TSDynamic(long_name=f'{spanner_type} start')
-                    events_by_bar\
-                        .setdefault(first.measureNumber, {})\
-                        .setdefault(first.beat, {})\
-                        .setdefault(voice, {})\
-                        .setdefault(description_order, [])\
-                        .append(event)
-
-                if last.measureNumber >= start_bar and last.measureNumber <= end_bar:
-                    event = TSDynamic(long_name=f'{spanner_type} end')
-                    # todo -  Note - THIS WILL NOT HANDLE CRESCENDOS/DIMINUENDOS THAT SPAN MEASURES
-                    events_by_bar\
-                        .setdefault(last.measureNumber, {})\
-                        .setdefault(last.beat + last.duration.quarterLength - 1, {})\
-                        .setdefault(voice, {})\
-                        .setdefault(description_order, [])\
-                        .append(event)
-
-        return events_by_bar
-
-    def update_events_for_measure(self, measure, events, voice: int = 1):
-        previous_beat = 1
-        for element in measure.elements:
-            element_type = type(element).__name__
-            event = None
-            # --- (This block of code to identify the element type is unchanged) ---
-            if element_type == 'Note':
-                event = TSNote()
-                event.pitch = TSPitch(self.map_pitch(element.pitch), self.map_octave(element.pitch.octave), element.pitch.ps, element.pitch.name[0])
-                description_order = 1
-                if element.tie:
-                    event.tie = element.tie.type
-                event.expressions = element.expressions
-            elif element_type == 'Unpitched':
-                event = TSUnpitched()
-                description_order = 1
-            elif element_type == 'Rest':
-                event = TSRest()
-                description_order = 1
-            elif element_type == 'Chord':
-                event = TSChord()
-                event.pitches = [TSPitch(self.map_pitch(element_pitch), self.map_octave(element_pitch.octave), element_pitch.ps, element_pitch.name[0]) for element_pitch in element.pitches]
-                description_order = 1
-                if element.tie:
-                    event.tie = element.tie.type
-            elif element_type == 'Dynamic':
-                event = TSDynamic(long_name=element.longName, short_name=element.value)
-                description_order = 0
-            elif element_type == 'Voice':
-                self.update_events_for_measure(element, events, int(element.id))
-            # --- (End of unchanged block) ---
-
-            if event is None:
-                continue
-            
-            # --- FIX: New logic to handle notes with invalid beats ---
-            beat_val = element.beat
-            
-            # If the beat is invalid, associate it with the previous valid beat.
-            if not isinstance(beat_val, (int, float)) or math.isnan(beat_val):
-                beat = previous_beat
-                # You could add a flag here later to specifically mark it as a grace note if needed
-                # e.g., event.is_grace_note = True
-            else:
-                # Otherwise, process the beat normally
-                if math.floor(beat_val) == math.floor(previous_beat):
-                    beat = previous_beat
-                elif math.floor(beat_val) == beat_val:
-                    beat = math.floor(beat_val)
-                else:
-                    beat = beat_val
-                # Update previous_beat only when we process a valid beat
-                previous_beat = beat
-            # --- END FIX ---
-
-            event.duration = ""
-            if (len(element.duration.tuplets) > 0):
-                if (element.duration.tuplets[0].type == "start"):
-                    if (element.duration.tuplets[0].fullName == "Triplet"):
-                        event.tuplets = "triplets "
-                    else:
-                        event.tuplets = element.duration.tuplets[0].fullName + " (" + str(element.duration.tuplets[0].tupletActual[0]) + " in " + str(element.duration.tuplets[0].tupletNormal[0]) + ") "
-                elif (element.duration.tuplets[0].type == "stop" and element.duration.tuplets[0].fullName != "Triplet"):
-                    event.endTuplets = "end tuplet "
-
-            if settings['dotPosition'] == "before":
-                event.duration += self.map_dots(element.duration.dots)
-            event.duration += self.map_duration(element.duration)
-            if settings['dotPosition'] == "after":
-                event.duration += " " + self.map_dots(element.duration.dots)
-
-            events\
-                .setdefault(measure.measureNumber, {})\
-                .setdefault(beat, {})\
-                .setdefault(voice, {})\
-                .setdefault(description_order, [])\
-                .append(event)
-
     def group_chord_pitches_by_octave(self, chord):
         chord_pitches_by_octave = {}
         for pitch in chord.pitches:
@@ -682,13 +548,114 @@ class Music21TalkingScore(TalkingScoreBase):
             # Note: using a consistent parameter order
             query_params += f"&start={range_start}&end={range_end}"
             return f"{base_url}?{query_params}"
+    def generate_part_description_data(self, part_index, start_bar, end_bar, initial_dynamic_state=None):
+        """
+        Generates a list of descriptive strings for a part segment with intuitive inline dynamics.
+        This is the new, robust single-pass algorithm.
+        It returns a simpler data structure for easier rendering in Jinja.
+        """
+        global settings
+        part = self.score.parts[part_index]
+        segment_stream = part.measures(start_bar, end_bar).flat
 
-    def generate_part_descriptions(self, instrument, start_bar, end_bar):
-        part_descriptions = []
-        for pi in range(self.part_instruments[instrument][1], self.part_instruments[instrument][1]+self.part_instruments[instrument][2]):
-            part_descriptions.append(self.get_events_for_bar_range(start_bar, end_bar, pi))
+        description_data = {}
+        active_stateful_dynamic = initial_dynamic_state
+        
+        # CORRECTED LINE: Added .stream() to ensure we have a generic stream object.
+        for element_group in segment_stream.stream().groupElementsByOffset():
+            
+            new_dynamic_object = None
+            for el in element_group:
+                if isinstance(el, music21.dynamics.Dynamic) and el.value not in ['crescendo', 'diminuendo', 'decrescendo']:
+                    new_dynamic_object = el
+                    break
 
-        return part_descriptions
+            notes_in_group = [e for e in element_group if isinstance(e, music21.note.GeneralNote)]
+            if not notes_in_group:
+                continue
+
+            beat_event_descriptions = []
+            
+            for el in notes_in_group:
+                desc_parts = []
+                
+                rhythm_desc = self.map_duration(el.duration)
+                if el.duration.dots > 0:
+                    dots_desc = self._DOTS_MAP.get(el.duration.dots, '')
+                    rhythm_desc = f"{dots_desc}{rhythm_desc}" if settings['dotPosition'] == 'before' else f"{rhythm_desc} {dots_desc.strip()}"
+                desc_parts.append(rhythm_desc)
+
+                if el.isRest:
+                    desc_parts.append("rest")
+                elif el.isChord:
+                    sorted_pitches = sorted(el.pitches, key=lambda p: p.ps)
+                    pitch_names = " ".join([p.nameWithOctave for p in sorted_pitches])
+                    desc_parts.append(f"{len(el.pitches)}-note chord ({pitch_names})")
+                else:
+                    desc_parts.append(el.pitch.nameWithOctave)
+
+                dynamic_tags = []
+                if new_dynamic_object and new_dynamic_object.longName != active_stateful_dynamic:
+                    dynamic_tags.append(f"[{new_dynamic_object.longName.capitalize()}]")
+                    active_stateful_dynamic = new_dynamic_object.longName
+                    new_dynamic_object = None
+
+                for spanner in el.getSpannerSites():
+                    if isinstance(spanner, (music21.spanner.Crescendo, music21.spanner.Diminuendo)):
+                        if el is spanner.getFirst():
+                           dynamic_tags.append(f"[{spanner.type} start]")
+                
+                full_desc_for_event = " ".join(desc_parts)
+                if dynamic_tags:
+                    full_desc_for_event += " " + " ".join(dynamic_tags)
+                beat_event_descriptions.append(full_desc_for_event)
+
+            bar_num = notes_in_group[0].measureNumber
+            beat_num_raw = notes_in_group[0].beat
+            beat_str = str(beat_num_raw)
+            if beat_str.endswith('.0'):
+                beat_str = beat_str[:-2]
+            
+            final_line = f"**Beat {beat_str}:** " + ", ".join(beat_event_descriptions)
+            
+            if bar_num not in description_data:
+                description_data[bar_num] = []
+            description_data[bar_num].append(final_line)
+
+        return (description_data, active_stateful_dynamic)
+
+    def generate_part_descriptions(self, instrument, start_bar, end_bar, part_dynamic_states):
+        """
+        Calls the new rendering function for an instrument's part(s) and manages dynamic state.
+        """
+        # This dictionary will store the final description data for each part of the instrument
+        descriptions_for_instrument = {}
+        
+        # An instrument can have multiple parts (e.g., piano right and left hand)
+        num_parts_in_instrument = self.part_instruments[instrument][2]
+        first_part_index = self.part_instruments[instrument][1]
+            
+        for i in range(num_parts_in_instrument):
+            part_index = first_part_index + i
+            
+            # Get the initial state for this part for this segment
+            initial_state = part_dynamic_states.get(part_index)
+            
+            # Call the new rendering function
+            description_data, final_state = self.generate_part_description_data(
+                part_index, 
+                start_bar, 
+                end_bar, 
+                initial_dynamic_state=initial_state
+            )
+            
+            # Store the result for this specific part
+            descriptions_for_instrument[part_index] = description_data
+
+            # IMPORTANT: Update the state for the next segment
+            part_dynamic_states[part_index] = final_state
+        
+        return descriptions_for_instrument
 
     def generate_midi_filenames(self, base_url, range_start=None, range_end=None, add_instruments=[]):
         """Generates MIDI URLs for a specific instrument and its constituent parts."""
@@ -1068,81 +1035,74 @@ class HTMLTalkingScoreFormatter():
         number_of_bars = self.score.get_number_of_bars()
 
         self.time_and_keys = {}
-        total = len(self.score.score.parts[0].flat.getElementsByClass('TimeSignature'))
-        for count, ts in enumerate(self.score.score.parts[0].flat.getElementsByClass('TimeSignature')):
-            description = "Time signature - " + str(count+1) + " of " + str(total) + " is " + self.score.describe_time_signature(ts) + ".  "
+        all_time_sigs = self.score.score.parts[0].flat.getElementsByClass('TimeSignature')
+        for count, ts in enumerate(all_time_sigs):
+            description = f"Time signature - {count + 1} of {len(all_time_sigs)} is {self.score.describe_time_signature(ts)}."
             self.time_and_keys.setdefault(ts.measureNumber, []).append(description)
 
-        total = len(self.score.score.parts[0].flat.getElementsByClass('KeySignature'))
-        for count, ks in enumerate(self.score.score.parts[0].flat.getElementsByClass('KeySignature')):
-            description = "Key signature - " + str(count+1) + " of " + str(total) + " is " + self.score.describe_key_signature(ks) + ".  "
+        all_key_sigs = self.score.score.parts[0].flat.getElementsByClass('KeySignature')
+        for count, ks in enumerate(all_key_sigs):
+            description = f"Key signature - {count + 1} of {len(all_key_sigs)} is {self.score.describe_key_signature(ks)}."
             self.time_and_keys.setdefault(ks.measureNumber, []).append(description)
         
-        self.score.timeSigs = {}
-        if self.score.score.parts[0].hasMeasures():
-            previous_ts = self.score.score.parts[0].getElementsByClass('Measure')[0].getTimeSignatures()[0]
+        # Initialize dynamic state tracker for each part. This will persist across segments.
+        part_dynamic_states = {pi: None for pi in range(len(self.score.score.parts))}
+
+        # Determine bar ranges to process, including a pickup bar if it exists
+        bar_ranges = []
+        measures = self.score.score.parts[0].getElementsByClass('Measure')
+        if not measures:
+            return [] # No bars in score
+        
+        first_measure_num = measures[0].number
+        if first_measure_num == 0:
+            bar_ranges.append((0, 0)) # Pickup bar segment
+            start_index = 1
         else:
-            # Fallback if there are no measures
-            previous_ts = self.score.get_initial_time_signature()
+            start_index = first_measure_num
 
+        for bar_index in range(start_index, number_of_bars + 1, settings['barsAtATime']):
+            end_bar_index = min(bar_index + settings['barsAtATime'] - 1, number_of_bars)
+            bar_ranges.append((bar_index, end_bar_index))
 
-        # pickup bar
-        if self.score.score.parts[0].getElementsByClass('Measure')[0].number != self.score.score.parts[0].measures(1, 2).getElementsByClass('Measure')[0].number:
-            self._trigger_midi_generation(start_bar=0, end_bar=0)
+        # Main loop to generate all data for each music segment
+        for start_bar, end_bar in bar_ranges:
             
-            previous_ts = self.score.score.parts[0].getElementsByClass('Measure')[0].getElementsByClass(meter.TimeSignature)[0]
-            self.score.timeSigs[0] = previous_ts
-            selected_instruments_descriptions = {}
-
-            selected_instruments_midis = {}
-            for index, ins in enumerate(self.score.selected_instruments):
-                midis = self.score.generate_midi_filenames(base_url=web_path, range_start=0, range_end=0, add_instruments=[ins])
-                selected_instruments_midis[ins] = {"ins": ins,  "midi": midis[0], "midi_parts": midis[1]}
-                selected_instruments_descriptions[ins] = self.score.generate_part_descriptions(instrument=ins, start_bar=0, end_bar=1)
-            
-            midiAll = self.score.generate_midi_filename_sel(base_url=web_path, range_start=0, range_end=0, sel="all")
-            midiSelected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=0, range_end=0, sel="sel")
-            midiUnselected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=0, range_end=0, sel="un")
-
-            music_segment = {'start_bar': '0 - pickup', 'end_bar': '0 - pickup', 'selected_instruments_descriptions': selected_instruments_descriptions, 'selected_instruments_midis': selected_instruments_midis,  'midi_all': midiAll, 'midi_sel': midiSelected, 'midi_un': midiUnselected}
-            music_segments.append(music_segment)
-            number_of_bars -= 1
-
-        # everything except the pickup
-        for bar_index in range(1, number_of_bars + 1, settings['barsAtATime']):
-            end_bar_index = bar_index + settings['barsAtATime'] - 1
-            if end_bar_index > number_of_bars:
-                end_bar_index = number_of_bars
-
-            if (self.score.score.parts[0].measure(bar_index) == None):
-                break
-            while (end_bar_index >= 1 and self.score.score.parts[0].measure(end_bar_index + 1) == None):
-                end_bar_index = end_bar_index - 1
-            
-            if end_bar_index == 0 and self.score.score.parts[0].measure(0) == None:
-                end_bar_index = 1
-            
-            self._trigger_midi_generation(start_bar=bar_index, end_bar=end_bar_index)
-
-            for checkts in range(bar_index, end_bar_index + 1):
-                if (self.score.score.parts[0].measure(bar_index) is not None) and len(self.score.score.parts[0].measure(bar_index).getElementsByClass(meter.TimeSignature)) > 0:
-                    previous_ts = self.score.score.parts[0].measure(bar_index).getElementsByClass(meter.TimeSignature)[0]
-                self.score.timeSigs[checkts] = previous_ts
+            self._trigger_midi_generation(start_bar=start_bar, end_bar=end_bar)
 
             selected_instruments_descriptions = {}
             selected_instruments_midis = {}
-            for index, ins in enumerate(self.score.selected_instruments):
-                midis = self.score.generate_midi_filenames(base_url=web_path, range_start=bar_index, range_end=end_bar_index, add_instruments=[ins])
-                selected_instruments_midis[ins] = {"ins": ins,  "midi": midis[0], "midi_parts": midis[1]}
-                selected_instruments_descriptions[ins] = self.score.generate_part_descriptions(instrument=ins, start_bar=bar_index, end_bar=end_bar_index)
             
-            midiAll = self.score.generate_midi_filename_sel(base_url=web_path, range_start=bar_index, range_end=end_bar_index, sel="all")
-            midiSelected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=bar_index, range_end=end_bar_index, sel="sel")
-            midiUnselected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=bar_index, range_end=end_bar_index, sel="un")
+            for ins in self.score.selected_instruments:
+                # Generate MIDI links (existing logic)
+                midis = self.score.generate_midi_filenames(base_url=web_path, range_start=start_bar, range_end=end_bar, add_instruments=[ins])
+                selected_instruments_midis[ins] = {"ins": ins,  "midi": midis[0], "midi_parts": midis[1]}
+                
+                # Generate Descriptions using the NEW state-managed method
+                # Note: part_dynamic_states is passed by reference and gets updated inside the function
+                selected_instruments_descriptions[ins] = self.score.generate_part_descriptions(
+                    instrument=ins, 
+                    start_bar=start_bar, 
+                    end_bar=end_bar, 
+                    part_dynamic_states=part_dynamic_states
+                )
+            
+            midiAll = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start_bar, range_end=end_bar, sel="all")
+            midiSelected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start_bar, range_end=end_bar, sel="sel")
+            midiUnselected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start_bar, range_end=end_bar, sel="un")
 
-            music_segment = {'start_bar': bar_index, 'end_bar': end_bar_index,  'selected_instruments_descriptions': selected_instruments_descriptions, 'selected_instruments_midis': selected_instruments_midis, 'midi_all': midiAll, 'midi_sel': midiSelected, 'midi_un': midiUnselected}
-            music_segments.append(music_segment)
-
+            segment_start_label = str(start_bar) if start_bar != 0 else f"{start_bar} - pickup"
+            
+            music_segments.append({
+                'start_bar': segment_start_label, 
+                'end_bar': end_bar,
+                'selected_instruments_descriptions': selected_instruments_descriptions, 
+                'selected_instruments_midis': selected_instruments_midis, 
+                'midi_all': midiAll, 
+                'midi_sel': midiSelected, 
+                'midi_un': midiUnselected
+            })
+            
         return music_segments
 
 
