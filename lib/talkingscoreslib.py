@@ -593,13 +593,13 @@ class Music21TalkingScore(TalkingScoreBase):
         for element in measure.elements:
             element_type = type(element).__name__
             event = None
+            # --- (This block of code to identify the element type is unchanged) ---
             if element_type == 'Note':
                 event = TSNote()
                 event.pitch = TSPitch(self.map_pitch(element.pitch), self.map_octave(element.pitch.octave), element.pitch.ps, element.pitch.name[0])
                 description_order = 1
                 if element.tie:
                     event.tie = element.tie.type
-
                 event.expressions = element.expressions
             elif element_type == 'Unpitched':
                 event = TSUnpitched()
@@ -607,29 +607,40 @@ class Music21TalkingScore(TalkingScoreBase):
             elif element_type == 'Rest':
                 event = TSRest()
                 description_order = 1
-
             elif element_type == 'Chord':
                 event = TSChord()
                 event.pitches = [TSPitch(self.map_pitch(element_pitch), self.map_octave(element_pitch.octave), element_pitch.ps, element_pitch.name[0]) for element_pitch in element.pitches]
                 description_order = 1
                 if element.tie:
                     event.tie = element.tie.type
-
             elif element_type == 'Dynamic':
                 event = TSDynamic(long_name=element.longName, short_name=element.value)
-                description_order = 0  # Always speak the dynamic first
-
+                description_order = 0
             elif element_type == 'Voice':
                 self.update_events_for_measure(element, events, int(element.id))
+            # --- (End of unchanged block) ---
 
             if event is None:
                 continue
-                
-            # --- ROBUST FIX: Check for invalid beat values before processing ---
-            # First check if beat is not a number, then check if it is NaN
-            if not isinstance(element.beat, (int, float)) or math.isnan(element.beat):
-                logger.warning(f"Skipping element of type {element_type} with invalid beat value: {element.beat}")
-                continue # Skip to the next element in the measure
+            
+            # --- FIX: New logic to handle notes with invalid beats ---
+            beat_val = element.beat
+            
+            # If the beat is invalid, associate it with the previous valid beat.
+            if not isinstance(beat_val, (int, float)) or math.isnan(beat_val):
+                beat = previous_beat
+                # You could add a flag here later to specifically mark it as a grace note if needed
+                # e.g., event.is_grace_note = True
+            else:
+                # Otherwise, process the beat normally
+                if math.floor(beat_val) == math.floor(previous_beat):
+                    beat = previous_beat
+                elif math.floor(beat_val) == beat_val:
+                    beat = math.floor(beat_val)
+                else:
+                    beat = beat_val
+                # Update previous_beat only when we process a valid beat
+                previous_beat = beat
             # --- END FIX ---
 
             event.duration = ""
@@ -647,15 +658,6 @@ class Music21TalkingScore(TalkingScoreBase):
             event.duration += self.map_duration(element.duration)
             if settings['dotPosition'] == "after":
                 event.duration += " " + self.map_dots(element.duration.dots)
-
-            if (math.floor(element.beat) == math.floor(previous_beat)):
-                beat = previous_beat
-            elif (math.floor(element.beat) == element.beat):
-                beat = math.floor(element.beat)
-            else:
-
-                beat = element.beat
-            previous_beat = beat
 
             events\
                 .setdefault(measure.measureNumber, {})\
