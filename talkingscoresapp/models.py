@@ -60,16 +60,17 @@ class TSScore(object):
         # This method remains the same
         data_filepath = self.get_data_file_path()
         opts_filepath = data_filepath + '.opts'
-        output_filepath = data_filepath.replace('.musicxml', '.html') # More robust path creation
-
+        
+        # We no longer check for a cached HTML file, so the state logic is simplified.
+        # Once options are submitted, we consider it ready for processing.
         if not os.path.exists(data_filepath):
             return TSScoreState.FETCHING
         elif not os.path.exists(opts_filepath):
             return TSScoreState.AWAITING_OPTIONS
-        elif not os.path.exists(output_filepath):
-            return TSScoreState.AWAITING_PROCESSING
         else:
+            # If the XML and options exist, it's ready to be processed into HTML on request.
             return TSScoreState.PROCESSED
+
 
     def info(self):
         # This method remains the same
@@ -115,56 +116,33 @@ class TSScore(object):
         return path
 
     def html(self):
+        # --- MODIFIED: REMOVED HTML CACHING ---
+        # This method now generates the HTML dynamically on every call.
+        
         data_path = self.get_data_file_path()
         if not data_path:
             return "Error: Could not find score data file."
 
-        # Define path for the cached HTML file
-        output_dir = os.path.join(MEDIA_ROOT, self.id)
-        os.makedirs(output_dir, exist_ok=True)
-        html_path = os.path.join(output_dir, self.filename.replace('.musicxml', '.html'))
-
-        # --- THIS IS THE FIX ---
-        # The web path should NOT include the .mid extension. It's just the base.
-        base_filename = os.path.splitext(self.filename)[0]
+        # The web path for MIDI links.
         web_path = f"/midis/{self.id}/{self.filename}"
-        # ------------------------
         
-        html_content = None
-
-        # Check for a valid cached file
-        if os.path.exists(html_path):
-            self.logger.info(f"Cache hit. Reading existing HTML from {html_path}")
-            with open(html_path, 'r', encoding='utf-8') as html_fh:
-                html_content = html_fh.read()
-            if not html_content or not html_content.strip():
-                self.logger.warning(f"Cached file at {html_path} was empty. Regenerating.")
-                html_content = None
-                try:
-                    os.remove(html_path)
-                except OSError as e:
-                    self.logger.error(f"Could not remove corrupt cache file: {e}")
-
-        # If no valid cache, generate the HTML now
-        if html_content is None:
-            self.logger.info(f"Generating new HTML for {data_path}")
-            try:
-                mxmlScore = Music21TalkingScore(data_path)
-                tsf = HTMLTalkingScoreFormatter(mxmlScore)
-                
-                # The output path for MIDI files is the media directory for this score
-                midi_output_path = output_dir
-                
-                html_content = tsf.generateHTML(output_path=midi_output_path, web_path=web_path)
-                
-                # Write the new content to the cache file
-                with open(html_path, "wb") as fh:
-                    fh.write(html_content.encode('utf-8'))
-            except Exception as e:
-                self.logger.exception(f"Failed to generate HTML from score {data_path}")
-                return f"<h1>Error Generating Score</h1><p>There was an error processing the MusicXML file: {e}</p>"
-                
-        return html_content
+        # The output path for on-demand MIDI files is the media directory for this score.
+        midi_output_path = os.path.join(MEDIA_ROOT, self.id)
+        os.makedirs(midi_output_path, exist_ok=True)
+        
+        self.logger.info(f"Dynamically generating HTML for {data_path}")
+        try:
+            mxmlScore = Music21TalkingScore(data_path)
+            tsf = HTMLTalkingScoreFormatter(mxmlScore)
+            
+            # The formatter will now handle MIDI generation as needed.
+            html_content = tsf.generateHTML(output_path=midi_output_path, web_path=web_path)
+            
+            return html_content
+            
+        except Exception as e:
+            self.logger.exception(f"Failed to generate HTML from score {data_path}")
+            return f"<h1>Error Generating Score</h1><p>There was an error processing the MusicXML file: {e}</p>"
     
     @classmethod
     def from_uploaded_file(cls, uploaded_file):
@@ -242,14 +220,4 @@ class TSScore(object):
             logger.exception(f"URL-fetched file failed validation at final destination: {destination_path}")
             raise e
             
-        return score
-
-    @classmethod
-    def from_url(cls, url):
-        logger.info("URL is: '%s'" % url)
-        parsed_url = urlparse(url)
-        score = TSScore(url=url)
-        score_temp_filepath = score.fetch()
-        score_filename = url2pathname(os.path.basename(sanitize_filename(parsed_url.path.name.replace("'", "").replace("\"", ""))))
-        score.store(score_temp_filepath, score_filename)
         return score
