@@ -1,9 +1,9 @@
 /* ============================================= */
-/* TALKING SCORES STYLESHEET (FINAL)             */
+/* TALKING SCORES STYLESHEET            */
 /* ============================================= */
 
 
-/* --- 1. CSS Variables --- */
+/* --- 1. THEME VARIABLES --- */
 :root {
     /* General */
     --background-color: #ffffff;
@@ -12,7 +12,7 @@
     --link-hover-decoration: none;
     --focus-outline-color: #FFC107;
 
-    /* Accent & Highlight Colors */
+    /* Accent & Highlight */
     --accent-highlight-bg: #0a58ca;
     --accent-highlight-color: #ffffff;
 
@@ -76,7 +76,7 @@ html[data-theme="dark"] {
 }
 
 
-/* --- 2. General & Typography --- */
+/* --- 2. GENERAL & TYPOGRAPHY --- */
 body {
     padding-top: 50px;
     background-color: var(--background-color);
@@ -90,36 +90,31 @@ body {
     line-height: 1.4; 
 }
 
-
-/* --- 3. Accessibility & Global Styles --- */
-*:focus-visible {
-    outline: 3px solid var(--focus-outline-color) !important;
-    outline-offset: 2px;
-    box-shadow: none !important;
-}
-
 .talking-scores a,
 .score-page a {
     color: var(--link-color);
     text-decoration: underline;
     outline-offset: 2px;
 }
+
 .talking-scores a:hover,
 .score-page a:hover {
     text-decoration: var(--link-hover-decoration);
 }
 
 
-/* --- 4. Main Layout & Components --- */
+/* --- 3. ACCESSIBILITY --- */
+*:focus-visible {
+    outline: 3px solid var(--focus-outline-color) !important;
+    outline-offset: 2px;
+    box-shadow: none !important;
+}
+
+
+/* --- 4. LAYOUT --- */
 .talking-scores {
     padding: 40px 15px;
     text-align: center;
-}
-
-.alert.alert-warning {
-    background-color: var(--alert-warning-bg);
-    color: var(--alert-warning-color);
-    border-color: var(--alert-warning-border);
 }
 
 .footer {
@@ -127,11 +122,12 @@ body {
 }
 
 
-/* --- 5. Navbar Styling --- */
+/* --- 5. COMPONENTS --- */
+
+/* Navbar */
 .navbar {
     background-color: var(--navbar-bg) !important;
 }
-
 .navbar-dark .navbar-nav .nav-link {
     color: var(--navbar-link-color);
     padding: 0.5rem 0.75rem;
@@ -143,8 +139,6 @@ body {
     color: var(--accent-highlight-color);
     background-color: var(--accent-highlight-bg);
 }
-
-/* Active Nav Link (.tsactive) */
 li.tsactive {
     background-color: transparent !important;
     padding: 0;
@@ -191,10 +185,7 @@ html[data-theme="light"] #theme-toggle .moon-icon { color: var(--switch-icon-ina
 html[data-theme="dark"] #theme-toggle .sun-icon { color: var(--switch-icon-inactive); }
 html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-active-dark); }
 
-
-/* --- 6. Forms & Buttons --- */
-
-/* Standard Form Controls */
+/* Forms & Buttons */
 .form-control,
 .score-page select{
     background-color: var(--form-control-bg);
@@ -210,11 +201,8 @@ html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-acti
     background-color: var(--form-control-bg);
     color: var(--form-control-color);
     border-color: var(--form-control-border);
-    /* This next line is the crucial part that was missing */
     box-shadow: none; 
 }
-
-/* Primary Button */
 .btn.btn-primary {
     background-color: var(--btn-primary-bg);
     color: var(--btn-primary-color);
@@ -227,8 +215,32 @@ html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-acti
 .btn.btn-primary:focus {
     box-shadow: none;
 }
+.clear-file-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 0.5rem;
+    font-size: 1.5rem;
+    font-weight: bold;
+    line-height: 1;
+    color: var(--clear-btn-color);
+    opacity: 0.7;
+    transition: opacity 0.2s ease-in-out;
+}
+.clear-file-btn:hover {
+    opacity: 1;
+}
 
-/* Drag and Drop Zone */
+/* Alert Boxes */
+.alert.alert-warning {
+    background-color: var(--alert-warning-bg);
+    color: var(--alert-warning-color);
+    border-color: var(--alert-warning-border);
+}
+
+/* --- 6. PAGE-SPECIFIC COMPONENTS --- */
+
+/* Homepage Forms */
 #drop-zone {
     position: relative;
     padding: 2rem;
@@ -239,14 +251,11 @@ html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-acti
 #drop-zone.drag-over {
     border-color: var(--accent-highlight-bg);
 }
-
-/* Custom File Input */
 .custom-file-upload {
     display: flex;
     align-items: center;
     gap: 1rem;
     text-align: left;
-    /* REMOVED: justify-content: center; to fix alignment */
 }
 .custom-file-upload input[type="file"] {
     display: none;
@@ -265,117 +274,12 @@ html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-acti
     font-size: 1rem;
     font-style: normal;
     color: var(--text-color);
-}
-
-/* Styling for the new 'clear file' button */
-#clear-file-button {
-    /* Use Bootstrap's built-in close button styles */
-    background-color: transparent;
-    border: none;
-    font-size: 1.25rem;
-    opacity: 0.7;
-    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
-}
-
-#clear-file-button:hover {
-    opacity: 1;
-    transform: scale(1.1);
-}
-
-/* Make the file name span shrink to make room for the button */
-#file-chosen-name {
     flex-shrink: 1;
-    min-width: 0; /* Allows the text to truncate with ellipsis if needed */
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-/* Styling for the custom 'clear file' button */
-.clear-file-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0 0.5rem;
-    font-size: 1.5rem;
-    font-weight: bold;
-    line-height: 1;
-    color: var(--clear-btn-color);
-    opacity: 0.7;
-    transition: opacity 0.2s ease-in-out;
-}
-
-.clear-file-btn:hover {
-    opacity: 1;
-}
-
-
-/* --- 7. Animations --- */
-.loading {
-    -webkit-animation: spin 2s linear infinite;
-    -moz-animation: spin 2s linear infinite;
-    animation: spin 2s linear infinite;
-}
-@-moz-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
-@-webkit-keyframes spin { 100% { -webkit-transform: rotate(360deg); } }
-@keyframes spin { 100% { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
-
-/* ============================================= */
-/* REPETITION & GUIDANCE STYLES                  */
-/* ============================================= */
-.repetition-info {
-    background-color: #e7f3fe; /* A light, friendly blue */
-    border-left: 5px solid #2196F3; /* A prominent blue accent border */
-    padding: 12px 16px;
-    margin: 16px 0; /* Add some vertical space around it */
-    font-size: 1.1em;
-    font-weight: 500; /* A medium weight, not quite bold */
-    border-radius: 4px;
-    color: #333; /* Darker text for contrast */
-}
-
-/* Dark Mode styles for the repetition message */
-html[data-theme="dark"] .repetition-info {
-    background-color: #2a3a4a;
-    border-left-color: #64b5f6;
-    color: #e0e0e0;
-}
-/* Styles for the color option previews */
-.color-preview {
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-family: monospace;
-    border: 1px solid transparent;
-    transition: color 0.2s, background-color 0.2s;
-    margin-left: auto; /* Pushes the preview to the right */
-}
-
-/* New layout for the pitch color palette */
-.palette-container {
-    display: flex;
-    flex-wrap: wrap; /* Allows wrapping on smaller screens */
-    gap: 2rem;
-    align-items: flex-start;
-    margin-top: 1rem;
-}
-
-.palette-radios {
-    flex-shrink: 0;
-}
-
-.palette-pickers {
-    flex-grow: 1;
-    min-width: 180px; /* Ensures pickers don't get too squished */
-}
-/* ============================================= */
-/* HOMEPAGE FORM STYLES                          */
-/* ============================================= */
-
-/* Removes italics from the "No file selected" text */
-#file-chosen-name {
-    font-style: normal;
-}
-
-/* Styles the new "Upload" and "URL" labels */
 .form-section-label {
     display: block;
     font-size: 1.2rem;
@@ -383,8 +287,6 @@ html[data-theme="dark"] .repetition-info {
     margin-bottom: 0.5rem;
     color: var(--text-color);
 }
-
-/* Styles the new "or" separator with lines */
 .form-separator {
     display: flex;
     align-items: center;
@@ -393,18 +295,110 @@ html[data-theme="dark"] .repetition-info {
     opacity: 0.6;
     margin: 2rem 1rem;
 }
-
 .form-separator::before,
 .form-separator::after {
     content: '';
     flex: 1;
     border-bottom: 1px solid var(--form-control-border);
 }
+.form-separator:not(:empty)::before { margin-right: 1em; }
+.form-separator:not(:empty)::after { margin-left: 1em; }
 
-.form-separator:not(:empty)::before {
-    margin-right: 1em;
+/* Options Page Components */
+.color-preview {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    border: 1px solid transparent;
+    transition: color 0.2s, background-color 0.2s;
+    margin-left: auto;
+}
+.palette-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-start;
+    margin-top: 1rem;
+}
+.palette-radios { flex-shrink: 0; }
+.palette-pickers { flex-grow: 1; min-width: 180px; }
+
+/* Options Page Help Button & Text */
+.help-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    font-weight: bold;
+    line-height: 1;
+    vertical-align: middle;
+    cursor: pointer;
+    border: 1px solid;
+    font-size: 0.9rem;
+    border-radius: 50%;
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+    
+    /* Light Mode Default */
+    color: #555;
+    border-color: #adb5bd;
+    background-color: transparent;
 }
 
-.form-separator:not(:empty)::after {
-    margin-left: 1em;
+/* Unified interactive state for both themes */
+.help-btn:hover,
+.help-btn:focus-visible,
+.help-btn.active {
+    color: var(--accent-highlight-color);
+    background-color: var(--accent-highlight-bg);
+    border-color: var(--accent-highlight-bg);
 }
+
+/* Dark Mode Default State - higher contrast */
+html[data-theme="dark"] .help-btn {
+    color: #ccc;
+    border-color: #ccc;
+}
+
+/* Help Text Dark Mode Styling */
+html[data-theme="dark"] #key-sig-help-text,
+html[data-theme="dark"] #key-sig-help-text p,
+html[data-theme="dark"] #key-sig-help-text li {
+    /* Use main text color for maximum readability */
+    color: var(--text-color) !important;
+}
+
+html[data-theme="dark"] #key-sig-help-text {
+    border-left-color: #6c757d;
+}
+
+html[data-theme="dark"] #key-sig-help-text strong {
+    color: var(--text-color) !important;
+}
+/* Score Page Components */
+.repetition-info {
+    background-color: #e7f3fe;
+    border-left: 5px solid #2196F3;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 1.1em;
+    font-weight: 500;
+    border-radius: 4px;
+    color: #333;
+}
+html[data-theme="dark"] .repetition-info {
+    background-color: #2a3a4a;
+    border-left-color: #64b5f6;
+    color: #e0e0e0;
+}
+
+
+/* --- 7. ANIMATIONS --- */
+.loading {
+    -webkit-animation: spin 2s linear infinite;
+    -moz-animation: spin 2s linear infinite;
+    animation: spin 2s linear infinite;
+}
+@-moz-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
+@-webkit-keyframes spin { 100% { -webkit-transform: rotate(360deg); } }
+@keyframes spin { 100% { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }

@@ -162,6 +162,25 @@
                 <option value="firstNote">First note of section</option>
             </select>
             <br/>
+            <br/>
+
+            <label for="key_signature_accidentals">
+                Key Signature Accidentals
+                <button type="button" class="help-btn" id="key-sig-help-btn" aria-label="More info on key signature accidentals" aria-expanded="false" aria-controls="key-sig-help-text">?</button>
+            </label>
+            <select name="key_signature_accidentals" id="key_signature_accidentals" class="form-control">
+                <option value="applied" selected>Applied to every note</option>
+                <option value="onChange">On change within measure</option>
+                <option value="standard">Standard (Ignores key signature)</option>
+            </select>
+            <div id="key-sig-help-text" class="form-text text-muted mt-2" style="display: none; border-left: 3px solid #ccc; padding-left: 1rem;">
+                <p class="mb-1 small"><strong>Example Scenario:</strong> The key signature has an E-flat, and the notes played are E-flat, E-flat, E-natural, E-flat.</p>
+                <ul class="list-unstyled mb-0 small">
+                    <li><strong>Applied to every note:</strong> Reads "E flat, E flat, E natural, E flat"</li>
+                    <li><strong>On change within measure:</strong> Reads "E flat, E, E natural, E flat"</li>
+                    <li><strong>Standard:</strong> Reads "E, E, E natural, E"</li>
+                </ul>
+            </div>
         </div>
     </fieldset>
     
@@ -308,38 +327,30 @@
 {% block javascript %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- Element References ---
+    // --- (All the existing code for color pickers, etc. remains the same) ---
     const elements = {
         form: document.querySelector('form.form-horizontal'),
         colourStyleSelect: document.getElementById('colour_style'),
         coloringDetailsPanel: document.getElementById('coloring-details-panel'),
-        
         chkColourPitch: document.getElementById('chk_colourPitch'),
         pitchColourPanel: document.getElementById('pitch-colour-panel'),
         profileRadios: document.querySelectorAll('input[name="colorProfile"]'),
         customProfileRadio: document.getElementById('profileCustom'),
         customColorPickers: document.querySelectorAll('#custom-color-pickers input[type="color"]'),
-        
         chkShowAdvanced: document.getElementById('chk_show_advanced_colouring'),
         advancedPanel: document.getElementById('advanced-colouring-panel'),
-
         rhythmColourModeSelect: document.getElementById('rhythm_colour_mode'),
         rhythmColourPanel: document.getElementById('rhythm-colour-panel'),
-
         octaveColourModeSelect: document.getElementById('octave_colour_mode'),
         octaveColourPanel: document.getElementById('octave-colour-panel'),
-        
         previewPitch: document.getElementById('preview-pitch'),
         previewRhythm: document.getElementById('preview-rhythm'),
         previewOctave: document.getElementById('preview-octave')
     };
-
-    // --- Color Data & Helpers ---
     const colorProfiles = {
         default: { C: "#FF0000", D: "#A52A2A", E: "#808080", F: "#0000FF", G: "#000000", A: "#FFFF00", B: "#008000" },
         classic: { C: "#FF0000", D: "#FFA500", E: "#FFFF00", F: "#008000", G: "#0000FF", A: "#4B0082", B: "#EE82EE" }
     };
-
     function getContrastColor(hex) {
         if (!hex || hex.length < 4) return '#000000';
         const hexValue = hex.startsWith('#') ? hex.slice(1) : hex;
@@ -349,11 +360,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const b = parseInt(hexValue.substring(4, 6), 16);
             const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
             return luminance > 0.5 ? '#000000' : '#FFFFFF';
-        } catch (e) {
-            return '#FFFFFF';
-        }
+        } catch (e) { return '#FFFFFF'; }
     }
-
     function applyNoteColorProfile(profileName) {
         const profile = colorProfiles[profileName];
         if (!profile) return;
@@ -362,53 +370,33 @@ document.addEventListener('DOMContentLoaded', function() {
             if (profile[note]) picker.value = profile[note];
         });
     }
-
-    // --- Main UI Update Function ---
     function updateFormDisplay() {
-    const isColoringOn = elements.colourStyleSelect.value !== 'none';
-    elements.coloringDetailsPanel.style.display = isColoringOn ? 'block' : 'none';
-
-    // Pitch Section visibility
-    const isPitchOn = elements.chkColourPitch.checked;
-    elements.pitchColourPanel.style.display = isPitchOn && isColoringOn ? 'block' : 'none';
-    
-    // Custom Pitch Picker state (always visible, but enabled/disabled)
-    const isCustomProfile = elements.customProfileRadio.checked;
-    elements.customColorPickers.forEach(picker => {
-        picker.disabled = !isCustomProfile;
-    });
-
-    // Advanced Section visibility
-    const showAdvanced = elements.chkShowAdvanced.checked;
-    elements.advancedPanel.style.display = showAdvanced && isColoringOn ? 'block' : 'none';
-    
-    // --- FIX: Correctly set display to 'block' or 'none' ---
-    elements.rhythmColourPanel.style.display = elements.rhythmColourModeSelect.value === 'custom' ? 'block' : 'none';
-    elements.octaveColourPanel.style.display = elements.octaveColourModeSelect.value === 'custom' ? 'block' : 'none';
-    
-    updateAllPreviews();
-}
-    
+        const isColoringOn = elements.colourStyleSelect.value !== 'none';
+        elements.coloringDetailsPanel.style.display = isColoringOn ? 'block' : 'none';
+        const isPitchOn = elements.chkColourPitch.checked;
+        elements.pitchColourPanel.style.display = isPitchOn && isColoringOn ? 'block' : 'none';
+        const isCustomProfile = elements.customProfileRadio.checked;
+        elements.customColorPickers.forEach(picker => { picker.disabled = !isCustomProfile; });
+        const showAdvanced = elements.chkShowAdvanced.checked;
+        elements.advancedPanel.style.display = showAdvanced && isColoringOn ? 'block' : 'none';
+        elements.rhythmColourPanel.style.display = elements.rhythmColourModeSelect.value === 'custom' ? 'block' : 'none';
+        elements.octaveColourPanel.style.display = elements.octaveColourModeSelect.value === 'custom' ? 'block' : 'none';
+        updateAllPreviews();
+    }
     function updateAllPreviews() {
         const style = elements.colourStyleSelect.value;
         const pitchColor = document.getElementById('color_C').value;
-
         const applyStyle = (el, color, isEnabled) => {
             if (!el) return;
             el.style.backgroundColor = ''; el.style.color = ''; el.style.borderColor = 'transparent';
             if (style === 'none' || !isEnabled || !color) return;
-
             if (style === 'background') {
                 el.style.backgroundColor = color;
                 el.style.color = getContrastColor(color);
                 el.style.borderColor = '#888';
-            } else { // 'text'
-                el.style.color = color;
-            }
+            } else { el.style.color = color; }
         };
-
         applyStyle(elements.previewPitch, pitchColor, elements.chkColourPitch.checked);
-
         const rhythmMode = elements.rhythmColourModeSelect.value;
         let rhythmColor = rhythmMode === 'inherit' ? pitchColor : null;
         if (rhythmMode === 'custom') {
@@ -416,7 +404,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (firstRhythmPicker) rhythmColor = firstRhythmPicker.value;
         }
         applyStyle(elements.previewRhythm, rhythmColor, rhythmMode !== 'none');
-
         const octaveMode = elements.octaveColourModeSelect.value;
         let octaveColor = octaveMode === 'inherit' ? pitchColor : null;
         if (octaveMode === 'custom') {
@@ -425,30 +412,35 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         applyStyle(elements.previewOctave, octaveColor, octaveMode !== 'none');
     }
-
-    // --- Event Listeners ---
-    // Add listeners to all controls that should trigger a UI update
     [
         elements.colourStyleSelect, elements.chkColourPitch, elements.chkShowAdvanced,
         elements.rhythmColourModeSelect, elements.octaveColourModeSelect
     ].forEach(el => el.addEventListener('change', updateFormDisplay));
-
-    // Listen to all color pickers for live preview updates
     document.querySelectorAll('input[type="color"]').forEach(picker => {
         picker.addEventListener('input', updateAllPreviews);
     });
-
-    // Special handling for radio buttons
     elements.profileRadios.forEach(radio => {
         radio.addEventListener('change', () => {
-            // FIX: Apply the selected profile's colors
             if (radio.value !== 'custom') {
                 applyNoteColorProfile(radio.value);
             }
-            // Always update the form display and previews
             updateFormDisplay();
         });
     });
+
+    // --- Key Signature Help Text Toggle ---
+    const helpBtn = document.getElementById('key-sig-help-btn');
+    const helpText = document.getElementById('key-sig-help-text');
+    if (helpBtn && helpText) {
+        helpBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isExpanded = helpBtn.getAttribute('aria-expanded') === 'true';
+            helpText.style.display = isExpanded ? 'none' : 'block';
+            helpBtn.setAttribute('aria-expanded', !isExpanded);
+            // NEW: Toggle .active class to show button is "on"
+            helpBtn.classList.toggle('active', !isExpanded);
+        });
+    }
 
     // --- Initial State on Page Load ---
     applyNoteColorProfile('default');

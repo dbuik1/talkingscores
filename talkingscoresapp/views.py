@@ -74,6 +74,9 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     octave_position = forms.CharField(widget=forms.Select, required=False)
     octave_announcement = forms.CharField(widget=forms.Select, required=False)
 
+    key_signature_accidentals = forms.CharField(widget=forms.Select, required=False)
+
+
     colour_position = forms.CharField(widget=forms.Select, required=False)
     chk_colourPitch = forms.BooleanField(required=False)
     chk_colourRhythm = forms.BooleanField(required=False)
@@ -109,18 +112,22 @@ def process(request, id, filename):
 def score(request, id, filename):
     score_obj = TSScore(id=id, filename=filename)
 
+    # Simplified state check: if options aren't submitted, redirect to options page.
     if score_obj.state() == TSScoreState.AWAITING_OPTIONS:
         return redirect('options', id, filename)
     elif score_obj.state() == TSScoreState.FETCHING:
+        # This state should ideally not be hit directly by a user URL.
+        # It means the file doesn't exist. Redirect to index.
+        messages.error(request, "The requested score could not be found. It may have expired.")
         return redirect('index')
     else:
+        # If the state is PROCESSED, generate the HTML dynamically.
         try:
             html = score_obj.html()
             return HttpResponse(html)
         except Exception:
             logger.exception("Unable to process score: http://%s%s " % (request.get_host(), reverse('score', args=[id, filename])))
             # The redirect to 'error' will handle showing the error page.
-            # Code after a return or redirect statement is unreachable.
             return redirect('error', id, filename)
 
 
@@ -230,12 +237,12 @@ def options(request, id, filename):
 
         # Dynamically build the advanced color dictionaries from the request
         advanced_rhythm_colours = {slugify(key.replace('color_rhythm_', '')): value
-                                 for key, value in request.POST.items()
-                                 if key.startswith('color_rhythm_')}
+                                   for key, value in request.POST.items()
+                                   if key.startswith('color_rhythm_')}
 
         advanced_octave_colours = {key.replace('color_octave_', ''): value
-                                 for key, value in request.POST.items()
-                                 if key.startswith('color_octave_')}
+                                   for key, value in request.POST.items()
+                                   if key.startswith('color_octave_')}
         
         # Build the complete options dictionary
         options_data = {
@@ -258,6 +265,8 @@ def options(request, id, filename):
             "colour_pitch": "chk_colourPitch" in request.POST,
             "rhythm_colour_mode": request.POST.get("rhythm_colour_mode", "none"),
             "octave_colour_mode": request.POST.get("octave_colour_mode", "none"),
+
+            "key_signature_accidentals": request.POST.get("key_signature_accidentals", "applied"),
             
             # --- FIX: Keep advanced dictionaries ---
             "advanced_rhythm_colours": advanced_rhythm_colours,
@@ -269,17 +278,8 @@ def options(request, id, filename):
         with open(options_path, "w") as options_fh:
             json.dump(options_data, options_fh)
 
-        # 5. CLEAR THE CACHE: Delete the old HTML file to force regeneration.
-        html_cache_path = score_obj.get_data_file_path(
-            root=os.path.join(STATIC_ROOT, 'data')
-        ) + '.html'
-
-        if os.path.exists(html_cache_path):
-            try:
-                os.remove(html_cache_path)
-                logger.info(f"Cleared cached HTML file at {html_cache_path}")
-            except OSError as e:
-                logger.error(f"Error removing cached file {html_cache_path}: {e}")
+        # 5. REMOVED OBSOLETE HTML CACHE CLEARING
+        # The HTML is now generated dynamically, so this is no longer needed.
 
         # 6. REDIRECT: Send the user to the processing page.
         return redirect('process', id, filename)
@@ -302,8 +302,6 @@ def options(request, id, filename):
         form = TalkingScoreGenerationOptionsForm()
         context = {'form': form, 'score_info': score_info}
         return render(request, 'options.html', context)
-
-
 
 
 # View for the main page
