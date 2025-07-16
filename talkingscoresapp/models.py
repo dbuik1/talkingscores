@@ -73,10 +73,12 @@ class TSScore(object):
 
 
     def info(self):
-        # This method remains the same
         try:
             data_filepath = self.get_data_file_path()
             score = Music21TalkingScore(data_filepath)
+            
+            beat_options = score.get_beat_division_options()
+
             return {
                 'title': score.get_title(),
                 'composer': score.get_composer(),
@@ -88,6 +90,7 @@ class TSScore(object):
                 'number_of_parts': score.get_number_of_parts(),
                 'rhythm_range': score.get_rhythm_range(),
                 'octave_range': score.get_octave_range(),
+                'beat_division_options': beat_options
             }
         except Exception as e:
             self.logger.exception(f"Failed to parse MusicXML info: {e}")
@@ -95,7 +98,8 @@ class TSScore(object):
                 'title': 'Error reading title', 'composer': 'Unknown',
                 'instruments': ['Error'], 'time_signature': '',
                 'key_signature': '', 'tempo': '', 'number_of_bars': '',
-                'rhythm_range': [], 'octave_range': {'min': 0, 'max': 0}
+                'rhythm_range': [], 'octave_range': {'min': 0, 'max': 0},
+                'beat_division_options': []
             }
 
     def get_data_file_path(self, root=MEDIA_ROOT):

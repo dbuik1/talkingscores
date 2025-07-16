@@ -86,6 +86,13 @@
     <fieldset class="mb-4">
         <legend class="h2 bold">Description Content</legend>
         <div class="form-group">
+            <label for="description_preset">Description Preset</label>
+            <select id="description_preset" class="form-control">
+                <option value="default" selected>Default</option>
+                <option value="notes_only">Notes Only</option>
+                <option value="custom" disabled>Custom</option>
+            </select>
+            <br/>
             <label for="bars_at_a_time">Bars at a time</label>
             <select name="bars_at_a_time" id="bars_at_a_time" class="form-control">
                 <option>1</option>
@@ -94,6 +101,16 @@
                 <option>8</option>
             </select>
             <br/>
+            <label for="beat_division">Group Beats By</label>
+            <select name="beat_division" id="beat_division" class="form-control">
+                {# CORRECTED: Access the options via the score_info object #}
+                {% for option in score_info.beat_division_options %}
+                    <option value="{{ option.value }}" {% if loop.index == 2 %}selected{% endif %}>{{ option.display }}</option>
+                {% endfor %}
+            </select>
+            <br/>
+
+            <label for="pitch_description">Pitch Description</label>
 
             <label for="pitch_description">Pitch Description</label>
             <select name="pitch_description" id="pitch_description" class="form-control">
@@ -116,7 +133,7 @@
             <select name="repetition_mode" id="repetition_mode" class="form-control">
                 <option value="none">None</option>
                 <option value="learning" selected>Learning Mode (e.g., "Same as previous bar")</option>
-                <option value="detailed">Detailed Analysis (e.g., "The rhythm in bar 2 is used 2 more times.")</option>
+                <option value="detailed">Detailed Analysis</option>
             </select>
             <br/>
         </div>
@@ -162,6 +179,18 @@
                 <option value="firstNote">First note of section</option>
             </select>
             <br/>
+
+            <label for="accidental_style">Accidental Style</label>
+            <select name="accidental_style" id="accidental_style" class="form-control">
+                <option value="words" selected>Words (e.g., sharp, flat)</option>
+                <option value="symbols">Symbols (e.g., ♯, ♭)</option>
+            </select>
+            <br/>
+
+            <div class="checkbox">
+                <input type="checkbox" name="chk_include_dynamics" id="chk_include_dynamics" value="checked" checked="checked" />
+                <label for="chk_include_dynamics">Include dynamic markings (e.g., forte, piano)</label>
+            </div>
             <br/>
 
             <label for="key_signature_accidentals">
@@ -327,7 +356,67 @@
 {% block javascript %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- (All the existing code for color pickers, etc. remains the same) ---
+    const presetControls = {
+        preset: document.getElementById('description_preset'),
+        beatDivision: document.getElementById('beat_division'), // ADDED
+        rhythmDescription: document.getElementById('rhythm_description'),
+        repetitionMode: document.getElementById('repetition_mode'),
+        includeDynamics: document.getElementById('chk_include_dynamics'),
+        octaveAnnouncement: document.getElementById('octave_announcement'),
+        accidentalStyle: document.getElementById('accidental_style')
+    };
+
+    const presets = {
+        'default': {
+            beatDivision: '{{ beat_division_options.1.value }}', // The default value
+            rhythmDescription: 'british',
+            repetitionMode: 'learning',
+            includeDynamics: true,
+            octaveAnnouncement: 'onChange',
+            accidentalStyle: 'words'
+        },
+        'notes_only': {
+            beatDivision: 'bar', // The 'Group by Bar' option
+            rhythmDescription: 'none',
+            repetitionMode: 'none',
+            includeDynamics: false,
+            octaveAnnouncement: 'onChange',
+            accidentalStyle: 'symbols'
+        }
+    };
+
+    function applyPreset(presetName) {
+        const settings = presets[presetName];
+        if (!settings) return;
+
+        presetControls.beatDivision.value = settings.beatDivision; // ADDED
+        presetControls.rhythmDescription.value = settings.rhythmDescription;
+        presetControls.repetitionMode.value = settings.repetitionMode;
+        presetControls.includeDynamics.checked = settings.includeDynamics;
+        presetControls.octaveAnnouncement.value = settings.octaveAnnouncement;
+        presetControls.accidentalStyle.value = settings.accidentalStyle;
+    }
+        
+
+    function switchToCustom() {
+        presetControls.preset.value = 'custom';
+    }
+
+    presetControls.preset.addEventListener('change', () => {
+        const selectedPreset = presetControls.preset.value;
+        if (selectedPreset !== 'custom') {
+            applyPreset(selectedPreset);
+        }
+    });
+
+    Object.values(presetControls).forEach(control => {
+        if (control && control.id !== 'description_preset') {
+            control.addEventListener('change', switchToCustom);
+        }
+    });
+    // --- END: NEW PRESET LOGIC ---
+
+    // --- EXISTING COLOR AND UI LOGIC ---
     const elements = {
         form: document.querySelector('form.form-horizontal'),
         colourStyleSelect: document.getElementById('colour_style'),
@@ -347,10 +436,12 @@ document.addEventListener('DOMContentLoaded', function() {
         previewRhythm: document.getElementById('preview-rhythm'),
         previewOctave: document.getElementById('preview-octave')
     };
+
     const colorProfiles = {
         default: { C: "#FF0000", D: "#A52A2A", E: "#808080", F: "#0000FF", G: "#000000", A: "#FFFF00", B: "#008000" },
         classic: { C: "#FF0000", D: "#FFA500", E: "#FFFF00", F: "#008000", G: "#0000FF", A: "#4B0082", B: "#EE82EE" }
     };
+
     function getContrastColor(hex) {
         if (!hex || hex.length < 4) return '#000000';
         const hexValue = hex.startsWith('#') ? hex.slice(1) : hex;
@@ -362,6 +453,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return luminance > 0.5 ? '#000000' : '#FFFFFF';
         } catch (e) { return '#FFFFFF'; }
     }
+
     function applyNoteColorProfile(profileName) {
         const profile = colorProfiles[profileName];
         if (!profile) return;
@@ -370,6 +462,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (profile[note]) picker.value = profile[note];
         });
     }
+
     function updateFormDisplay() {
         const isColoringOn = elements.colourStyleSelect.value !== 'none';
         elements.coloringDetailsPanel.style.display = isColoringOn ? 'block' : 'none';
@@ -383,6 +476,7 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.octaveColourPanel.style.display = elements.octaveColourModeSelect.value === 'custom' ? 'block' : 'none';
         updateAllPreviews();
     }
+
     function updateAllPreviews() {
         const style = elements.colourStyleSelect.value;
         const pitchColor = document.getElementById('color_C').value;
@@ -412,13 +506,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         applyStyle(elements.previewOctave, octaveColor, octaveMode !== 'none');
     }
+
     [
         elements.colourStyleSelect, elements.chkColourPitch, elements.chkShowAdvanced,
         elements.rhythmColourModeSelect, elements.octaveColourModeSelect
-    ].forEach(el => el.addEventListener('change', updateFormDisplay));
+    ].forEach(el => { 
+        if(el) el.addEventListener('change', updateFormDisplay);
+    });
+
     document.querySelectorAll('input[type="color"]').forEach(picker => {
         picker.addEventListener('input', updateAllPreviews);
     });
+
     elements.profileRadios.forEach(radio => {
         radio.addEventListener('change', () => {
             if (radio.value !== 'custom') {
@@ -428,7 +527,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // --- Key Signature Help Text Toggle ---
     const helpBtn = document.getElementById('key-sig-help-btn');
     const helpText = document.getElementById('key-sig-help-text');
     if (helpBtn && helpText) {
@@ -437,12 +535,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const isExpanded = helpBtn.getAttribute('aria-expanded') === 'true';
             helpText.style.display = isExpanded ? 'none' : 'block';
             helpBtn.setAttribute('aria-expanded', !isExpanded);
-            // NEW: Toggle .active class to show button is "on"
             helpBtn.classList.toggle('active', !isExpanded);
         });
     }
 
-    // --- Initial State on Page Load ---
     applyNoteColorProfile('default');
     updateFormDisplay();
 });

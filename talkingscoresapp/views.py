@@ -64,7 +64,9 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     chk_playUnselected = forms.BooleanField(required=False)
 
     bars_at_a_time = forms.ChoiceField(choices=(('1', 1), ('2', 2), ('4', 4), ('8', 8)), initial=4,
-                                       label="Bars at a time")
+                                        label="Bars at a time")
+
+    beat_division = forms.CharField(widget=forms.Select, required=False)
 
     pitch_description = forms.CharField(widget=forms.Select, required=False)
     rhythm_description = forms.CharField(widget=forms.Select, required=False)
@@ -74,6 +76,9 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     octave_position = forms.CharField(widget=forms.Select, required=False)
     octave_announcement = forms.CharField(widget=forms.Select, required=False)
 
+    # ADDED: New field for dynamics toggle
+    chk_include_dynamics = forms.BooleanField(required=False)
+    accidental_style = forms.CharField(widget=forms.Select, required=False)
     key_signature_accidentals = forms.CharField(widget=forms.Select, required=False)
 
 
@@ -247,10 +252,11 @@ def options(request, id, filename):
         # Build the complete options dictionary
         options_data = {
             "bars_at_a_time": int(request.POST.get("bars_at_a_time", 2)),
+            "beat_division": request.POST.get("beat_division"),
             "play_all": "chk_playAll" in request.POST,
             "play_selected": "chk_playSelected" in request.POST,
             "play_unselected": "chk_playUnselected" in request.POST,
-            "instruments": instruments,
+            "instruments": [int(i) for i in request.POST.getlist("instruments")],
             "pitch_description": request.POST.get("pitch_description", "noteName"),
             "rhythm_description": request.POST.get("rhythm_description", "british"),
             "dot_position": request.POST.get("dot_position", "before"),
@@ -258,20 +264,21 @@ def options(request, id, filename):
             "octave_description": request.POST.get("octave_description", "name"),
             "octave_position": request.POST.get("octave_position", "before"),
             "octave_announcement": request.POST.get("octave_announcement", "onChange"),
+            # ADDED: Save the new dynamics toggle and repetition mode
+            "include_dynamics": "chk_include_dynamics" in request.POST,
+            "accidental_style": request.POST.get("accidental_style", "words"),
             "repetition_mode": request.POST.get("repetition_mode", "learning"),
             "colour_position": request.POST.get("colour_style", "none"),
             
-            # --- FIX: Independent colouring settings ---
             "colour_pitch": "chk_colourPitch" in request.POST,
             "rhythm_colour_mode": request.POST.get("rhythm_colour_mode", "none"),
             "octave_colour_mode": request.POST.get("octave_colour_mode", "none"),
 
             "key_signature_accidentals": request.POST.get("key_signature_accidentals", "applied"),
             
-            # --- FIX: Keep advanced dictionaries ---
-            "advanced_rhythm_colours": advanced_rhythm_colours,
-            "advanced_octave_colours": advanced_octave_colours,
-            "figureNoteColours": figure_note_colours
+            "advanced_rhythm_colours": {slugify(key.replace('color_rhythm_', '')): value for key, value in request.POST.items() if key.startswith('color_rhythm_')},
+            "advanced_octave_colours": {key.replace('color_octave_', ''): value for key, value in request.POST.items() if key.startswith('color_octave_')},
+            "figureNoteColours": {key.split('_')[1]: val for key, val in request.POST.items() if key.startswith('color_') and not key.startswith('color_rhythm_') and not key.startswith('color_octave_')}
         }
 
         # 4. Write the new options to the .opts file.

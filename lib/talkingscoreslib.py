@@ -101,19 +101,20 @@ class TSEvent(object, metaclass=ABCMeta):
     bar = None
     part = None
     tie = None
-    # --- NEW ATTRIBUTES FOR SORTING AND GROUPING ---
     start_offset = 0.0
     beat = 0.0
 
     def render(self, settings, context=None, noteLetter=None):
         rendered_elements = []
-        if (context is None or context.duration != self.duration or self.tuplets != "" or settings['rhythmAnnouncement'] == "everyNote"):
+        # MODIFIED: Check if rhythm description is turned off
+        if settings.get('rhythmDescription', 'british') != 'none' and \
+           (context is None or context.duration != self.duration or self.tuplets != "" or settings['rhythmAnnouncement'] == "everyNote"):
             rendered_elements.append(self.tuplets)
             if (noteLetter != None):
                 rendered_elements.append(render_colourful_output(self.duration, noteLetter, "rhythm", settings))
             else:
                 rendered_elements.append(self.duration)
-        rendered_elements.append(self.endTuplets)
+            rendered_elements.append(self.endTuplets)
 
         if self.tie:
             rendered_elements.append(f"tie {self.tie}")
@@ -328,7 +329,7 @@ class Music21TalkingScore(TalkingScoreBase):
         if self.score.metadata.title is not None:
             return self.score.metadata.title
         # Have a guess
-        for tb in self.score.flat.getElementsByClass('TextBox'):
+        for tb in self.score.flatten().getElementsByClass('TextBox'):
             # in some musicxml files - a textbox might not have those attributes - so we use hasattr()...
             if hasattr(tb, 'justifty') and tb.justify == 'center' and hasattr(tb, 'alignVertical') and tb.alignVertical == 'top' and hasattr(tb, 'size') and tb.size > 18:
                 return tb.content
@@ -359,10 +360,10 @@ class Music21TalkingScore(TalkingScoreBase):
 
     def get_initial_key_signature(self):
         m1 = self.score.parts[0].measures(1, 1)
-        if len(m1.flat.getElementsByClass('KeySignature')) == 0:
+        if len(m1.flatten().getElementsByClass('KeySignature')) == 0:
             ks = key.KeySignature(0)
         else:
-            ks = m1.flat.getElementsByClass('KeySignature')[0]
+            ks = m1.flatten().getElementsByClass('KeySignature')[0]
         return self.describe_key_signature(ks)
 
     def describe_key_signature(self, ks):
@@ -378,7 +379,7 @@ class Music21TalkingScore(TalkingScoreBase):
         # Get the first measure of the first part
         m1 = self.score.parts[0].measures(1, 1)
         # Get the text expressions from that measure
-        text_expressions = m1.flat.getElementsByClass('TextExpression')
+        text_expressions = m1.flatten().getElementsByClass('TextExpression')
         for te in text_expressions:
             return te.content
 
@@ -393,6 +394,69 @@ class Music21TalkingScore(TalkingScoreBase):
             settings['dotPosition'] = "before"
             settings['rhythmDescription'] = "british"
         return self.describe_tempo(self.score.metronomeMarkBoundaries()[0][2])
+
+    # In lib/talkingscoreslib.py, inside the Music21TalkingScore class
+
+    def get_beat_division_options(self):
+        """
+        Analyzes the initial time signature of the score and returns a list
+        of valid beat division options for the user.
+        """
+        ts = None
+        try:
+            # Directly iterate through the first measure to find the TimeSignature object
+            first_measure = self.score.parts[0].getElementsByClass('Measure')[0]
+            for item in first_measure:
+                if isinstance(item, meter.TimeSignature):
+                    ts = item
+                    break  # Stop once we've found the first one
+            
+            if not ts:
+                # If still not found, try the stream-level fallback
+                ts = self.score.getTimeSignatures()[0]
+        except Exception as e:
+            self.logger.error(f"Could not find any TimeSignature in the score. Error: {e}")
+            return []
+
+        options = []
+        seen_values = set()
+
+        def add_option(display, value):
+            if value not in seen_values:
+                options.append({'display': display, 'value': value})
+                seen_values.add(value)
+
+        # 1. Add the "No Beats" option
+        add_option('Group by Bar (continuous)', 'bar')
+
+        # 2. Add the default music21 interpretation
+        default_beat_string = self.map_duration(ts.beatDuration)
+        default_display = f"{ts.beatCount} {default_beat_string} beats (Default)"
+        default_value = f"{ts.beatCount}/{ts.beatDuration.quarterLength}"
+        add_option(default_display, default_value)
+        
+        # 3. Add the "face value" interpretation
+        face_value_beat_string = self.map_duration(duration.Duration(1.0 / ts.denominator))
+        face_value_display = f"{ts.numerator} {face_value_beat_string} beats"
+        face_value_value = f"{ts.numerator}/{ts.denominator}"
+        add_option(face_value_display, face_value_value)
+
+        # 4. Add compound meter interpretation if applicable
+        if ts.numerator % 3 == 0 and ts.numerator > 3:
+            compound_beat_count = ts.numerator / 3
+            # Get the name of the simple beat (e.g., for 6/8, the 8th is a 'quaver')
+            simple_beat_name = self.map_duration(duration.Duration(1.0 / ts.denominator))
+            
+            # Construct the compound beat name (e.g., 'Dotted quaver')
+            compound_beat_string = f"Dotted {simple_beat_name}"
+            compound_display = f"{int(compound_beat_count)} {compound_beat_string} beats"
+            
+            # The value remains a calculation of its quarterLength
+            compound_beat_duration_ql = (1.0 / ts.denominator) * 3
+            compound_value = f"{int(compound_beat_count)}/{compound_beat_duration_ql}"
+            add_option(compound_display, compound_value)
+
+        return options
 
     # some tempos have soundingNumber set but not number
     # we would get an error trying to scale a tempo.number of None
@@ -441,7 +505,7 @@ class Music21TalkingScore(TalkingScoreBase):
         self.part_names = {}  # key = part index 0 based, {part name eg "left hand" or "right hand" etc} - but part only included if instrument has multiple parts.
         instrument_names = []  # each instrument instrument once even if it has multiple parts.  still needed for Info / Options page
         ins_count = 1
-        for c, instrument in enumerate(self.score.flat.getInstruments()):
+        for c, instrument in enumerate(self.score.flatten().getInstruments()):
             if len(self.part_instruments) == 0 or self.part_instruments[ins_count-1][3] != instrument.partId:
                 pname = instrument.partName
                 if pname == None:
@@ -548,10 +612,7 @@ class Music21TalkingScore(TalkingScoreBase):
         
         # Determine the correct bar range, handling pickup bars.
         first_bar_num = start_bar
-        if start_bar == 0 and end_bar == 1:
-            last_bar_num = 0
-        else:
-            last_bar_num = end_bar
+        last_bar_num = end_bar
 
         # Iterate over bars to collect notes, rests, chords, etc.
         for bar_index in range(first_bar_num, last_bar_num + 1):
@@ -559,58 +620,54 @@ class Music21TalkingScore(TalkingScoreBase):
             if measure is not None:
                 self.update_events_for_measure(measure, intermediate_events)
         
-        # Iterate over spanners (crescendos, etc.) and add them to the structure
-        for spanner in self.score.parts[part_index].spanners.elements:
-            first = spanner.getFirst()
-            last = spanner.getLast()
+        # Check if dynamics should be included before processing spanners
+        if settings.get('include_dynamics', True):
+            for spanner in self.score.parts[part_index].spanners.elements:
+                first = spanner.getFirst()
+                last = spanner.getLast()
 
-            if first.measureNumber is None or last.measureNumber is None or first.measureNumber > last_bar_num:
-                continue
+                if first.measureNumber is None or last.measureNumber is None:
+                    continue
 
-            spanner_type = type(spanner).__name__
-            if spanner_type == 'Crescendo' or spanner_type == 'Diminuendo':
-                # Process spanner start
-                if first.measureNumber >= first_bar_num:
-                    event = TSDynamic(long_name=f'{spanner_type} Start')
-                    event.start_offset = first.offset
-                    event.beat = first.beat
-                    intermediate_events.setdefault(first.measureNumber, {})\
-                        .setdefault(first.offset, {})\
-                        .setdefault(1, [])\
-                        .append(event)
-                
-                # Process spanner end
-                if last.measureNumber <= last_bar_num:
-                    event = TSDynamic(long_name=f'{spanner_type} End')
-                    # Place the 'end' event precisely after the element it's attached to
-                    event.start_offset = last.offset + last.duration.quarterLength
-                    event.beat = last.beat + last.duration.quarterLength
-                    intermediate_events.setdefault(last.measureNumber, {})\
-                        .setdefault(event.start_offset, {})\
-                        .setdefault(1, [])\
-                        .append(event)
+                # Only process spanners that overlap with the current segment
+                if first.measureNumber <= last_bar_num and last.measureNumber >= first_bar_num:
+                    spanner_type = type(spanner).__name__
+                    if spanner_type == 'Crescendo' or spanner_type == 'Diminuendo':
+                        # Process spanner start
+                        if first.measureNumber >= first_bar_num:
+                            event = TSDynamic(long_name=f'{spanner_type} Start')
+                            event.start_offset = first.offset
+                            event.beat = first.beat
+                            intermediate_events.setdefault(first.measureNumber, {}).setdefault(first.offset, {}).setdefault(1, []).append(event)
+                        
+                        # Process spanner end
+                        if last.measureNumber <= last_bar_num:
+                            event = TSDynamic(long_name=f'{spanner_type} End')
+                            event.start_offset = last.offset + last.duration.quarterLength
+                            event.beat = last.beat + last.duration.quarterLength
+                            intermediate_events.setdefault(last.measureNumber, {}).setdefault(event.start_offset, {}).setdefault(1, []).append(event)
 
         # Final step: Convert the intermediate structure into the final, template-friendly sorted list.
         final_events_by_bar = {}
-        for bar_num, time_points in intermediate_events.items():
-            sorted_time_points = []
-            # Sort the time_points by their offset (the dictionary key)
-            for offset, voices in sorted(time_points.items()):
-                # Get the beat from the first event at this time_point for display purposes.
-                first_event = next(iter(next(iter(voices.values()))))
-                
-                sorted_time_points.append({
-                    'offset': offset,
-                    'beat': first_event.beat,
-                    'voices': voices
-                })
-            final_events_by_bar[bar_num] = sorted_time_points
+        # Loop only over the requested bar range to prevent data leakage
+        for bar_num in range(first_bar_num, last_bar_num + 1):
+            if bar_num in intermediate_events:
+                time_points = intermediate_events[bar_num]
+                sorted_time_points = []
+                for offset, voices in sorted(time_points.items()):
+                    # Get the beat from the first event at this time_point for display purposes.
+                    first_event = next(iter(next(iter(voices.values()))))
+                    
+                    sorted_time_points.append({
+                        'offset': offset,
+                        'beat': first_event.beat,
+                        'voices': voices
+                    })
+                final_events_by_bar[bar_num] = sorted_time_points
             
         return final_events_by_bar
 
     def update_events_for_measure(self, measure_stream, events, voice: int = 1, state=None):
-        # Only create the state dictionary at the top-level call for a measure.
-        # It's then passed down through recursion for different voices.
         if state is None:
             state = {}
 
@@ -620,19 +677,15 @@ class Music21TalkingScore(TalkingScoreBase):
             
             if element_type == 'Note':
                 event = TSNote()
-                # Calculate pitch name using the shared state
                 pitch_name = self.map_pitch(element.pitch, state)
                 event.pitch = TSPitch(pitch_name, self.map_octave(element.pitch.octave), element.pitch.ps, element.pitch.name[0])
                 if element.tie:
                     event.tie = element.tie.type
                 event.expressions = element.expressions
-            elif element_type == 'Unpitched':
-                event = TSUnpitched()
             elif element_type == 'Rest':
                 event = TSRest()
             elif element_type == 'Chord':
                 event = TSChord()
-                # Calculate pitch names using the shared state
                 chord_pitches = []
                 for p in element.pitches:
                     pitch_name = self.map_pitch(p, state)
@@ -641,9 +694,10 @@ class Music21TalkingScore(TalkingScoreBase):
                 if element.tie:
                     event.tie = element.tie.type
             elif element_type == 'Dynamic':
-                event = TSDynamic(long_name=element.longName, short_name=element.value)
+                # MODIFIED: Check settings before creating dynamic events
+                if settings.get('include_dynamics', True):
+                    event = TSDynamic(long_name=element.longName, short_name=element.value)
             elif element_type == 'Voice':
-                # Pass the EXISTING state down in the recursive call
                 self.update_events_for_measure(element, events, int(element.id), state=state)
                 continue
             
@@ -652,7 +706,6 @@ class Music21TalkingScore(TalkingScoreBase):
 
             event.start_offset = element.offset
             event.beat = element.beat
-            
             event.duration = ""
             if (len(element.duration.tuplets) > 0):
                 if (element.duration.tuplets[0].type == "start"):
@@ -684,12 +737,14 @@ class Music21TalkingScore(TalkingScoreBase):
     # for all / selected / unselected
     def generate_midi_filename_sel(self, base_url, range_start=None, range_end=None, sel=""):
         """Generates a MIDI URL for a selection of parts (all, selected, unselected)."""
-        # The base_url is the complete path part, e.g., /midis/hash/file.musicxml
-        query_params = f"sel={sel}&t=100&c=n"
+        # Build query parameters, now correctly including bsi and bpi
+        query_params = f"bsi={self.binary_selected_instruments}&bpi={self.binary_play_all}"
+        if sel:
+            query_params += f"&sel={sel}"
         if range_start is not None:
-            # Note: using a consistent parameter order
             query_params += f"&start={range_start}&end={range_end}"
-            return f"{base_url}?{query_params}"
+        # Return the full URL
+        return f"{base_url}?{query_params}"
 
     def generate_part_descriptions(self, instrument, start_bar, end_bar):
         part_descriptions = []
@@ -704,20 +759,20 @@ class Music21TalkingScore(TalkingScoreBase):
         instrument_midi = ""
         last_ins = add_instruments[-1] if add_instruments else None
 
-        # Construct the base query string
-        query_string = "t=100&c=n"
+        # Base query string now correctly includes bsi and bpi
+        query_string = f"bsi={self.binary_selected_instruments}&bpi={self.binary_play_all}"
         if range_start is not None:
             query_string += f"&start={range_start}&end={range_end}"
 
-    # Generate URLs for individual parts (if the instrument has more than one)
+        # Generate URLs for individual parts
         for ins in add_instruments:
             if self.part_instruments[ins][2] > 1:
                 start_part_index = self.part_instruments[ins][1]
                 end_part_index = start_part_index + self.part_instruments[ins][2]
-            for pi in range(start_part_index, end_part_index):
-                part_midis.append(f"{base_url}?part={pi}&{query_string}")
+                for pi in range(start_part_index, end_part_index):
+                    part_midis.append(f"{base_url}?part={pi}&{query_string}")
 
-    # Generate the URL for the whole instrument
+        # Generate the URL for the whole instrument
         if last_ins is not None:
             instrument_midi = f"{base_url}?ins={last_ins}&{query_string}"
 
@@ -869,6 +924,25 @@ class Music21TalkingScore(TalkingScoreBase):
         if not pitch.accidental:
             return base_name
 
+        # --- MODIFIED LOGIC FOR ACCIDENTALS ---
+        accidental_text = ""
+        if settings.get('accidental_style') == 'symbols':
+            symbol_map = {
+                'sharp': '♯',
+                'flat': '♭',
+                'natural': '♮',
+                'double-sharp': '𝄪',
+                'double-flat': '♭♭'
+            }
+            # Note: no space between base_name and symbol
+            accidental_text = symbol_map.get(pitch.accidental.name, '')
+            return f"{base_name}{accidental_text}"
+        else: # Default to 'words'
+            # Note: space between base_name and word
+            accidental_text = pitch.accidental.fullName
+            return f"{base_name} {accidental_text}"
+        # --- END MODIFICATION ---
+
         # "Standard" mode: Only show explicit accidentals
         if mode == 'standard':
             if pitch.accidental.displayStatus:
@@ -916,7 +990,7 @@ class Music21TalkingScore(TalkingScoreBase):
         valid_rhythms = self._DURATION_MAP.values()
         found_rhythms = set()
 
-        for n in self.score.flat.notesAndRests:
+        for n in self.score.flatten().notesAndRests:
             # map_duration translates the note's type into our description term (e.g., "crotchet")
             rhythm_name = self.map_duration(n.duration)
             if rhythm_name in valid_rhythms:
@@ -931,7 +1005,7 @@ class Music21TalkingScore(TalkingScoreBase):
         """
         all_octaves = []
         # Iterate through all note and chord elements in the score
-        for element in self.score.flat.notes:
+        for element in self.score.flatten().notes:
             if 'Chord' in element.classes:
                 # For a Chord, get the octave of each pitch within it
                 for p in element.pitches:
@@ -945,33 +1019,21 @@ class Music21TalkingScore(TalkingScoreBase):
         
         return {'min': min(all_octaves), 'max': max(all_octaves)}
 
-
 class HTMLTalkingScoreFormatter():
-    """
-    Handles the formatting of a Music21 score into an HTML talking score.
-    """
     def __init__(self, talking_score):
-        """
-        Initializes the formatter with the score object and sets up the configuration.
-        """
         global settings
         self.score: Music21TalkingScore = talking_score
-        self.options = {}  # Initialize self.options
+        self.options = {}
 
         options_path = self.score.filepath + '.opts'
         try:
             with open(options_path, "r") as options_fh:
-                # Load the options into the instance variable
                 self.options = json.load(options_fh)
         except FileNotFoundError:
             logger.warning(f"Options file not found: {options_path}. Using default settings.")
-            pass # Use default .get() values below
+            pass
 
-        # Build the settings dictionary using self.options and assign it globally
         settings = {
-            'pitchBeforeDuration': False,
-            'describeBy': 'beat',
-            'handsTogether': True,
             'barsAtATime': int(self.options.get("bars_at_a_time", 2)),
             'playAll': self.options.get("play_all", False),
             'playSelected': self.options.get("play_selected", False),
@@ -984,6 +1046,10 @@ class HTMLTalkingScoreFormatter():
             'octaveDescription': self.options.get("octave_description", "name"),
             'octavePosition': self.options.get("octave_position", "before"),
             'octaveAnnouncement': self.options.get("octave_announcement", "onChange"),
+            # ADDED: Read new options from the file, with defaults
+            'include_dynamics': self.options.get("include_dynamics", True),
+            'accidental_style': self.options.get("accidental_style", "words"),
+            'repetition_mode': self.options.get('repetition_mode', 'learning'),
             'key_signature_accidentals': self.options.get("key_signature_accidentals", "applied"),
             'colourPosition': self.options.get("colour_position", "none"),
             'colourPitch': self.options.get("colour_pitch", False),
@@ -1059,6 +1125,13 @@ class HTMLTalkingScoreFormatter():
 
         # Also pass the clean web_path here
         music_segments = self.get_music_segments(output_path, web_path)
+        # Get beat division options to pass to the template
+        beat_division_options = self.score.get_beat_division_options()
+
+         # ADD THIS DEBUGGING CODE
+        print("--- DEBUG INFO: Beat Division Options ---")
+        print(beat_division_options)
+        # END DEBUGGING CODE
 
         return template.render({
             'settings': settings,
@@ -1066,6 +1139,7 @@ class HTMLTalkingScoreFormatter():
             'preamble': self.get_preamble(),
             'full_score_midis': full_score_midis,
             'music_segments': music_segments,
+            'beat_division_options': beat_division_options,
             'instruments': self.score.part_instruments,
             'part_names': self.score.part_names,
             'binary_selected_instruments': self.score.binary_selected_instruments,
@@ -1133,13 +1207,13 @@ class HTMLTalkingScoreFormatter():
         
         # --- PREAMBLE DATA COLLECTION ---
         self.time_and_keys = {}
-        total = len(self.score.score.parts[0].flat.getElementsByClass('TimeSignature'))
-        for count, ts in enumerate(self.score.score.parts[0].flat.getElementsByClass('TimeSignature')):
+        total = len(self.score.score.parts[0].flatten().getElementsByClass('TimeSignature'))
+        for count, ts in enumerate(self.score.score.parts[0].flatten().getElementsByClass('TimeSignature')):
             description = "Time signature - " + str(count+1) + " of " + str(total) + " is " + self.score.describe_time_signature(ts) + ".  "
             self.time_and_keys.setdefault(ts.measureNumber, []).append(description)
 
-        total = len(self.score.score.parts[0].flat.getElementsByClass('KeySignature'))
-        for count, ks in enumerate(self.score.score.parts[0].flat.getElementsByClass('KeySignature')):
+        total = len(self.score.score.parts[0].flatten().getElementsByClass('KeySignature'))
+        for count, ks in enumerate(self.score.score.parts[0].flatten().getElementsByClass('KeySignature')):
             description = "Key signature - " + str(count+1) + " of " + str(total) + " is " + self.score.describe_key_signature(ks) + ".  "
             self.time_and_keys.setdefault(ks.measureNumber, []).append(description)
         
