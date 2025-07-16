@@ -114,11 +114,11 @@ class MusicAnalyser:
         generalSummary = ""
         generalSummary += "There are " + str(num_measures) + " bars...  "
 
-        timesigs = self.score.parts[0].flat.getElementsByClass('TimeSignature')
+        timesigs = self.score.parts[0].flatten().getElementsByClass('TimeSignature')
         generalSummary += self.summarise_key_and_time_changes(timesigs, "time signature")
-        keysigs = self.score.parts[0].flat.getElementsByClass('KeySignature')
+        keysigs = self.score.parts[0].flatten().getElementsByClass('KeySignature')
         generalSummary += self.summarise_key_and_time_changes(keysigs, "key signature")
-        tempos = self.score.flat.getElementsByClass('MetronomeMark')
+        tempos = self.score.flatten().getElementsByClass('MetronomeMark')
         generalSummary += self.summarise_key_and_time_changes(tempos, "tempo")
 
         return generalSummary
@@ -1138,13 +1138,13 @@ class AnalysePart:
         self.part = p
 
         event_index = 0
-        previous_note_pitch = -1  # needed to work out intervals
+        previous_note_pitch = -1
         current_measure = -1
         measure_analyse_indexes = AnalyseSection()
-        measure_accidentals = 0  # count
-        measure_gracenotes = 0  # count
-        measure_rests = 0  # count
-        for n in self.part.flat.notesAndRests:
+        measure_accidentals = 0
+        measure_gracenotes = 0
+        measure_rests = 0
+        for n in self.part.flatten().notesAndRests:
             # the start of a new measure
             if (n.measureNumber > current_measure):
                 # todo - if a measure doesn't have any notes or rests then it won't be added to measure_indexes etc and will cause errors later when looking for groups etc

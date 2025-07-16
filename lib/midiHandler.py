@@ -43,7 +43,7 @@ class MidiHandler:
 
         instrument_index = -1
         prev_instrument = ""
-        for part_index, part in enumerate(self.score.flat.getInstruments()):
+        for part_index, part in enumerate(self.score.flatten().getInstruments()):
             if part.partId != prev_instrument:
                 instrument_index += 1
             
