@@ -11,6 +11,8 @@
     --link-color: #0056b3;
     --link-hover-decoration: none;
     --focus-outline-color: #FFC107;
+    --muted-text-color: #5c677d; /* A muted but readable gray */
+    --switch-icon-active-light: #f0db4f;
 
     /* Accent & Highlight */
     --accent-highlight-bg: #0a58ca;
@@ -49,6 +51,9 @@ html[data-theme="dark"] {
     --text-color: #f8f8f2;
     --link-color: #90cfff;
     --link-hover-decoration: underline;
+    --muted-text-color: #a0aec0; /* A lighter, high-contrast gray for dark mode */
+    --switch-icon-active-dark: #61dafb;
+
 
     /* Components */
     --form-control-bg: #3b4049;
@@ -328,22 +333,23 @@ html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-acti
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1.2rem;   /* Smaller */
+    height: 1.2rem;  /* Smaller */
     font-weight: bold;
     line-height: 1;
-    vertical-align: middle;
+    vertical-align: middle; /* Better alignment with text */
     cursor: pointer;
     border: 1px solid;
-    font-size: 0.9rem;
+    font-size: 0.8rem; /* Smaller font for the '?' */
     border-radius: 50%;
+    margin-left: 0.25rem; /* Adds space from the label */
     transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
     
-    /* Light Mode Default */
     color: #555;
     border-color: #adb5bd;
     background-color: transparent;
 }
+    
 
 /* Unified interactive state for both themes */
 .help-btn:hover,
@@ -402,3 +408,102 @@ html[data-theme="dark"] .repetition-info {
 @-moz-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
 @-webkit-keyframes spin { 100% { -webkit-transform: rotate(360deg); } }
 @keyframes spin { 100% { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
+
+/* --- Options Page: Preset Cards --- */
+.preset-card-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.preset-card {
+    padding: 1.25rem;
+    border: 2px solid var(--form-control-border);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    text-align: left;
+}
+
+.preset-card:hover {
+    border-color: var(--btn-primary-bg);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+html[data-theme="dark"] .preset-card:hover {
+     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.preset-card.active {
+    border-color: var(--btn-primary-bg);
+    background-color: var(--accent-highlight-bg);
+    color: var(--accent-highlight-color);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.preset-card.active .preset-card-desc {
+    color: var(--accent-highlight-color);
+    opacity: 0.9;
+}
+
+.preset-card-title {
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.preset-card-desc {
+    font-size: 0.95rem;
+    color: var(--text-color);
+    opacity: 0.7;
+    transition: color 0.2s ease-in-out;
+}
+
+
+/* --- Options Page: Advanced Section --- */
+.advanced-options-container {
+    border: 1px solid var(--form-control-border);
+    border-radius: 0.5rem;
+    padding: 1rem;
+}
+
+.advanced-options-summary {
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0.5rem;
+    transition: color 0.2s;
+}
+
+.advanced-options-summary:hover {
+    color: var(--btn-primary-bg);
+}
+
+/* --- Options Page: Help Text --- */
+.help-text-panel {
+    display: none; 
+    border-left: 3px solid #ccc; 
+    padding-left: 1rem;
+    margin-top: 0.5rem !important;
+}
+
+html[data-theme="dark"] .help-text-panel {
+    border-left-color: #6c757d;
+}
+/* --- Options Page Accessibility Fixes --- */
+.options-page .text-muted {
+    color: var(--muted-text-color) !important; /* Use a high-contrast muted color */
+}
+
+.help-text-panel,
+.preset-card-desc,
+.form-group label {
+    font-size: 1rem; /* Approx 16px or 12pt, a good minimum */
+}
+
+.help-text-panel {
+    border-left: 3px solid var(--form-control-border); 
+    padding-left: 1rem;
+    margin-top: 0.5rem !important;
+}

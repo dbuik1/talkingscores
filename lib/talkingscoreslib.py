@@ -560,21 +560,26 @@ class Music21TalkingScore(TalkingScoreBase):
                 for pni in range(pn1index, pn1index+self.part_instruments[ins][2]):
                     self.selected_part_names.append(ins_name + " - " + self.part_names[pni])
 
-        # --- START: CORRECTED LOGIC ---
-        # 1. Preserve the user's original choices for pre-generation, using .get() for safety.
+        # --- START: MODIFIED LOGIC ---
+        # 1. Preserve the user's original choices for pre-generation.
         play_all_choice = settings.get('playAll', False)
         play_selected_choice = settings.get('playSelected', False)
         play_unselected_choice = settings.get('playUnselected', False)
 
         # 2. Apply "smart" logic to hide redundant links in the template.
-        if len(self.unselected_instruments) == 0:  # All instruments selected
-            settings['playUnselected'] = False
-        if len(self.selected_instruments) == len(self.part_instruments) and settings.get('playAll', False): # All instruments selected AND playAll is checked
-            settings['playSelected'] = False
-        if len(self.selected_instruments) == 1: # Only one instrument selected
-            settings['playSelected'] = False
-        if len(self.part_instruments) == 1: # Only one instrument in the whole piece
+        # If there's only one instrument total, "Play All" is the same as playing the instrument.
+        if len(self.part_instruments) == 1:
             settings['playAll'] = False
+            settings['playSelected'] = False
+        
+        # Original logic for multi-instrument scores
+        if len(self.unselected_instruments) == 0:
+            settings['playUnselected'] = False
+        if len(self.selected_instruments) == len(self.part_instruments) and settings.get('playAll', False):
+            settings['playSelected'] = False
+        if len(self.selected_instruments) == 1:
+            settings['playSelected'] = False
+        # --- END: MODIFIED LOGIC ---
 
         # 3. Calculate the binary flags for the URL based on the *original* choices.
         self.binary_play_all = 1  # placeholder,all,selected,unselected
@@ -587,7 +592,6 @@ class Music21TalkingScore(TalkingScoreBase):
         self.binary_play_all = self.binary_play_all << 1
         if play_unselected_choice:
             self.binary_play_all += 1
-        # --- END: CORRECTED LOGIC ---
 
         print("selected_part_names = " + str(self.selected_part_names))
         print("selected_instruments = " + str(self.selected_instruments))
