@@ -35,6 +35,24 @@
 </head>
 <body class="score-page">
 
+    <nav class="score-nav-ribbon">
+        <a href="#" class="nav-link-top">Back to Top</a>
+        <hr>
+        <ul>
+            {% for segment in music_segments %}
+                <li>
+                    <a href="#segment-{{ segment.start_bar }}">
+                        {% if segment.start_bar == 'Pickup' %}
+                            Pickup Bar
+                        {% else %}
+                            Bar{% if segment.start_bar != segment.end_bar %}s{% endif %} {{ segment.start_bar }}
+                        {% endif %}
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    </nav>
+
 <h1>Info</h1>
 
 <p>{{ basic_information['title']|default('Untitled work') }} by {{ basic_information['composer']|default('Unknown composer') }}.</p>
@@ -285,6 +303,41 @@
 
         // Initialize all links when the page first loads
         document.querySelectorAll('.lnkPlay').forEach(updateLink);
+    });
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const navRibbon = document.querySelector('.score-nav-ribbon');
+
+        if (navRibbon) {
+            navRibbon.addEventListener('click', function(event) {
+                // Only act on the anchor links inside the ribbon
+                const targetLink = event.target.closest('a');
+                if (!targetLink) return;
+
+                const href = targetLink.getAttribute('href');
+
+                // If it's a "Back to Top" link, scroll to top smoothly
+                if (href === '#') {
+                    event.preventDefault();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    history.replaceState(null, null, ' '); // Clean the hash from URL
+                    return;
+                }
+
+                // For all other anchor links, find the target element
+                const targetElement = document.querySelector(href);
+                if (targetElement) {
+                    event.preventDefault(); // Stop the default jump
+                    
+                    // Manually scroll to the element
+                    targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    
+                    // Update the URL without adding to browser history
+                    history.replaceState(null, null, href);
+                }
+            });
+        }
     });
 </script>
 </body>

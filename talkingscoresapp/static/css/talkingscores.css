@@ -397,6 +397,49 @@ html[data-theme="dark"] .repetition-info {
     border-left-color: #64b5f6;
     color: #e0e0e0;
 }
+/* --- Score Page Navigation Ribbon --- */
+.score-nav-ribbon {
+    position: fixed;
+    top: 80px; /* Position it below the main navbar */
+    right: 20px;
+    width: 200px;
+    height: calc(100vh - 100px); /* Fill most of the screen height */
+    padding: 1rem;
+    background-color: var(--form-control-bg);
+    border: 1px solid var(--form-control-border);
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 1000;
+    overflow-y: auto; /* Make the list scrollable */
+}
+
+.score-nav-ribbon .nav-link-top {
+    font-weight: bold;
+    display: block;
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.score-nav-ribbon ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.score-nav-ribbon li a {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.score-nav-ribbon li a:hover,
+.score-nav-ribbon li a:focus-visible {
+    background-color: var(--accent-highlight-bg);
+    color: var(--accent-highlight-color);
+    text-decoration: none;
+}
 
 
 /* --- 7. ANIMATIONS --- */
