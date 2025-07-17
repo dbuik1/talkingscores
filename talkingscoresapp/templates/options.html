@@ -54,6 +54,10 @@
                     <h4 class="preset-card-title">Notes Only</h4>
                     <p class="preset-card-desc">A minimal description focusing only on pitches. Hides rests, ties, dynamics, and arpeggios.</p>
                 </div>
+                <div class="preset-card disabled" id="preset-card-custom" data-preset="custom">
+                    <h4 class="preset-card-title">Custom</h4>
+                    <p class="preset-card-desc">Your settings have been loaded from memory or modified from a preset.</p>
+                </div>
             </div>
         </fieldset>
         
@@ -194,122 +198,166 @@
 {% block javascript %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- START: REWRITTEN PRESET & UI LOGIC ---
-
+    // =================================================================
+    // --- 1. SETUP & CONFIGURATION ---
+    // =================================================================
+    const LOCAL_STORAGE_KEY = 'talkingScoresSettings';
+    
     const presetCards = {
         default: document.getElementById('preset-card-default'),
-        notes_only: document.getElementById('preset-card-notes_only')
+        notes_only: document.getElementById('preset-card-notes_only'),
+        custom: document.getElementById('preset-card-custom')
     };
     const allAdvancedControls = document.querySelectorAll('.advanced-options-container select, .advanced-options-container input[type="checkbox"]');
 
-    // This object maps a preset setting to the ID of its form control
     const controlIds = {
-        beatDivision: 'beat_division',
-        rhythmDescription: 'rhythm_description',
-        repetitionMode: 'repetition_mode',
-        includeDynamics: 'chk_include_dynamics',
-        octaveAnnouncement: 'octave_announcement',
-        accidentalStyle: 'accidental_style',
-        includeTies: 'chk_include_ties',
-        includeRests: 'chk_include_rests',
-        includeArpeggios: 'chk_include_arpeggios'
+        bars_at_a_time: 'bars_at_a_time', beatDivision: 'beat_division', rhythmDescription: 'rhythm_description',
+        repetitionMode: 'repetition_mode', includeDynamics: 'chk_include_dynamics', octaveAnnouncement: 'octave_announcement',
+        accidentalStyle: 'accidental_style', includeTies: 'chk_include_ties', includeRests: 'chk_include_rests',
+        includeArpeggios: 'chk_include_arpeggios', pitch_description: 'pitch_description', octave_description: 'octave_description',
+        dot_position: 'dot_position', rhythm_announcement: 'rhythm_announcement', octave_position: 'octave_position',
+        key_signature_accidentals: 'key_signature_accidentals'
     };
 
     const presets = {
         'default': {
             beatDivision: '{% if score_info.beat_division_options|length > 1 %}{{ score_info.beat_division_options.1.value }}{% else %}{{ score_info.beat_division_options.0.value }}{% endif %}',
-            rhythmDescription: 'british',
-            repetitionMode: 'learning',
-            includeDynamics: true,
-            octaveAnnouncement: 'onChange',
-            accidentalStyle: 'words',
-            includeTies: true,
-            includeRests: true,
-            includeArpeggios: true
+            rhythmDescription: 'british', repetitionMode: 'learning', includeDynamics: true, octaveAnnouncement: 'onChange',
+            accidentalStyle: 'words', includeTies: true, includeRests: true, includeArpeggios: true
         },
         'notes_only': {
-            beatDivision: 'bar',
-            rhythmDescription: 'none',
-            repetitionMode: 'none',
-            includeDynamics: false,
-            octaveAnnouncement: 'onChange',
-            accidentalStyle: 'symbols',
-            includeTies: false,
-            includeRests: false,
+            beatDivision: 'bar', rhythmDescription: 'none', repetitionMode: 'none', includeDynamics: false,
+            octaveAnnouncement: 'onChange', accidentalStyle: 'symbols', includeTies: false, includeRests: false,
             includeArpeggios: false
         }
     };
 
-    function applyPreset(presetName) {
-        try {
-            const settings = presets[presetName];
-            if (!settings) return;
 
-            // Explicitly set each control's value. This is more robust.
-            document.getElementById(controlIds.beatDivision).value = settings.beatDivision;
-            document.getElementById(controlIds.rhythmDescription).value = settings.rhythmDescription;
-            document.getElementById(controlIds.repetitionMode).value = settings.repetitionMode;
-            document.getElementById(controlIds.octaveAnnouncement).value = settings.octaveAnnouncement;
-            document.getElementById(controlIds.accidentalStyle).value = settings.accidentalStyle;
+    // =================================================================
+    // --- 2. CORE FUNCTIONS ---
+    // =================================================================
 
-            document.getElementById(controlIds.includeDynamics).checked = settings.includeDynamics;
-            document.getElementById(controlIds.includeTies).checked = settings.includeTies;
-            document.getElementById(controlIds.includeRests).checked = settings.includeRests;
-            document.getElementById(controlIds.includeArpeggios).checked = settings.includeArpeggios;
-            
-            updateActiveCard(presetName);
-
-        } catch (error) {
-            console.error("Error applying preset '"+ presetName +"':", error);
+    function saveSettings() {
+        const settingsToSave = {};
+        for (const key in controlIds) {
+            const control = document.getElementById(controlIds[key]);
+            if (control) {
+                settingsToSave[key] = (control.type === 'checkbox') ? control.checked : control.value;
+            }
         }
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(settingsToSave));
+    }
+
+    function loadSettings() {
+        const savedSettings = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (savedSettings) {
+            const settings = JSON.parse(savedSettings);
+            for (const key in settings) {
+                const control = document.getElementById(controlIds[key]);
+                if (control && settings[key] !== undefined) {
+                     if (control.type === 'checkbox') { control.checked = settings[key]; } 
+                     else { control.value = settings[key]; }
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // NEW: Checks the current form state against all known presets.
+    function matchCurrentSettingsToPreset() {
+        for (const presetName in presets) {
+            const presetSettings = presets[presetName];
+            let isMatch = true;
+            for (const key in presetSettings) {
+                const control = document.getElementById(controlIds[key]);
+                const currentValue = (control.type === 'checkbox') ? control.checked : control.value;
+                if (currentValue !== presetSettings[key]) {
+                    isMatch = false;
+                    break; 
+                }
+            }
+            if (isMatch) {
+                return presetName; // Found a perfect match
+            }
+        }
+        return 'custom'; // No presets match
+    }
+
+    function applyPreset(presetName) {
+        const settings = presets[presetName];
+        if (!settings) return;
+        
+        for (const key in settings) {
+            const control = document.getElementById(controlIds[key]);
+            if (control) {
+                if (control.type === 'checkbox') { control.checked = settings[key]; } 
+                else { control.value = settings[key]; }
+            }
+        }
+        
+        updateActiveCard(presetName);
+        updateFormVisibility();
     }
 
     function updateActiveCard(activePreset) {
         for (const presetName in presetCards) {
-            presetCards[presetName].classList.toggle('active', presetName === activePreset);
+            if (presetCards[presetName]) {
+                presetCards[presetName].classList.toggle('active', presetName === activePreset);
+            }
         }
     }
 
-    function switchToCustom() {
-        updateActiveCard(null); 
+    function updateFormVisibility() {
+        const rhythmValue = document.getElementById(controlIds.rhythmDescription).value;
+        const octaveValue = document.getElementById(controlIds.octave_description).value;
+        [controlIds.dot_position, controlIds.rhythm_announcement].forEach(id => {
+            document.getElementById(id).closest('.form-group').style.display = (rhythmValue === 'none') ? 'none' : '';
+        });
+        [controlIds.octave_position, controlIds.octave_announcement].forEach(id => {
+            document.getElementById(id).closest('.form-group').style.display = (octaveValue === 'none') ? 'none' : '';
+        });
     }
 
-    // --- Event Listeners ---
-    for (const presetName in presetCards) {
+    
+    // =================================================================
+    // --- 3. EVENT LISTENERS & INITIALIZATION ---
+    // =================================================================
+    document.querySelector('form.form-horizontal').addEventListener('submit', saveSettings);
+
+    for (const presetName in presets) { // Only allow clicking on real presets
         const card = presetCards[presetName];
         if (card) {
             card.addEventListener('click', () => applyPreset(presetName));
             card.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    applyPreset(presetName);
-                }
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); applyPreset(presetName); }
             });
         }
     }
 
+    // When any advanced control is changed, re-evaluate which preset is active
     allAdvancedControls.forEach(control => {
-        control.addEventListener('change', switchToCustom);
-    });
-    
-    document.querySelectorAll('.help-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const panelId = btn.dataset.controls;
-            const panel = document.getElementById(panelId);
-            if(panel) {
-                const isExpanded = panel.style.display === 'block';
-                panel.style.display = isExpanded ? 'none' : 'block';
-            }
+        control.addEventListener('change', () => {
+            const matchedPreset = matchCurrentSettingsToPreset();
+            updateActiveCard(matchedPreset);
+            updateFormVisibility();
         });
     });
+    
+    document.querySelectorAll('.help-btn').forEach(btn => { /* ... help button logic ... */ });
 
-    applyPreset('default');
+    // --- Page Load ---
+    if (!loadSettings()) {
+        applyPreset('default');
+    } else {
+        const matchedPreset = matchCurrentSettingsToPreset();
+        updateActiveCard(matchedPreset);
+    }
+    updateFormVisibility();
 
-    // --- END: NEW PRESET & UI LOGIC ---
-
-
-    // --- START: EXISTING COLOR LOGIC ---
+    // =================================================================
+    // --- 4. COLOR PICKER LOGIC (Unchanged) ---
+    // =================================================================
     const elements = {
         form: document.querySelector('form.form-horizontal'),
         colourStyleSelect: document.getElementById('colour_style'),
@@ -342,7 +390,6 @@ document.addEventListener('DOMContentLoaded', function() {
     elements.profileRadios.forEach(radio => { radio.addEventListener('change', () => { if (radio.value !== 'custom') { applyNoteColorProfile(radio.value); } updateFormDisplay(); }); });
     applyNoteColorProfile('default');
     updateFormDisplay();
-    // --- END: EXISTING COLOR LOGIC ---
 });
 </script>
 {% endblock %}
