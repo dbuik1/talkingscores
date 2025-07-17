@@ -76,7 +76,7 @@
         <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play - {{instruments[ins.ins][0]}} </a><br/>
         <li style="margin-left:15px; list-style-type:none;">
             {% for midipart in ins.midi_parts %}
-                <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1 ]}}  </a><br/>
+                <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1 ]}} </a><br/>
             {% endfor %}
         </li>
     {% endfor %}
@@ -149,7 +149,7 @@
         {% for part_description in part_descriptions %}
             {% set part_index = loop.index0 %}
             {% if part_descriptions|length > 1 %}<h4>{{part_names[instruments[instrument_index][1] + loop.index-1 ]}}</h4>{% endif %}
-            
+
             {% for bar, time_point_list in part_description.items() %}
                 <h5>Bar: {% if segment.start_bar == 'Pickup' %}Pickup{% else %}{{ bar }}{% endif %}</h5>
                 {% if bar in time_and_keys %}<p class="meta-info">{% for tk in time_and_keys[bar] %}{{tk}}<br/>{% endfor %}</p>{% endif %}
@@ -158,34 +158,40 @@
                 {% if settings.repetition_mode == 'learning' and learning_info %}<div class="repetition-info">{{ learning_info.text }}</div>
                 {% elif settings.repetition_mode == 'detailed' and detailed_info %}<div class="repetition-info"><strong>Repetition:</strong> {{ detailed_info }}</div>{% endif %}
 
-                {% if not (settings.repetition_mode == 'learning' and learning_info and learning_info.type == 'exact') %}
-                    {# This version restores the original beat-by-beat logic and applies whitespace control to fix formatting #}
-                    {%- if segment.start_bar == 'Pickup' -%}
-                        <p class="beat-group"><span class="beat-content">
-                        {%- set ns = namespace(previous_event=None) -%}
-                        {%- for time_point in time_point_list -%}
-                            {# START: ADDED MISSING FILTERING LOGIC #}
-                            {%- set filtered = namespace(events=[], has_note_or_chord=false) -%}
-                            {%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}
-                                {%- if event.__class__.__name__ in ['TSNote', 'TSChord'] -%}{%- set filtered.has_note_or_chord = true -%}{%- endif -%}
-                            {%- endfor -%}{%- endfor -%}
-                            {%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}
-                                {%- set event_type = event.__class__.__name__ -%}
-                                {%- if filtered.has_note_or_chord -%}
-                                    {%- if event_type in ['TSNote', 'TSChord', 'TSDynamic'] -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}
-                                {%- else -%}
-                                    {%- set filtered.events = filtered.events + [event] -%}
-                                {%- endif -%}
-                            {%- endfor -%}{%- endfor -%}
-                            {# END: ADDED MISSING FILTERING LOGIC #}
-                            {%- for event in filtered.events -%}
-                                {%- if not loop.first -%}, {%- endif -%}
-                                {{- event.render(settings, ns.previous_event)|join(' ') | safe -}}
-                                {%- set ns.previous_event = event -%}
-                            {%- endfor -%}
-                        {%- endfor -%}
-                        .</span></p>
+                {# Pre-check if there are any notes or chords to render for this bar #}
+                {% set N = namespace(has_renderable_event=false) %}
+                {% for time_point in time_point_list %}
+                    {% for voice, events_in_voice in time_point.voices|dictsort %}
+                        {% for event in events_in_voice %}
+                            {% if event.__class__.__name__ in ['TSNote', 'TSChord'] %}
+                                {% set N.has_renderable_event = true %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                {% endfor %}
+
+                {% if not N.has_renderable_event %}
+                    <p>(This part rests for the entire bar)</p>
+                {% elif not (settings.repetition_mode == 'learning' and learning_info and learning_info.type == 'exact') %}
+                {%- if settings.beat_division == 'bar' or segment.start_bar == 'Pickup' -%}
+                {# Renders the bar as one continuous paragraph #}
+                <p class="beat-group"><span class="beat-content">
+                {%- set ns = namespace(previous_event=None, is_first_event_in_bar=True) -%}
+                {%- for time_point in time_point_list -%}
+                    {%- set filtered = namespace(events=[], has_note_or_chord=false) -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- if event.__class__.__name__ in ['TSNote', 'TSChord'] -%}{%- set filtered.has_note_or_chord = true -%}{%- endif -%}{%- endfor -%}{%- endfor -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- set event_type = event.__class__.__name__ -%}{%- if filtered.has_note_or_chord -%}{%- if event_type in ['TSNote', 'TSChord', 'TSDynamic'] -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- else -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
+                    {%- for event in filtered.events -%}
+                        {%- set rendered_event = event.render(settings, ns.previous_event) -%}
+                        {%- if rendered_event -%}
+                        {%- if not ns.is_first_event_in_bar -%},&nbsp;{%- endif -%}
+                            {{- rendered_event|join(' ') | safe -}}
+                            {%- set ns.previous_event = event -%}
+                            {%- set ns.is_first_event_in_bar = false -%}
+                        {%- endif -%}
+                    {%- endfor -%}
+                {%- endfor -%}
+                </span></p>
                     {%- else -%}
+                        {# Renders the bar beat-by-beat #}
                         {%- set ns = namespace(current_integer_beat=0, previous_event=None, is_first_event_in_bar=True) -%}
                         {%- for time_point in time_point_list -%}
                             {%- set integer_beat = (time_point.beat - 0.001)|round|int if time_point.beat is number and time_point.beat > 0 else ns.current_integer_beat -%}

@@ -62,6 +62,10 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     chk_playAll = forms.BooleanField(required=False)
     chk_playSelected = forms.BooleanField(required=False)
     chk_playUnselected = forms.BooleanField(required=False)
+    chk_include_rests = forms.BooleanField(required=False)
+    chk_include_ties = forms.BooleanField(required=False)
+    chk_include_arpeggios = forms.BooleanField(required=False)
+    
 
     bars_at_a_time = forms.ChoiceField(choices=(('1', 1), ('2', 2), ('4', 4), ('8', 8)), initial=4,
                                         label="Bars at a time")
@@ -264,6 +268,9 @@ def options(request, id, filename):
             "octave_description": request.POST.get("octave_description", "name"),
             "octave_position": request.POST.get("octave_position", "before"),
             "octave_announcement": request.POST.get("octave_announcement", "onChange"),
+            "include_rests": "chk_include_rests" in request.POST,
+            "include_ties": "chk_include_ties" in request.POST,
+            "include_arpeggios": "chk_include_arpeggios" in request.POST,
             # ADDED: Save the new dynamics toggle and repetition mode
             "include_dynamics": "chk_include_dynamics" in request.POST,
             "accidental_style": request.POST.get("accidental_style", "words"),

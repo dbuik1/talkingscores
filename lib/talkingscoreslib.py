@@ -116,9 +116,10 @@ class TSEvent(object, metaclass=ABCMeta):
                 rendered_elements.append(self.duration)
             rendered_elements.append(self.endTuplets)
 
-        if self.tie:
+        if self.tie and settings.get('include_ties', True):
             rendered_elements.append(f"tie {self.tie}")
-        return rendered_elements
+
+        return list(filter(None, rendered_elements))
 
 
 class TSDynamic(TSEvent):
@@ -134,8 +135,9 @@ class TSDynamic(TSEvent):
         self.short_name = short_name
 
     def render(self, settings, context=None):
-        # --- MODIFIED: Add brackets to dynamics ---
-        return [f'[{self.long_name}]']
+        if self.long_name:
+            return [f'[{self.long_name}]']
+        return []
 
 
 class TSPitch(TSEvent):
@@ -156,8 +158,8 @@ class TSPitch(TSEvent):
         rendered_elements.append(render_colourful_output(self.pitch_name, self.pitch_letter, "pitch", settings))
         if settings['octavePosition'] == "after":
             rendered_elements.append(self.render_octave(settings, context))
-
-        return rendered_elements
+        
+        return list(filter(None, rendered_elements))
 
     def render_octave(self, settings, context=None):
         show_octave = False
@@ -206,12 +208,14 @@ class TSRest(TSEvent):
     pitch = None
 
     def render(self, settings, context=None):
+        if not settings.get('include_rests', True):
+            return [] 
+
         rendered_elements = []
-        # Render the duration
-        rendered_elements.append(' '.join(super(TSRest, self).render(settings, context)))
-        # Render the pitch
-        rendered_elements.append(' rest')
-        return rendered_elements
+        rendered_elements.extend(super(TSRest, self).render(settings, context))
+        rendered_elements.append('rest')
+        
+        return list(filter(None, rendered_elements))
 
 
 class TSNote(TSEvent):
@@ -221,15 +225,14 @@ class TSNote(TSEvent):
     def render(self, settings, context=None):
         rendered_elements = []
         for exp in self.expressions:
-            rendered_elements.append(exp.name + ', ')
+            is_arpeggio = 'arpeggio' in exp.name.lower()
+            if not is_arpeggio or (is_arpeggio and settings.get('include_arpeggios', True)):
+                rendered_elements.append(exp.name)
 
-         # This now correctly calls the parent render with settings
-        rendered_elements.append(' '.join(super().render(settings, context, self.pitch.pitch_letter)))
-
-        # This now correctly calls the pitch render with settings
-        rendered_elements.append(' '.join(self.pitch.render(settings, getattr(context, 'pitch', None))))
-        return rendered_elements
-
+        rendered_elements.extend(super().render(settings, context, self.pitch.pitch_letter))
+        rendered_elements.extend(self.pitch.render(settings, getattr(context, 'pitch', None)))
+        
+        return list(filter(None, rendered_elements))
 
 class TSChord(TSEvent):
     pitches = []
@@ -239,12 +242,14 @@ class TSChord(TSEvent):
 
     def render(self, settings, context=None):
         rendered_elements = [f'{len(self.pitches)}-note chord']
-        rendered_elements.append(' '.join(super(TSChord, self).render(settings, context)))
+        
+        rendered_elements.extend(super(TSChord, self).render(settings, context))
         previous_pitch = None
         for pitch in sorted(self.pitches, key=lambda TSPitch: TSPitch.pitch_number):
-            rendered_elements.append(' '.join(pitch.render(settings, previous_pitch)))
+            rendered_elements.extend(pitch.render(settings, previous_pitch))
             previous_pitch = pitch
-        return [', '.join(rendered_elements)]
+        
+        return list(filter(None, rendered_elements))
 
 
 class TalkingScoreBase(object, metaclass=ABCMeta):
@@ -920,52 +925,43 @@ class Music21TalkingScore(TalkingScoreBase):
             base_name = self._PITCH_PHONETIC_MAP.get(pitch.step, "?")
         else: # Default to noteName or none
              base_name = pitch.step if settings['pitchDescription'] == 'noteName' else ''
-        
+
+        # If there's no accidental object, we're done.
         if not pitch.accidental:
             return base_name
 
-        # --- MODIFIED LOGIC FOR ACCIDENTALS ---
-        accidental_text = ""
-        if settings.get('accidental_style') == 'symbols':
-            symbol_map = {
-                'sharp': '♯',
-                'flat': '♭',
-                'natural': '♮',
-                'double-sharp': '𝄪',
-                'double-flat': '♭♭'
-            }
-            # Note: no space between base_name and symbol
-            accidental_text = symbol_map.get(pitch.accidental.name, '')
-            return f"{base_name}{accidental_text}"
-        else: # Default to 'words'
-            # Note: space between base_name and word
-            accidental_text = pitch.accidental.fullName
-            return f"{base_name} {accidental_text}"
-        # --- END MODIFICATION ---
-
-        # "Standard" mode: Only show explicit accidentals
-        if mode == 'standard':
-            if pitch.accidental.displayStatus:
-                return f"{base_name} {pitch.accidental.fullName}"
-            return base_name
-
-        # "Applied" mode: Show all accidentals
+        # 1. Decide IF an accidental should be shown based on the mode
+        show_accidental = False
         if mode == 'applied':
-            return f"{base_name} {pitch.accidental.fullName}"
-
-        # "On Change" mode: Show accidental if it's new for this measure
-        if mode == 'onChange':
+            # Per user request: In "applied" mode, show sharps/flats, but NEVER naturals.
+            if pitch.accidental.name != 'natural':
+                show_accidental = True
+        elif mode == 'standard':
+            # Show only accidentals that are explicitly displayed on the page
+            if pitch.accidental.displayStatus:
+                show_accidental = True
+        elif mode == 'onChange':
             current_alter = pitch.alter
             step = pitch.step
             last_seen_alter = state.get(step)
-
             if last_seen_alter is None or current_alter != last_seen_alter:
                 state[step] = current_alter # Update state
-                return f"{base_name} {pitch.accidental.fullName}"
-            else:
-                return base_name # No change, return base name
+                show_accidental = True
         
-        return base_name
+        if not show_accidental:
+            return base_name
+
+        # 2. If we should show it, decide HOW to format it
+        if settings.get('accidental_style') == 'symbols':
+            symbol_map = {
+                'sharp': '♯', 'flat': '♭', 'natural': '♮',
+                'double-sharp': '𝄪', 'double-flat': '♭♭'
+            }
+            accidental_text = symbol_map.get(pitch.accidental.name, '')
+            return f"{base_name}{accidental_text}"
+        else: # 'words'
+            accidental_text = pitch.accidental.fullName
+            return f"{base_name} {accidental_text}"
 
     def map_duration(self, duration):
         global settings
@@ -1035,6 +1031,10 @@ class HTMLTalkingScoreFormatter():
 
         settings = {
             'barsAtATime': int(self.options.get("bars_at_a_time", 2)),
+            'beat_division': self.options.get("beat_division"),
+            'include_rests': self.options.get("include_rests", True),
+            'include_ties': self.options.get("include_ties", True),
+            'include_arpeggios': self.options.get("include_arpeggios", True),
             'playAll': self.options.get("play_all", False),
             'playSelected': self.options.get("play_selected", False),
             'playUnselected': self.options.get("play_unselected", False),
