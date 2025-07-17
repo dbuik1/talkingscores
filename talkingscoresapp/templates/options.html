@@ -45,18 +45,26 @@
         <fieldset class="mb-4">
             <legend class="h2 bold text-center">Choose Your Experience</legend>
             <p class="text-center text-muted mb-4">Select a preset to start. You can fine-tune settings in the "Advanced Options" section.</p>
-            <div class="preset-card-container">
+            <div class="preset-card-container four-cards">
                 <div class="preset-card active" id="preset-card-default" data-preset="default" tabindex="0">
                     <h4 class="preset-card-title">Default</h4>
                     <p class="preset-card-desc">A balanced description with rhythm, rests, and repetition analysis. Great for general use.</p>
                 </div>
                 <div class="preset-card" id="preset-card-notes_only" data-preset="notes_only" tabindex="0">
                     <h4 class="preset-card-title">Notes Only</h4>
-                    <p class="preset-card-desc">A minimal description focusing only on pitches. Hides rests, ties, dynamics, and arpeggios.</p>
+                    <p class="preset-card-desc">A minimal description focusing only on pitches. Hides rests, ties, and dynamics.</p>
+                </div>
+                 <div class="preset-card" id="preset-card-pitch_only" data-preset="pitch_only" tabindex="0">
+                    <h4 class="preset-card-title">Pitch Only</h4>
+                    <p class="preset-card-desc">Focuses only on the sequence of notes and octaves, hiding rhythm and other markings.</p>
+                </div>
+                <div class="preset-card" id="preset-card-rhythm_only" data-preset="rhythm_only" tabindex="0">
+                    <h4 class="preset-card-title">Rhythm Only</h4>
+                    <p class="preset-card-desc">Focuses only on the rhythm, rests, and ties, hiding all pitch and octave information.</p>
                 </div>
                 <div class="preset-card disabled" id="preset-card-custom" data-preset="custom">
                     <h4 class="preset-card-title">Custom</h4>
-                    <p class="preset-card-desc">Your settings have been loaded from memory or modified from a preset.</p>
+                    <p class="preset-card-desc">Your settings have been loaded or modified from a preset.</p>
                 </div>
             </div>
         </fieldset>
@@ -87,6 +95,7 @@
                     <div class="checkbox"><input type="checkbox" name="chk_include_ties" id="chk_include_ties" value="checked" checked="checked" /><label for="chk_include_ties">Include ties</label></div>
                     <div class="checkbox"><input type="checkbox" name="chk_include_rests" id="chk_include_rests" value="checked" checked="checked" /><label for="chk_include_rests">Include rests</label></div>
                     <div class="checkbox"><input type="checkbox" name="chk_include_arpeggios" id="chk_include_arpeggios" value="checked" checked="checked" /><label for="chk_include_arpeggios">Include arpeggio marks</label></div>
+                    <div class="checkbox"><input type="checkbox" name="chk_describe_chords" id="chk_describe_chords" value="checked" checked="checked" /><label for="chk_describe_chords">Announce chords (e.g., '4-note chord')</label></div>
                 </div>
                 <div class="form-group mt-3">
                     <label for="repetition_mode">Repetition Description <button type="button" class="help-btn" aria-label="More info on repetition description" data-controls="repetition-help-text">?</button></label>
@@ -206,6 +215,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const presetCards = {
         default: document.getElementById('preset-card-default'),
         notes_only: document.getElementById('preset-card-notes_only'),
+        pitch_only: document.getElementById('preset-card-pitch_only'),
+        rhythm_only: document.getElementById('preset-card-rhythm_only'),
         custom: document.getElementById('preset-card-custom')
     };
     const allAdvancedControls = document.querySelectorAll('.advanced-options-container select, .advanced-options-container input[type="checkbox"]');
@@ -215,6 +226,7 @@ document.addEventListener('DOMContentLoaded', function() {
         repetitionMode: 'repetition_mode', includeDynamics: 'chk_include_dynamics', octaveAnnouncement: 'octave_announcement',
         accidentalStyle: 'accidental_style', includeTies: 'chk_include_ties', includeRests: 'chk_include_rests',
         includeArpeggios: 'chk_include_arpeggios', pitch_description: 'pitch_description', octave_description: 'octave_description',
+        describe_chords: 'chk_describe_chords',
         dot_position: 'dot_position', rhythm_announcement: 'rhythm_announcement', octave_position: 'octave_position',
         key_signature_accidentals: 'key_signature_accidentals'
     };
@@ -222,13 +234,59 @@ document.addEventListener('DOMContentLoaded', function() {
     const presets = {
         'default': {
             beatDivision: '{% if score_info.beat_division_options|length > 1 %}{{ score_info.beat_division_options.1.value }}{% else %}{{ score_info.beat_division_options.0.value }}{% endif %}',
-            rhythmDescription: 'british', repetitionMode: 'learning', includeDynamics: true, octaveAnnouncement: 'onChange',
-            accidentalStyle: 'words', includeTies: true, includeRests: true, includeArpeggios: true
+            rhythmDescription: 'british',
+            repetitionMode: 'learning',
+            pitch_description: 'noteName',
+            octave_description: 'name',
+            includeDynamics: true,
+            octaveAnnouncement: 'onChange',
+            accidentalStyle: 'words',
+            includeTies: true,
+            includeRests: true,
+            includeArpeggios: true,
+            describe_chords: true
         },
         'notes_only': {
-            beatDivision: 'bar', rhythmDescription: 'none', repetitionMode: 'none', includeDynamics: false,
-            octaveAnnouncement: 'onChange', accidentalStyle: 'symbols', includeTies: false, includeRests: false,
-            includeArpeggios: false
+            beatDivision: 'bar',
+            rhythmDescription: 'none',
+            repetitionMode: 'none',
+            pitch_description: 'noteName',
+            octave_description: 'name',
+            includeDynamics: false,
+            octaveAnnouncement: 'onChange',
+            accidentalStyle: 'symbols',
+            includeTies: false,
+            includeRests: false,
+            includeArpeggios: false,
+            describe_chords: false
+        },
+        'pitch_only': {
+            beatDivision: 'bar',
+            rhythmDescription: 'none',
+            repetitionMode: 'none',
+            pitch_description: 'noteName',
+            octave_description: 'name',
+            includeDynamics: false,
+            octaveAnnouncement: 'onChange',
+            accidentalStyle: 'words',
+            includeTies: false,
+            includeRests: false,
+            includeArpeggios: false,
+            describe_chords: true
+        },
+        'rhythm_only': {
+            beatDivision: '{% if score_info.beat_division_options|length > 1 %}{{ score_info.beat_division_options.1.value }}{% else %}{{ score_info.beat_division_options.0.value }}{% endif %}',
+            rhythmDescription: 'british',
+            repetitionMode: 'none',
+            pitch_description: 'none',
+            octave_description: 'none',
+            includeDynamics: true,
+            octaveAnnouncement: 'onChange',
+            accidentalStyle: 'words',
+            includeTies: true,
+            includeRests: true,
+            includeArpeggios: true,
+            describe_chords: true
         }
     };
 

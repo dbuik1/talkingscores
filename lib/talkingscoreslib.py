@@ -241,7 +241,9 @@ class TSChord(TSEvent):
         return ''
 
     def render(self, settings, context=None):
-        rendered_elements = [f'{len(self.pitches)}-note chord']
+        rendered_elements = []
+        if settings.get('describe_chords', True):
+            rendered_elements.append(f'{len(self.pitches)}-note chord')
         
         rendered_elements.extend(super(TSChord, self).render(settings, context))
         previous_pitch = None
@@ -1039,6 +1041,7 @@ class HTMLTalkingScoreFormatter():
             'include_rests': self.options.get("include_rests", True),
             'include_ties': self.options.get("include_ties", True),
             'include_arpeggios': self.options.get("include_arpeggios", True),
+            'describe_chords': self.options.get("describe_chords", True),
             'playAll': self.options.get("play_all", False),
             'playSelected': self.options.get("play_selected", False),
             'playUnselected': self.options.get("play_unselected", False),

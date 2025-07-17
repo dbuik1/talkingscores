@@ -114,6 +114,36 @@ body {
     outline-offset: 2px;
     box-shadow: none !important;
 }
+/* Accessibility: Skip to Main Content Link */
+.skip-link {
+    border: 0;
+    clip: rect(1px, 1px, 1px, 1px);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+    white-space: nowrap;
+}
+
+.skip-link:focus {
+    clip: auto;
+    clip-path: none;
+    width: auto;
+    height: auto;
+    white-space: normal;
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    padding: 1rem;
+    background-color: var(--accent-highlight-bg);
+    color: var(--accent-highlight-color);
+    font-weight: bold;
+    z-index: 9999;
+    text-decoration: none;
+}
 
 
 /* --- 4. LAYOUT --- */
@@ -455,7 +485,7 @@ html[data-theme="dark"] .repetition-info {
 /* --- Options Page: Preset Cards --- */
 .preset-card-container {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 1rem;
     margin-bottom: 2rem;
 }

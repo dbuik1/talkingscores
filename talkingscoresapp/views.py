@@ -65,6 +65,7 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     chk_include_rests = forms.BooleanField(required=False)
     chk_include_ties = forms.BooleanField(required=False)
     chk_include_arpeggios = forms.BooleanField(required=False)
+    chk_describe_chords = forms.BooleanField(required=False)
     
 
     bars_at_a_time = forms.ChoiceField(choices=(('1', 1), ('2', 2), ('4', 4), ('8', 8)), initial=4,
@@ -271,6 +272,7 @@ def options(request, id, filename):
             "include_rests": "chk_include_rests" in request.POST,
             "include_ties": "chk_include_ties" in request.POST,
             "include_arpeggios": "chk_include_arpeggios" in request.POST,
+            "describe_chords": "chk_describe_chords" in request.POST,
             # ADDED: Save the new dynamics toggle and repetition mode
             "include_dynamics": "chk_include_dynamics" in request.POST,
             "accidental_style": request.POST.get("accidental_style", "words"),
