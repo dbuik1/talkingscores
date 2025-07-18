@@ -51,7 +51,7 @@ html[data-theme="dark"] {
     --text-color: #f8f8f2;
     --link-color: #90cfff;
     --link-hover-decoration: underline;
-    --muted-text-color: #a0aec0; /* A lighter, high-contrast gray for dark mode */
+    --muted-text-color: #d1d1d1; /* Increased contrast for better readability */
     --switch-icon-active-dark: #61dafb;
 
 
@@ -135,8 +135,9 @@ body {
     height: auto;
     white-space: normal;
     position: absolute;
-    top: 1rem;
-    left: 1rem;
+    top: 60px;
+    left: 50%; /* Center the starting point */
+    transform: translateX(-50%); /* Shift it left by half its own width */
     padding: 1rem;
     background-color: var(--accent-highlight-bg);
     color: var(--accent-highlight-color);
@@ -150,6 +151,10 @@ body {
 .talking-scores {
     padding: 40px 15px;
     text-align: center;
+}
+.text-start {
+    padding: 40px 15px;
+    text-align: left;
 }
 
 .footer {
@@ -339,10 +344,24 @@ html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-acti
 .form-separator:not(:empty)::before { margin-right: 1em; }
 .form-separator:not(:empty)::after { margin-left: 1em; }
 
+html[data-theme="dark"] .form-separator {
+    color: var(--text-color);
+    font-weight: bold;
+    opacity: 0.9;
+}
+html[data-theme="dark"] .form-horizontal label,
+html[data-theme="dark"] .form-horizontal .form-check-label,
+html[data-theme="dark"] .form-horizontal legend {
+    color: var(--text-color);
+    opacity: 1;
+}
+
+
 /* Options Page Components */
 .color-preview {
-    padding: 2px 8px;
+    padding: 8px 18px;
     border-radius: 4px;
+    font-size: 1.5rem;
     font-family: monospace;
     border: 1px solid transparent;
     transition: color 0.2s, background-color 0.2s;
@@ -502,6 +521,14 @@ div[id^="segment-"] h5 {
     color: var(--accent-highlight-color);
     text-decoration: none;
 }
+/* Score Page: Main Layout */
+#score-main-content {
+    /* Add padding on the right to prevent content from flowing under the fixed ribbon */
+    padding-right: 240px; 
+    padding-left: 2rem;
+    padding-top: 1rem;
+    padding-bottom: 2rem;
+}
     
 
 /* Unified interactive state for both themes */
@@ -546,6 +573,69 @@ html[data-theme="dark"] #key-sig-help-text strong {
 @-webkit-keyframes spin { 100% { -webkit-transform: rotate(360deg); } }
 @keyframes spin { 100% { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
 
+/* --- Options Page: General Readability & Sizing --- */
+#main-content .form-group label,
+#main-content .form-check-label,
+#main-content .preset-card-desc,
+#main-content .form-text,
+#main-content .checkbox label {
+    font-size: 1.1rem;
+}
+
+#main-content .form-control {
+    font-size: 1.1rem;
+}
+
+/* --- Options Page: Form Element Styling --- */
+#main-content .form-group {
+    margin-bottom: 1.25rem;
+}
+
+#main-content input[type="checkbox"],
+#main-content .form-check-input[type="radio"] {
+    width: 1.4rem;
+    height: 1.4rem;
+    margin-right: 0.75rem;
+    vertical-align: middle;
+}
+
+#main-content .checkbox label,
+#main-content .form-check-label {
+    vertical-align: middle;
+}
+
+/* Improve checkbox layout and size */
+.form-horizontal input[type="checkbox"],
+.form-horizontal input[type="radio"] {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin-right: 0.75rem;
+    vertical-align: middle;
+}
+
+.form-horizontal .checkbox label {
+    vertical-align: middle; /* Align label better with the larger checkbox */
+}
+
+/* --- Options Page: Color Customization Menu --- */
+
+/* Increase size of labels and headings within the color panels */
+.palette-container label,
+.palette-container h5,
+#advanced-colouring-panel .form-group > .d-flex label {
+    font-size: 1.1rem;
+}
+
+/* Increase the size of the color picker controls */
+.palette-pickers input[type="color"],
+#rhythm-colour-panel input[type="color"],
+#octave-colour-panel input[type="color"] {
+    min-width: 60px;
+    min-height: 35px;
+    padding: 0.2rem;
+}
+
+
 /* --- Options Page: Preset Cards --- */
 .preset-card-container {
     display: grid;
@@ -562,6 +652,15 @@ html[data-theme="dark"] #key-sig-help-text strong {
     transition: all 0.2s ease-in-out;
     text-align: left;
 }
+.preset-preview-text {
+    font-size: 1.2rem;
+    color: var(--text-color);
+    opacity: 0.8;
+    padding: 0.5rem;
+    background-color: rgba(0,0,0,0.05);
+    border-radius: 4px;
+    margin-bottom: 0;
+}
 
 .preset-card:hover {
     border-color: var(--btn-primary-bg);
@@ -573,11 +672,9 @@ html[data-theme="dark"] .preset-card:hover {
      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
-.preset-card.active {
-    border-color: var(--btn-primary-bg);
-    background-color: var(--accent-highlight-bg);
+.preset-card.active .preset-preview-text {
     color: var(--accent-highlight-color);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    background-color: rgba(255,255,255,0.1);
 }
 
 .preset-card.active .preset-card-desc {
@@ -632,6 +729,10 @@ html[data-theme="dark"] .help-text-panel {
 .options-page .text-muted {
     color: var(--muted-text-color) !important; /* Use a high-contrast muted color */
 }
+html[data-theme="dark"] .text-muted {
+    color: var(--text-color) !important;
+    opacity: 0.85 !important; 
+}
 
 .help-text-panel,
 .preset-card-desc,
@@ -654,4 +755,58 @@ html[data-theme="dark"] .help-text-panel {
     transform: none;
     box-shadow: none;
     border-color: var(--form-control-border);
+}
+.preset-card.disabled.active {
+    color: var(--text-color);
+    background-color: var(--form-control-bg);
+    border-color: var(--form-control-border);
+    opacity: 0.8;
+}
+
+.preset-card.disabled.active .preset-card-desc {
+    color: var(--text-color);
+    opacity: 0.7;
+}
+/* --- Options Page: Sticky Preview Ribbon --- */
+#sticky-preview-container {
+    position: fixed;
+    top: 80px; /* Position it below the main navbar */
+    right: 20px;
+    width: 280px; /* A bit wider for more text */
+    padding: 1rem;
+    background-color: var(--form-control-bg);
+    border: 1px solid var(--form-control-border);
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 1000;
+}
+
+.preview-block h5 {
+    font-weight: bold;
+    border-bottom: 1px solid var(--form-control-border);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.preview-block-content {
+    font-size: 1rem;
+    color: var(--muted-text-color);
+    padding: 0.75rem;
+    background-color: rgba(0,0,0,0.05);
+    border-radius: 4px;
+    font-style: italic;
+}
+
+html[data-theme="dark"] .preview-block-content {
+    background-color: rgba(255,255,255,0.05);
+}
+
+.active-profile-display {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+}
+
+.active-profile-display strong {
+    color: var(--link-color);
+    font-weight: bold;
 }

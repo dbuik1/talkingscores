@@ -199,6 +199,21 @@ def privacy_policy(request):
 
 # View for the a particular score - REFACTORED AND CORRECTED
 def options(request, id, filename):
+    # DEFINE THE ACCESSIBLE PALETTE HERE
+    ACCESSIBLE_PALETTE = [
+        '#E6194B',  # Red
+        '#3CB44B',  # Green
+        '#4363D8',  # Blue
+        '#F58231',  # Orange
+        '#911EB4',  # Purple
+        '#46F0F0',  # Cyan
+        '#FABEBE',  # Pink
+        '#008080',  # Teal
+        '#F032E6',  # Magenta
+        '#FFE119',  # Yellow
+        '#BFEF45',  # Lime
+        '#9A6324',  # Brown
+    ]
     try:
         score_obj = TSScore(id=id, filename=filename)
         data_path = score_obj.get_data_file_path()
@@ -210,19 +225,16 @@ def options(request, id, filename):
         return redirect('error', id, filename)
 
     if request.method == 'POST':
-        # 1. Get the list of selected instruments from the form submission.
         instruments = [int(i) for i in request.POST.getlist("instruments")]
 
-        # 2. VALIDATION FIRST: Check if any instruments were selected.
         if not instruments:
             form = TalkingScoreGenerationOptionsForm(request.POST)
             form.add_error(None, "Please select at least one instrument to describe.")
-            # We need to pre-process the rhythm range here too for the error page to render correctly
             if score_info.get('rhythm_range'):
                 rhythms_with_colors = []
+                # FIX 1 (POST): USE THE ACCESSIBLE PALETTE
                 for i, rhythm_name in enumerate(score_info['rhythm_range']):
-                    color_val = (i + 1) * 203040
-                    default_color = f"#{color_val:06x}"
+                    default_color = ACCESSIBLE_PALETTE[i % len(ACCESSIBLE_PALETTE)]
                     rhythms_with_colors.append({
                         'name': rhythm_name,
                         'id_name': slugify(rhythm_name),
@@ -232,8 +244,6 @@ def options(request, id, filename):
             context = {'form': form, 'score_info': score_info}
             return render(request, 'options.html', context)
 
-        # 3. If validation passes, build the options dictionary.
-        # Handle color profiles
         color_profiles = {
             "default": {"C": "#FF0000", "D": "#A52A2A", "E": "#808080", "F": "#0000FF", "G": "#000000", "A": "#FFFF00", "B": "#008000"},
             "classic": {"C": "#FF0000", "D": "#FFA500", "E": "#FFFF00", "F": "#008000", "G": "#0000FF", "A": "#4B0082", "B": "#EE82EE"}
@@ -245,16 +255,6 @@ def options(request, id, filename):
         else:
             figure_note_colours = color_profiles.get(selected_profile, {})
 
-        # Dynamically build the advanced color dictionaries from the request
-        advanced_rhythm_colours = {slugify(key.replace('color_rhythm_', '')): value
-                                   for key, value in request.POST.items()
-                                   if key.startswith('color_rhythm_')}
-
-        advanced_octave_colours = {key.replace('color_octave_', ''): value
-                                   for key, value in request.POST.items()
-                                   if key.startswith('color_octave_')}
-        
-        # Build the complete options dictionary
         options_data = {
             "bars_at_a_time": int(request.POST.get("bars_at_a_time", 2)),
             "beat_division": request.POST.get("beat_division"),
@@ -273,47 +273,38 @@ def options(request, id, filename):
             "include_ties": "chk_include_ties" in request.POST,
             "include_arpeggios": "chk_include_arpeggios" in request.POST,
             "describe_chords": "chk_describe_chords" in request.POST,
-            # ADDED: Save the new dynamics toggle and repetition mode
             "include_dynamics": "chk_include_dynamics" in request.POST,
             "accidental_style": request.POST.get("accidental_style", "words"),
             "repetition_mode": request.POST.get("repetition_mode", "learning"),
             "colour_position": request.POST.get("colour_style", "none"),
-            
             "colour_pitch": "chk_colourPitch" in request.POST,
             "rhythm_colour_mode": request.POST.get("rhythm_colour_mode", "none"),
             "octave_colour_mode": request.POST.get("octave_colour_mode", "none"),
-
             "key_signature_accidentals": request.POST.get("key_signature_accidentals", "applied"),
-            
             "advanced_rhythm_colours": {slugify(key.replace('color_rhythm_', '')): value for key, value in request.POST.items() if key.startswith('color_rhythm_')},
             "advanced_octave_colours": {key.replace('color_octave_', ''): value for key, value in request.POST.items() if key.startswith('color_octave_')},
-            "figureNoteColours": {key.split('_')[1]: val for key, val in request.POST.items() if key.startswith('color_') and not key.startswith('color_rhythm_') and not key.startswith('color_octave_')}
+            
+            # FIX 2: USE THE CORRECTLY CALCULATED `figure_note_colours` VARIABLE
+            "figureNoteColours": figure_note_colours
         }
 
-        # 4. Write the new options to the .opts file.
         with open(options_path, "w") as options_fh:
             json.dump(options_data, options_fh)
 
-        # 5. REMOVED OBSOLETE HTML CACHE CLEARING
-        # The HTML is now generated dynamically, so this is no longer needed.
-
-        # 6. REDIRECT: Send the user to the processing page.
         return redirect('process', id, filename)
 
     else:  # This block runs for GET requests.
-        # --- START: Pre-calculate colors for the template ---
         if score_info.get('rhythm_range'):
             rhythms_with_colors = []
+            # FIX 1 (GET): USE THE ACCESSIBLE PALETTE
             for i, rhythm_name in enumerate(score_info['rhythm_range']):
-                color_val = (i + 1) * 203040
-                default_color = f"#{color_val:06x}"
+                default_color = ACCESSIBLE_PALETTE[i % len(ACCESSIBLE_PALETTE)]
                 rhythms_with_colors.append({
                     'name': rhythm_name,
                     'id_name': slugify(rhythm_name),
                     'default_color': default_color
                 })
             score_info['rhythm_range'] = rhythms_with_colors
-        # --- END: Pre-calculation logic ---
 
         form = TalkingScoreGenerationOptionsForm()
         context = {'form': form, 'score_info': score_info}

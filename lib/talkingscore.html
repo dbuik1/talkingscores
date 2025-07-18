@@ -37,7 +37,7 @@
 
     <nav class="score-nav-ribbon">
         <a href="#" class="nav-link-top">Back to Top</a>
-        <button id="stop-playback-btn" class="nav-link-stop">Stop Playback</button>
+        <a href="#" id="stop-playback-btn" class="nav-link-stop">Stop Playback</a>
         <hr>
         <ul>
             {% for segment in music_segments %}
@@ -45,15 +45,19 @@
                     <a href="#segment-{{ segment.start_bar }}">
                         {% if segment.start_bar == 'Pickup' %}
                             Pickup Bar
+                        {% elif segment.start_bar == segment.end_bar %}
+                            Bar {{ segment.start_bar }}
                         {% else %}
-                            Bar{% if segment.start_bar != segment.end_bar %}s{% endif %} {{ segment.start_bar }}
+                            Bars {{ segment.start_bar }}-{{ segment.end_bar }}
                         {% endif %}
                     </a>
                 </li>
             {% endfor %}
         </ul>
     </nav>
-            <h1>Info</h1>
+    <div class="container">
+        <main id="score-main-content">
+        <h1>Info</h1>
 
             <p>{{ basic_information['title']|default('Untitled work') }} by {{ basic_information['composer']|default('Unknown composer') }}.</p>
 
@@ -117,92 +121,85 @@
         <br/>
 
         <h1>Music segment descriptions and playback</h1>
-        {% for segment in music_segments %}
+{% for segment in music_segments %}
+<div id="segment-{{ segment.start_bar }}">
+    <h2>
+        {% if segment.start_bar == 'Pickup' %}
+            Pickup Bar
+        {% elif segment.start_bar == segment.end_bar %}
+            Bar {{ segment.start_bar }}
+        {% else %}
+            Bars {{ segment.start_bar }} to {{ segment.end_bar }}
+        {% endif %}
+    </h2>
 
-        <div id="segment-{{ segment.start_bar }}">
-            <h2>
-                {% if segment.start_bar == 'Pickup' %}
-                    Pickup Bar
-                {% else %}
-                    Bar{% if segment.start_bar != segment.end_bar %}s{% endif %} {{ segment.start_bar }} {% if segment.start_bar != segment.end_bar %} to {{ segment.end_bar }}{% endif %}
-                {% endif %}
-            </h2>
+    <p>
+        Tempo:
+        <select class="ddlTempo" name="tempo">
+            <option value="50">50%</option>
+            <option value="100" selected>100%</option>
+            <option value="150">150%</option>
+        </select>
+        &nbsp; &nbsp;
+        Click:
+        <select class="ddlClick" name="click">
+            <option value="n">None</option>
+            <option value="be">Bars / Beats</option>
+        </select>
+    </p>
 
-            <p>
-                Tempo:
-                <select class="ddlTempo" name="tempo">
-                    <option value="50">50%</option>
-                    <option value="100" selected>100%</option>
-                    <option value="150">150%</option>
-                </select>
-                &nbsp; &nbsp;
-                Click:
-                <select class="ddlClick" name="click">
-                    <option value="n">None</option>
-                    <option value="be">Bars / Beats</option>
-                </select>
-            </p>
-
-            {% set segment_label = "bars " ~ segment.start_bar ~ " to " ~ segment.end_bar if segment.start_bar != 'Pickup' and segment.start_bar != segment.end_bar else "bar " ~ segment.start_bar if segment.start_bar != 'Pickup' else "Pickup Bar" %}
-            {% if play_all %}
-                <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_all }}">Play All - {{ segment_label }}</a><br/>
-            {% endif %}
-            {% if play_selected %}
-                <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_sel }}">Play Selected - {{ segment_label }}</a><br/>
-            {% endif %}
-            {% if play_unselected %}
-                <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_un }}">Play Unselected - {{ segment_label }}</a><br/>
-            {% endif %}
-            
-            <h3>Instrument MIDIs</h3>
-            {% for index, ins in segment.selected_instruments_midis.items() %}
-                {% if preamble.number_of_parts > 1 %}
-                     <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play - {{instruments[ins.ins][0]}} - {{ segment_label }}</a><br/>
-                {% else %}
-                     <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play Score - {{ segment_label }}</a><br/>
-                {% endif %}
-                
-                {% if ins.midi_parts|length > 0 %}
-                <li style="margin-left:15px; list-style-type:none;">
-                    {% for midipart in ins.midi_parts %}
-                        <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1 ]}}</a><br/>
-                    {% endfor %}
-                </li>
-                {% endif %}
+    {% set segment_label = "bars " ~ segment.start_bar ~ " to " ~ segment.end_bar if segment.start_bar != 'Pickup' and segment.start_bar != segment.end_bar else "bar " ~ segment.start_bar if segment.start_bar != 'Pickup' else "Pickup Bar" %}
+    {% if play_all %}
+        <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_all }}">Play All - {{ segment_label }}</a><br/>
+    {% endif %}
+    {% if play_selected %}
+        <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_sel }}">Play Selected - {{ segment_label }}</a><br/>
+    {% endif %}
+    {% if play_unselected %}
+        <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_un }}">Play Unselected - {{ segment_label }}</a><br/>
+    {% endif %}
+    
+    <h3>Instrument MIDIs</h3>
+    {% for index, ins in segment.selected_instruments_midis.items() %}
+        {% if preamble.number_of_parts > 1 %}
+             <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play - {{instruments[ins.ins][0]}} - {{ segment_label }}</a><br/>
+        {% else %}
+             <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play Score - {{ segment_label }}</a><br/>
+        {% endif %}
+        
+        {% if ins.midi_parts|length > 0 %}
+        <li style="margin-left:15px; list-style-type:none;">
+            {% for midipart in ins.midi_parts %}
+                <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1 ]}}</a><br/>
             {% endfor %}
-            <br/>
+        </li>
+        {% endif %}
+    {% endfor %}
+    <br/>
 
-            {% for instrument_index, part_descriptions in segment.selected_instruments_descriptions.items() %}
-                {% if segment.selected_instruments_descriptions|length > 1 %}<h3>{{instruments[instrument_index][0]}}</h3>{% endif %}
-                {% for part_description in part_descriptions %}
-                    {% set part_index = loop.index0 %}
-                    {% if part_descriptions|length > 1 %}<h4>{{part_names[instruments[instrument_index][1] + loop.index-1 ]}}</h4>{% endif %}
+    {% for instrument_index, part_descriptions in segment.selected_instruments_descriptions.items() %}
+        {% if segment.selected_instruments_descriptions|length > 1 %}<h3>{{instruments[instrument_index][0]}}</h3>{% endif %}
+        {% for part_description in part_descriptions %}
+            {% set part_index = loop.index0 %}
+            {% if part_descriptions|length > 1 %}<h4>{{part_names[instruments[instrument_index][1] + loop.index-1 ]}}</h4>{% endif %}
 
-                    {% for bar, time_point_list in part_description.items() %}
-                        <h5>Bar: {% if segment.start_bar == 'Pickup' %}Pickup{% else %}{{ bar }}{% endif %}</h5>
-                        {% if bar in time_and_keys %}<p class="meta-info">{% for tk in time_and_keys[bar] %}{{tk}}<br/>{% endfor %}</p>{% endif %}
-                        {% set detailed_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
-                        {% set learning_info = immediate_repetition_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
-                        {% if settings.repetition_mode == 'learning' and learning_info %}<div class="repetition-info">{{ learning_info.text }}</div>
-                        {% elif settings.repetition_mode == 'detailed' and detailed_info %}<div class="repetition-info"><strong>Repetition:</strong> {{ detailed_info }}</div>{% endif %}
+            {# This is the corrected inner loop that prevents duplication #}
+            {% for bar, time_point_list in part_description.items()|sort %}
+                <p class="meta-info"><strong>Bar: {{ bar }}</strong></p>
+                {% if bar in time_and_keys %}<p class="meta-info">{% for tk in time_and_keys[bar] %}{{tk}}<br/>{% endfor %}</p>{% endif %}
+                {% set detailed_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
+                {% set learning_info = immediate_repetition_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
+                {% if settings.repetition_mode == 'learning' and learning_info %}<div class="repetition-info">{{ learning_info.text }}</div>
+                {% elif settings.repetition_mode == 'detailed' and detailed_info %}<div class="repetition-info"><strong>Repetition:</strong> {{ detailed_info }}</div>{% endif %}
 
-                        {# Pre-check if there are any notes or chords to render for this bar #}
-                        {% set N = namespace(has_renderable_event=false) %}
-                        {% for time_point in time_point_list %}
-                            {% for voice, events_in_voice in time_point.voices|dictsort %}
-                                {% for event in events_in_voice %}
-                                    {% if event.__class__.__name__ in ['TSNote', 'TSChord'] %}
-                                        {% set N.has_renderable_event = true %}
-                                    {% endif %}
-                                {% endfor %}
-                            {% endfor %}
-                        {% endfor %}
+                {# The rest of the rendering logic remains the same #}
+                {% set N = namespace(has_renderable_event=false) %}
+                {% for time_point in time_point_list %}{% for voice, events_in_voice in time_point.voices|dictsort %}{% for event in events_in_voice %}{% if event.__class__.__name__ in ['TSNote', 'TSChord'] %}{% set N.has_renderable_event = true %}{% endif %}{% endfor %}{% endfor %}{% endfor %}
 
-                        {% if not N.has_renderable_event %}
-                            <p>(This part rests for the entire bar)</p>
-                        {% elif not (settings.repetition_mode == 'learning' and learning_info and learning_info.type == 'exact') %}
-                        {%- if settings.beat_division == 'bar' or segment.start_bar == 'Pickup' -%}
-                        {# Renders the bar as one continuous paragraph #}
+                {% if not N.has_renderable_event %}
+                    <p>(This part rests for the entire bar)</p>
+                {% elif not (settings.repetition_mode == 'learning' and learning_info and learning_info.type == 'exact') %}
+                    {%- if settings.beat_division == 'bar' or segment.start_bar == 'Pickup' -%}
                         <p class="beat-group"><span class="beat-content">
                         {%- set ns = namespace(previous_event=None, is_first_event_in_bar=True) -%}
                         {%- for time_point in time_point_list -%}
@@ -218,32 +215,35 @@
                             {%- endfor -%}
                         {%- endfor -%}
                         </span></p>
-                                {%- else -%}
-                                    {# Renders the bar beat-by-beat #}
-                                    {%- set ns = namespace(current_integer_beat=0, previous_event=None, is_first_event_in_bar=True) -%}
-                                    {%- for time_point in time_point_list -%}
-                                        {%- set integer_beat = (time_point.beat - 0.001)|round|int if time_point.beat is number and time_point.beat > 0 else ns.current_integer_beat -%}
-                                        {%- if integer_beat > ns.current_integer_beat -%}
-                                            {%- if not ns.is_first_event_in_bar -%}</span></p>{%- endif -%}
-                                            <p class="beat-group"><strong>Beat {{ integer_beat }}:</strong> <span class="beat-content">
-                                            {%- set ns.current_integer_beat = integer_beat -%}
-                                        {%- elif not ns.is_first_event_in_bar -%}, {% endif -%}
-                                        {%- set filtered = namespace(events=[], has_note_or_chord=false) -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- if event.__class__.__name__ in ['TSNote', 'TSChord'] -%}{%- set filtered.has_note_or_chord = true -%}{%- endif -%}{%- endfor -%}{%- endfor -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- set event_type = event.__class__.__name__ -%}{%- if filtered.has_note_or_chord -%}{%- if event_type in ['TSNote', 'TSChord', 'TSDynamic'] -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- else -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
-                                        {%- for event in filtered.events -%}
-                                            {%- if not loop.first %} - together with {% endif -%}
-                                            {{- event.render(settings, ns.previous_event)|join(' ') | safe -}}
-                                            {%- set ns.previous_event = event -%}
-                                        {%- endfor -%}
-                                        {%- set ns.is_first_event_in_bar = false -%}
-                                    {%- endfor -%}
-                                    {%- if not ns.is_first_event_in_bar -%}</span></p>{%- endif -%}
-                                {%- endif -%}
-                        {% endif %}
-                    {% endfor %}
-                {% endfor %}
+                    {%- else -%}
+                        {%- set ns = namespace(current_integer_beat=0, previous_event=None, is_first_event_in_bar=True) -%}
+                        {%- for time_point in time_point_list -%}
+                            {%- set integer_beat = (time_point.beat - 0.001)|round|int if time_point.beat is number and time_point.beat > 0 else ns.current_integer_beat -%}
+                            {%- if integer_beat > ns.current_integer_beat -%}
+                                {%- if not ns.is_first_event_in_bar -%}</span></p>{%- endif -%}
+                                <p class="beat-group"><strong>Beat {{ integer_beat }}:</strong> <span class="beat-content">
+                                {%- set ns.current_integer_beat = integer_beat -%}
+                            {%- elif not ns.is_first_event_in_bar -%}, {% endif -%}
+                            {%- set filtered = namespace(events=[], has_note_or_chord=false) -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- if event.__class__.__name__ in ['TSNote', 'TSChord'] -%}{%- set filtered.has_note_or_chord = true -%}{%- endif -%}{%- endfor -%}{%- endfor -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- set event_type = event.__class__.__name__ -%}{%- if filtered.has_note_or_chord -%}{%- if event_type in ['TSNote', 'TSChord', 'TSDynamic'] -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- else -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
+                            {%- for event in filtered.events -%}
+                                {%- if not loop.first %} - together with {% endif -%}
+                                {{- event.render(settings, ns.previous_event)|join(' ') | safe -}}
+                                {%- set ns.previous_event = event -%}
+                            {%- endfor -%}
+                            {%- set ns.is_first_event_in_bar = false -%}
+                        {%- endfor -%}
+                        {%- if not ns.is_first_event_in_bar -%}</span></p>{%- endif -%}
+                    {%- endif -%}
+                {% endif %}
             {% endfor %}
-        </div>
         {% endfor %}
+    {% endfor %}
+</div>
+{% endfor %}
+
+        <a href="#score-nav-ribbon" class="skip-link">Back to navigation</a>
+    </main>
+
 
     <script>
         document.addEventListener("DOMContentLoaded", (event) => {

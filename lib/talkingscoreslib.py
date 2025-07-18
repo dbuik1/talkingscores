@@ -986,19 +986,23 @@ class Music21TalkingScore(TalkingScoreBase):
         
     def get_rhythm_range(self):
         """
-        Finds all unique rhythm types present in the score.
+        Finds all unique rhythm types present in the score, independent of user settings.
         """
-        # The _DURATION_MAP keys cover the rhythm names we use for descriptions.
-        valid_rhythms = self._DURATION_MAP.values()
+        # The _DURATION_MAP contains the canonical list of rhythm names we support.
+        # Its keys are the music21 duration types (e.g., 'quarter', 'half').
+        # Its values are the British English names (e.g., 'crotchet', 'minim').
+        valid_rhythm_types = self._DURATION_MAP.keys()
         found_rhythms = set()
 
         for n in self.score.flatten().notesAndRests:
-            # map_duration translates the note's type into our description term (e.g., "crotchet")
-            rhythm_name = self.map_duration(n.duration)
-            if rhythm_name in valid_rhythms:
-                found_rhythms.add(rhythm_name)
+            # We check the note's actual type directly against our map.
+            if n.duration.type in valid_rhythm_types:
+                # We add the corresponding British English name to our set.
+                found_rhythms.add(self._DURATION_MAP[n.duration.type])
         
-        return sorted(list(found_rhythms), key=lambda r: list(valid_rhythms).index(r))
+        # We sort the found rhythms based on the order they appear in the map (longest to shortest)
+        return sorted(list(found_rhythms), key=lambda r: list(self._DURATION_MAP.values()).index(r))
+
 
     def get_octave_range(self):
         """
@@ -1035,7 +1039,10 @@ class HTMLTalkingScoreFormatter():
             logger.warning(f"Options file not found: {options_path}. Using default settings.")
             pass
 
-        settings = {
+        # --- THIS IS THE FIX ---
+        # Instead of creating a new dictionary, we update the global 'settings' object
+        # with the values loaded from the user's options file.
+        settings.update({
             'barsAtATime': int(self.options.get("bars_at_a_time", 2)),
             'beat_division': self.options.get("beat_division"),
             'include_rests': self.options.get("include_rests", True),
@@ -1053,7 +1060,6 @@ class HTMLTalkingScoreFormatter():
             'octaveDescription': self.options.get("octave_description", "name"),
             'octavePosition': self.options.get("octave_position", "before"),
             'octaveAnnouncement': self.options.get("octave_announcement", "onChange"),
-            # ADDED: Read new options from the file, with defaults
             'include_dynamics': self.options.get("include_dynamics", True),
             'accidental_style': self.options.get("accidental_style", "words"),
             'repetition_mode': self.options.get('repetition_mode', 'learning'),
@@ -1065,8 +1071,7 @@ class HTMLTalkingScoreFormatter():
             'figureNoteColours': self.options.get("figureNoteColours", {}),
             'advanced_rhythm_colours': self.options.get("advanced_rhythm_colours", {}),
             'advanced_octave_colours': self.options.get("advanced_octave_colours", {}),
-            'repetition_mode': self.options.get('repetition_mode', 'learning')
-        }
+        })
     def _create_music_segment(self, start_bar, end_bar, web_path):
         """Internal helper to generate a music segment dictionary for a given bar range."""
         self._trigger_midi_generation(start_bar=start_bar, end_bar=end_bar)
@@ -1082,13 +1087,9 @@ class HTMLTalkingScoreFormatter():
 
         selected_instruments_descriptions = {}
         for index, ins in enumerate(self.score.selected_instruments):
-            # The end_bar for description generation needs to be inclusive, so we pass it as is.
-            desc_end_bar = end_bar
-            # For pickup bars, the call to get_events_for_bar_range expects a range.
-            if start_bar == end_bar:
-                desc_end_bar = start_bar + 1
-
-            selected_instruments_descriptions[ins] = self.score.generate_part_descriptions(instrument=ins, start_bar=start_bar, end_bar=desc_end_bar)
+            # THE FIX IS HERE: We no longer modify the end_bar.
+            # The generate_part_descriptions function will now receive the correct, inclusive range.
+            selected_instruments_descriptions[ins] = self.score.generate_part_descriptions(instrument=ins, start_bar=start_bar, end_bar=end_bar)
 
         return {
             'start_bar': start_bar, 
@@ -1250,7 +1251,7 @@ class HTMLTalkingScoreFormatter():
 
         # --- MAIN LOOP FOR REGULAR BARS ---
         # Adjust total bars count if there was a pickup bar not numbered 0
-        total_measures = len(self.score.score.parts[0].getElementsByClass('Measure'))
+        total_measures = self.score.score.parts[0].getElementsByClass('Measure')[-1].number
         
         for bar_index in range(start_bar_for_loop, total_measures + 1, settings['barsAtATime']):
             end_bar_index = bar_index + settings['barsAtATime'] - 1
