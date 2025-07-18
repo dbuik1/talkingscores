@@ -206,248 +206,262 @@
 
 {% block javascript %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // =================================================================
-    // --- 1. SETUP & CONFIGURATION ---
-    // =================================================================
-    const LOCAL_STORAGE_KEY = 'talkingScoresSettings';
+    document.addEventListener('DOMContentLoaded', function() {
+        // =================================================================
+        // --- 1. SETUP & CONFIGURATION ---
+        // =================================================================
+        const LOCAL_STORAGE_KEY = 'talkingScoresSettings';
+        
+        const presetCards = {
+            default: document.getElementById('preset-card-default'),
+            notes_only: document.getElementById('preset-card-notes_only'),
+            pitch_only: document.getElementById('preset-card-pitch_only'),
+            rhythm_only: document.getElementById('preset-card-rhythm_only'),
+            custom: document.getElementById('preset-card-custom')
+        };
+        const allAdvancedControls = document.querySelectorAll('.advanced-options-container select, .advanced-options-container input[type="checkbox"]');
     
-    const presetCards = {
-        default: document.getElementById('preset-card-default'),
-        notes_only: document.getElementById('preset-card-notes_only'),
-        pitch_only: document.getElementById('preset-card-pitch_only'),
-        rhythm_only: document.getElementById('preset-card-rhythm_only'),
-        custom: document.getElementById('preset-card-custom')
-    };
-    const allAdvancedControls = document.querySelectorAll('.advanced-options-container select, .advanced-options-container input[type="checkbox"]');
-
-    const controlIds = {
-        bars_at_a_time: 'bars_at_a_time', beatDivision: 'beat_division', rhythmDescription: 'rhythm_description',
-        repetitionMode: 'repetition_mode', includeDynamics: 'chk_include_dynamics', octaveAnnouncement: 'octave_announcement',
-        accidentalStyle: 'accidental_style', includeTies: 'chk_include_ties', includeRests: 'chk_include_rests',
-        includeArpeggios: 'chk_include_arpeggios', pitch_description: 'pitch_description', octave_description: 'octave_description',
-        describe_chords: 'chk_describe_chords',
-        dot_position: 'dot_position', rhythm_announcement: 'rhythm_announcement', octave_position: 'octave_position',
-        key_signature_accidentals: 'key_signature_accidentals'
-    };
-
-    const presets = {
-        'default': {
-            beatDivision: '{% if score_info.beat_division_options|length > 1 %}{{ score_info.beat_division_options.1.value }}{% else %}{{ score_info.beat_division_options.0.value }}{% endif %}',
-            rhythmDescription: 'british',
-            repetitionMode: 'learning',
-            pitch_description: 'noteName',
-            octave_description: 'name',
-            includeDynamics: true,
-            octaveAnnouncement: 'onChange',
-            accidentalStyle: 'words',
-            includeTies: true,
-            includeRests: true,
-            includeArpeggios: true,
-            describe_chords: true
-        },
-        'notes_only': {
-            beatDivision: 'bar',
-            rhythmDescription: 'none',
-            repetitionMode: 'none',
-            pitch_description: 'noteName',
-            octave_description: 'name',
-            includeDynamics: false,
-            octaveAnnouncement: 'onChange',
-            accidentalStyle: 'symbols',
-            includeTies: false,
-            includeRests: false,
-            includeArpeggios: false,
-            describe_chords: false
-        },
-        'pitch_only': {
-            beatDivision: 'bar',
-            rhythmDescription: 'none',
-            repetitionMode: 'none',
-            pitch_description: 'noteName',
-            octave_description: 'name',
-            includeDynamics: false,
-            octaveAnnouncement: 'onChange',
-            accidentalStyle: 'words',
-            includeTies: false,
-            includeRests: false,
-            includeArpeggios: false,
-            describe_chords: true
-        },
-        'rhythm_only': {
-            beatDivision: '{% if score_info.beat_division_options|length > 1 %}{{ score_info.beat_division_options.1.value }}{% else %}{{ score_info.beat_division_options.0.value }}{% endif %}',
-            rhythmDescription: 'british',
-            repetitionMode: 'none',
-            pitch_description: 'none',
-            octave_description: 'none',
-            includeDynamics: true,
-            octaveAnnouncement: 'onChange',
-            accidentalStyle: 'words',
-            includeTies: true,
-            includeRests: true,
-            includeArpeggios: true,
-            describe_chords: true
-        }
-    };
-
-
-    // =================================================================
-    // --- 2. CORE FUNCTIONS ---
-    // =================================================================
-
-    function saveSettings() {
-        const settingsToSave = {};
-        for (const key in controlIds) {
-            const control = document.getElementById(controlIds[key]);
-            if (control) {
-                settingsToSave[key] = (control.type === 'checkbox') ? control.checked : control.value;
+        const controlIds = {
+            bars_at_a_time: 'bars_at_a_time', beatDivision: 'beat_division', rhythmDescription: 'rhythm_description',
+            repetitionMode: 'repetition_mode', includeDynamics: 'chk_include_dynamics', octaveAnnouncement: 'octave_announcement',
+            accidentalStyle: 'accidental_style', includeTies: 'chk_include_ties', includeRests: 'chk_include_rests',
+            includeArpeggios: 'chk_include_arpeggios', pitch_description: 'pitch_description', octave_description: 'octave_description',
+            describe_chords: 'chk_describe_chords',
+            dot_position: 'dot_position', rhythm_announcement: 'rhythm_announcement', octave_position: 'octave_position',
+            key_signature_accidentals: 'key_signature_accidentals'
+        };
+    
+        const presets = {
+            'default': {
+                beatDivision: '{% if score_info.beat_division_options|length > 1 %}{{ score_info.beat_division_options.1.value }}{% else %}{{ score_info.beat_division_options.0.value }}{% endif %}',
+                rhythmDescription: 'british',
+                repetitionMode: 'learning',
+                pitch_description: 'noteName',
+                octave_description: 'name',
+                includeDynamics: true,
+                octaveAnnouncement: 'onChange',
+                accidentalStyle: 'words',
+                includeTies: true,
+                includeRests: true,
+                includeArpeggios: true,
+                describe_chords: true
+            },
+            'notes_only': {
+                beatDivision: 'bar',
+                rhythmDescription: 'none',
+                repetitionMode: 'none',
+                pitch_description: 'noteName',
+                octave_description: 'name',
+                includeDynamics: false,
+                octaveAnnouncement: 'onChange',
+                accidentalStyle: 'symbols',
+                includeTies: false,
+                includeRests: false,
+                includeArpeggios: false,
+                describe_chords: false
+            },
+            'pitch_only': {
+                beatDivision: 'bar',
+                rhythmDescription: 'none',
+                repetitionMode: 'none',
+                pitch_description: 'noteName',
+                octave_description: 'name',
+                includeDynamics: false,
+                octaveAnnouncement: 'onChange',
+                accidentalStyle: 'words',
+                includeTies: false,
+                includeRests: false,
+                includeArpeggios: false,
+                describe_chords: true
+            },
+            'rhythm_only': {
+                beatDivision: '{% if score_info.beat_division_options|length > 1 %}{{ score_info.beat_division_options.1.value }}{% else %}{{ score_info.beat_division_options.0.value }}{% endif %}',
+                rhythmDescription: 'british',
+                repetitionMode: 'none',
+                pitch_description: 'none',
+                octave_description: 'none',
+                includeDynamics: true,
+                octaveAnnouncement: 'onChange',
+                accidentalStyle: 'words',
+                includeTies: true,
+                includeRests: true,
+                includeArpeggios: true,
+                describe_chords: true
             }
+        };
+    
+    
+        // =================================================================
+        // --- 2. CORE FUNCTIONS ---
+        // =================================================================
+    
+        function saveSettings() {
+            const settingsToSave = {};
+            for (const key in controlIds) {
+                const control = document.getElementById(controlIds[key]);
+                if (control) {
+                    settingsToSave[key] = (control.type === 'checkbox') ? control.checked : control.value;
+                }
+            }
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(settingsToSave));
         }
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(settingsToSave));
-    }
-
-    function loadSettings() {
-        const savedSettings = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (savedSettings) {
-            const settings = JSON.parse(savedSettings);
+    
+        function loadSettings() {
+            const savedSettings = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                for (const key in settings) {
+                    const control = document.getElementById(controlIds[key]);
+                    if (control && settings[key] !== undefined) {
+                         if (control.type === 'checkbox') { control.checked = settings[key]; } 
+                         else { control.value = settings[key]; }
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+        
+        function matchCurrentSettingsToPreset() {
+            for (const presetName in presets) {
+                const presetSettings = presets[presetName];
+                let isMatch = true;
+                for (const key in presetSettings) {
+                    const control = document.getElementById(controlIds[key]);
+                    const currentValue = (control.type === 'checkbox') ? control.checked : control.value;
+                    if (currentValue !== presetSettings[key]) {
+                        isMatch = false;
+                        break; 
+                    }
+                }
+                if (isMatch) {
+                    return presetName; // Found a perfect match
+                }
+            }
+            return 'custom'; // No presets match
+        }
+    
+        function applyPreset(presetName) {
+            const settings = presets[presetName];
+            if (!settings) return;
+            
             for (const key in settings) {
                 const control = document.getElementById(controlIds[key]);
-                if (control && settings[key] !== undefined) {
-                     if (control.type === 'checkbox') { control.checked = settings[key]; } 
-                     else { control.value = settings[key]; }
+                if (control) {
+                    if (control.type === 'checkbox') { control.checked = settings[key]; } 
+                    else { control.value = settings[key]; }
                 }
             }
-            return true;
+            
+            updateActiveCard(presetName);
+            // Dispatch a 'change' event on a control to ensure visibility updates
+            document.getElementById(controlIds.octave_description).dispatchEvent(new Event('change'));
         }
-        return false;
-    }
-
-    // NEW: Checks the current form state against all known presets.
-    function matchCurrentSettingsToPreset() {
-        for (const presetName in presets) {
-            const presetSettings = presets[presetName];
-            let isMatch = true;
-            for (const key in presetSettings) {
-                const control = document.getElementById(controlIds[key]);
-                const currentValue = (control.type === 'checkbox') ? control.checked : control.value;
-                if (currentValue !== presetSettings[key]) {
-                    isMatch = false;
-                    break; 
-                }
-            }
-            if (isMatch) {
-                return presetName; // Found a perfect match
-            }
-        }
-        return 'custom'; // No presets match
-    }
-
-    function applyPreset(presetName) {
-        const settings = presets[presetName];
-        if (!settings) return;
-        
-        for (const key in settings) {
-            const control = document.getElementById(controlIds[key]);
-            if (control) {
-                if (control.type === 'checkbox') { control.checked = settings[key]; } 
-                else { control.value = settings[key]; }
-            }
-        }
-        
-        updateActiveCard(presetName);
-        updateFormVisibility();
-    }
-
-    function updateActiveCard(activePreset) {
-        for (const presetName in presetCards) {
-            if (presetCards[presetName]) {
-                presetCards[presetName].classList.toggle('active', presetName === activePreset);
-            }
-        }
-    }
-
-    function updateFormVisibility() {
-        const rhythmValue = document.getElementById(controlIds.rhythmDescription).value;
-        const octaveValue = document.getElementById(controlIds.octave_description).value;
-        [controlIds.dot_position, controlIds.rhythm_announcement].forEach(id => {
-            document.getElementById(id).closest('.form-group').style.display = (rhythmValue === 'none') ? 'none' : '';
-        });
-        [controlIds.octave_position, controlIds.octave_announcement].forEach(id => {
-            document.getElementById(id).closest('.form-group').style.display = (octaveValue === 'none') ? 'none' : '';
-        });
-    }
-
     
-    // =================================================================
-    // --- 3. EVENT LISTENERS & INITIALIZATION ---
-    // =================================================================
-    document.querySelector('form.form-horizontal').addEventListener('submit', saveSettings);
-
-    for (const presetName in presets) { // Only allow clicking on real presets
-        const card = presetCards[presetName];
-        if (card) {
-            card.addEventListener('click', () => applyPreset(presetName));
-            card.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); applyPreset(presetName); }
+        function updateActiveCard(activePreset) {
+            for (const presetName in presetCards) {
+                if (presetCards[presetName]) {
+                    presetCards[presetName].classList.toggle('active', presetName === activePreset);
+                }
+            }
+        }
+    
+        function updateFormVisibility() {
+            const rhythmValue = document.getElementById(controlIds.rhythmDescription).value;
+            const octaveValue = document.getElementById(controlIds.octave_description).value;
+    
+            [controlIds.dot_position, controlIds.rhythm_announcement].forEach(id => {
+                const control = document.getElementById(id);
+                if(control) control.closest('.form-group').style.display = (rhythmValue === 'none') ? 'none' : '';
+            });
+    
+            // THIS IS THE KEY LOGIC FOR THE OCTAVE OPTIONS
+            [controlIds.octave_position, controlIds.octave_announcement].forEach(id => {
+                const control = document.getElementById(id);
+                if(control) control.closest('.form-group').style.display = (octaveValue === 'none') ? 'none' : '';
             });
         }
-    }
-
-    // When any advanced control is changed, re-evaluate which preset is active
-    allAdvancedControls.forEach(control => {
-        control.addEventListener('change', () => {
+        
+        function setupHelpButtons() {
+            document.querySelectorAll('.help-btn').forEach(btn => {
+                const panelId = btn.dataset.controls;
+                const panel = document.getElementById(panelId);
+                if (!panel) return;
+        
+                btn.addEventListener('click', () => {
+                    const isVisible = panel.style.display === 'block';
+                    panel.style.display = isVisible ? 'none' : 'block';
+                    btn.classList.toggle('active', !isVisible);
+                });
+            });
+        }
+    
+        // =================================================================
+        // --- 3. EVENT LISTENERS & INITIALIZATION ---
+        // =================================================================
+        document.querySelector('form.form-horizontal').addEventListener('submit', saveSettings);
+    
+        for (const presetName in presets) {
+            const card = presetCards[presetName];
+            if (card) {
+                card.addEventListener('click', () => applyPreset(presetName));
+                card.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); applyPreset(presetName); }
+                });
+            }
+        }
+    
+        allAdvancedControls.forEach(control => {
+            control.addEventListener('change', () => {
+                const matchedPreset = matchCurrentSettingsToPreset();
+                updateActiveCard(matchedPreset);
+                updateFormVisibility();
+            });
+        });
+        
+        setupHelpButtons();
+    
+        if (!loadSettings()) {
+            applyPreset('default');
+        } else {
             const matchedPreset = matchCurrentSettingsToPreset();
             updateActiveCard(matchedPreset);
-            updateFormVisibility();
-        });
-    });
+        }
+        updateFormVisibility();
     
-    document.querySelectorAll('.help-btn').forEach(btn => { /* ... help button logic ... */ });
-
-    // --- Page Load ---
-    if (!loadSettings()) {
-        applyPreset('default');
-    } else {
-        const matchedPreset = matchCurrentSettingsToPreset();
-        updateActiveCard(matchedPreset);
-    }
-    updateFormVisibility();
-
-    // =================================================================
-    // --- 4. COLOR PICKER LOGIC (Unchanged) ---
-    // =================================================================
-    const elements = {
-        form: document.querySelector('form.form-horizontal'),
-        colourStyleSelect: document.getElementById('colour_style'),
-        coloringDetailsPanel: document.getElementById('coloring-details-panel'),
-        chkColourPitch: document.getElementById('chk_colourPitch'),
-        pitchColourPanel: document.getElementById('pitch-colour-panel'),
-        profileRadios: document.querySelectorAll('input[name="colorProfile"]'),
-        customProfileRadio: document.getElementById('profileCustom'),
-        customColorPickers: document.querySelectorAll('#custom-color-pickers input[type="color"]'),
-        chkShowAdvanced: document.getElementById('chk_show_advanced_colouring'),
-        advancedPanel: document.getElementById('advanced-colouring-panel'),
-        rhythmColourModeSelect: document.getElementById('rhythm_colour_mode'),
-        rhythmColourPanel: document.getElementById('rhythm-colour-panel'),
-        octaveColourModeSelect: document.getElementById('octave_colour_mode'),
-        octaveColourPanel: document.getElementById('octave-colour-panel'),
-        previewPitch: document.getElementById('preview-pitch'),
-        previewRhythm: document.getElementById('preview-rhythm'),
-        previewOctave: document.getElementById('preview-octave')
-    };
-    const colorProfiles = {
-        default: { C: "#FF0000", D: "#A52A2A", E: "#808080", F: "#0000FF", G: "#000000", A: "#FFFF00", B: "#008000" },
-        classic: { C: "#FF0000", D: "#FFA500", E: "#FFFF00", F: "#008000", G: "#0000FF", A: "#4B0082", B: "#EE82EE" }
-    };
-    function getContrastColor(hex) { if (!hex || hex.length < 4) return '#000000'; const hexValue = hex.startsWith('#') ? hex.slice(1) : hex; try { const r = parseInt(hexValue.substring(0, 2), 16); const g = parseInt(hexValue.substring(2, 4), 16); const b = parseInt(hexValue.substring(4, 6), 16); const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255; return luminance > 0.5 ? '#000000' : '#FFFFFF'; } catch (e) { return '#FFFFFF'; } }
-    function applyNoteColorProfile(profileName) { const profile = colorProfiles[profileName]; if (!profile) return; elements.customColorPickers.forEach(picker => { const note = picker.id.split('_')[1]; if (profile[note]) picker.value = profile[note]; }); }
-    function updateFormDisplay() { const isColoringOn = elements.colourStyleSelect.value !== 'none'; elements.coloringDetailsPanel.style.display = isColoringOn ? 'block' : 'none'; const isPitchOn = elements.chkColourPitch.checked; elements.pitchColourPanel.style.display = isPitchOn && isColoringOn ? 'block' : 'none'; const isCustomProfile = elements.customProfileRadio.checked; elements.customColorPickers.forEach(picker => { picker.disabled = !isCustomProfile; }); const showAdvanced = elements.chkShowAdvanced.checked; elements.advancedPanel.style.display = showAdvanced && isColoringOn ? 'block' : 'none'; elements.rhythmColourPanel.style.display = elements.rhythmColourModeSelect.value === 'custom' ? 'block' : 'none'; elements.octaveColourPanel.style.display = elements.octaveColourModeSelect.value === 'custom' ? 'block' : 'none'; updateAllPreviews(); }
-    function updateAllPreviews() { const style = elements.colourStyleSelect.value; const pitchColor = document.getElementById('color_C').value; const applyStyle = (el, color, isEnabled) => { if (!el) return; el.style.backgroundColor = ''; el.style.color = ''; el.style.borderColor = 'transparent'; if (style === 'none' || !isEnabled || !color) return; if (style === 'background') { el.style.backgroundColor = color; el.style.color = getContrastColor(color); el.style.borderColor = '#888'; } else { el.style.color = color; } }; applyStyle(elements.previewPitch, pitchColor, elements.chkColourPitch.checked); const rhythmMode = elements.rhythmColourModeSelect.value; let rhythmColor = rhythmMode === 'inherit' ? pitchColor : null; if (rhythmMode === 'custom') { const firstRhythmPicker = document.querySelector('#rhythm-colour-panel input[type="color"]'); if (firstRhythmPicker) rhythmColor = firstRhythmPicker.value; } applyStyle(elements.previewRhythm, rhythmColor, rhythmMode !== 'none'); const octaveMode = elements.octaveColourModeSelect.value; let octaveColor = octaveMode === 'inherit' ? pitchColor : null; if (octaveMode === 'custom') { const firstOctavePicker = document.querySelector('#octave-colour-panel input[type="color"]'); if (firstOctavePicker) octaveColor = firstOctavePicker.value; } applyStyle(elements.previewOctave, octaveColor, octaveMode !== 'none'); }
-    [ elements.colourStyleSelect, elements.chkColourPitch, elements.chkShowAdvanced, elements.rhythmColourModeSelect, elements.octaveColourModeSelect ].forEach(el => { if(el) el.addEventListener('change', updateFormDisplay); });
-    document.querySelectorAll('input[type="color"]').forEach(picker => { picker.addEventListener('input', updateAllPreviews); });
-    elements.profileRadios.forEach(radio => { radio.addEventListener('change', () => { if (radio.value !== 'custom') { applyNoteColorProfile(radio.value); } updateFormDisplay(); }); });
-    applyNoteColorProfile('default');
-    updateFormDisplay();
-});
-</script>
+        // Color picker logic remains unchanged
+        const elements = {
+            form: document.querySelector('form.form-horizontal'),
+            colourStyleSelect: document.getElementById('colour_style'),
+            coloringDetailsPanel: document.getElementById('coloring-details-panel'),
+            chkColourPitch: document.getElementById('chk_colourPitch'),
+            pitchColourPanel: document.getElementById('pitch-colour-panel'),
+            profileRadios: document.querySelectorAll('input[name="colorProfile"]'),
+            customProfileRadio: document.getElementById('profileCustom'),
+            customColorPickers: document.querySelectorAll('#custom-color-pickers input[type="color"]'),
+            chkShowAdvanced: document.getElementById('chk_show_advanced_colouring'),
+            advancedPanel: document.getElementById('advanced-colouring-panel'),
+            rhythmColourModeSelect: document.getElementById('rhythm_colour_mode'),
+            rhythmColourPanel: document.getElementById('rhythm-colour-panel'),
+            octaveColourModeSelect: document.getElementById('octave_colour_mode'),
+            octaveColourPanel: document.getElementById('octave-colour-panel'),
+            previewPitch: document.getElementById('preview-pitch'),
+            previewRhythm: document.getElementById('preview-rhythm'),
+            previewOctave: document.getElementById('preview-octave')
+        };
+        const colorProfiles = {
+            default: { C: "#FF0000", D: "#A52A2A", E: "#808080", F: "#0000FF", G: "#000000", A: "#FFFF00", B: "#008000" },
+            classic: { C: "#FF0000", D: "#FFA500", E: "#FFFF00", F: "#008000", G: "#0000FF", A: "#4B0082", B: "#EE82EE" }
+        };
+        function getContrastColor(hex) { if (!hex || hex.length < 4) return '#000000'; const hexValue = hex.startsWith('#') ? hex.slice(1) : hex; try { const r = parseInt(hexValue.substring(0, 2), 16); const g = parseInt(hexValue.substring(2, 4), 16); const b = parseInt(hexValue.substring(4, 6), 16); const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255; return luminance > 0.5 ? '#000000' : '#FFFFFF'; } catch (e) { return '#FFFFFF'; } }
+        function applyNoteColorProfile(profileName) { const profile = colorProfiles[profileName]; if (!profile) return; elements.customColorPickers.forEach(picker => { const note = picker.id.split('_')[1]; if (profile[note]) picker.value = profile[note]; }); }
+        function updateColorFormDisplay() { const isColoringOn = elements.colourStyleSelect.value !== 'none'; elements.coloringDetailsPanel.style.display = isColoringOn ? 'block' : 'none'; const isPitchOn = elements.chkColourPitch.checked; elements.pitchColourPanel.style.display = isPitchOn && isColoringOn ? 'block' : 'none'; const isCustomProfile = elements.customProfileRadio.checked; elements.customColorPickers.forEach(picker => { picker.disabled = !isCustomProfile; }); const showAdvanced = elements.chkShowAdvanced.checked; elements.advancedPanel.style.display = showAdvanced && isColoringOn ? 'block' : 'none'; elements.rhythmColourPanel.style.display = elements.rhythmColourModeSelect.value === 'custom' ? 'block' : 'none'; elements.octaveColourPanel.style.display = elements.octaveColourModeSelect.value === 'custom' ? 'block' : 'none'; updateAllPreviews(); }
+        function updateAllPreviews() { const style = elements.colourStyleSelect.value; const pitchColor = document.getElementById('color_C').value; const applyStyle = (el, color, isEnabled) => { if (!el) return; el.style.backgroundColor = ''; el.style.color = ''; el.style.borderColor = 'transparent'; if (style === 'none' || !isEnabled || !color) return; if (style === 'background') { el.style.backgroundColor = color; el.style.color = getContrastColor(color); el.style.borderColor = '#888'; } else { el.style.color = color; } }; applyStyle(elements.previewPitch, pitchColor, elements.chkColourPitch.checked); const rhythmMode = elements.rhythmColourModeSelect.value; let rhythmColor = rhythmMode === 'inherit' ? pitchColor : null; if (rhythmMode === 'custom') { const firstRhythmPicker = document.querySelector('#rhythm-colour-panel input[type="color"]'); if (firstRhythmPicker) rhythmColor = firstRhythmPicker.value; } applyStyle(elements.previewRhythm, rhythmColor, rhythmMode !== 'none'); const octaveMode = elements.octaveColourModeSelect.value; let octaveColor = octaveMode === 'inherit' ? pitchColor : null; if (octaveMode === 'custom') { const firstOctavePicker = document.querySelector('#octave-colour-panel input[type="color"]'); if (firstOctavePicker) octaveColor = firstOctavePicker.value; } applyStyle(elements.previewOctave, octaveColor, octaveMode !== 'none'); }
+        [ elements.colourStyleSelect, elements.chkColourPitch, elements.chkShowAdvanced, elements.rhythmColourModeSelect, elements.octaveColourModeSelect ].forEach(el => { if(el) el.addEventListener('change', updateColorFormDisplay); });
+        document.querySelectorAll('input[type="color"]').forEach(picker => { picker.addEventListener('input', updateAllPreviews); });
+        elements.profileRadios.forEach(radio => { radio.addEventListener('change', () => { if (radio.value !== 'custom') { applyNoteColorProfile(radio.value); } updateColorFormDisplay(); }); });
+        applyNoteColorProfile('default');
+        updateColorFormDisplay();
+    });
+    </script>
 {% endblock %}
