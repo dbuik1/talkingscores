@@ -1,0 +1,26 @@
+<!-- Navigation Ribbon for Score Pages -->
+<nav class="score-nav-ribbon" role="navigation" aria-label="Score navigation">
+    <a href="#main-content" class="nav-link-top">Back to Top</a>
+    
+    <button id="stop-playback-btn" class="nav-link-stop" aria-label="Stop all MIDI playback">
+        Stop Playback
+    </button>
+    
+    <hr>
+    
+    <!-- Segment Navigation -->
+    <ul role="list">
+        {% for segment in music_segments %}
+            <li>
+                <a href="#segment-{{ segment.start_bar }}" 
+                   aria-label="Navigate to {% if segment.start_bar == 'Pickup' %}Pickup Bar{% else %}Bar{{ 's' if segment.start_bar != segment.end_bar else '' }} {{ segment.start_bar }}{% endif %}">
+                    {% if segment.start_bar == 'Pickup' %}
+                        Pickup Bar
+                    {% else %}
+                        Bar{% if segment.start_bar != segment.end_bar %}s{% endif %} {{ segment.start_bar }}
+                    {% endif %}
+                </a>
+            </li>
+        {% endfor %}
+    </ul>
+</nav>

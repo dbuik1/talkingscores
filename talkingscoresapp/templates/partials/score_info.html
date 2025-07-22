@@ -1,0 +1,18 @@
+<!-- Basic Score Information -->
+<section aria-labelledby="info-heading">
+    <h1 id="info-heading">Info</h1>
+
+    <div class="score-metadata">
+        <h2>{{ basic_information.title|default:'Untitled work' }}</h2>
+        <p class="composer">by {{ basic_information.composer|default:'Unknown composer' }}</p>
+
+        <div class="score-details">
+            <p>
+                <span class="detail-label">Time signature:</span> {{ preamble.time_signature }}<br>
+                <span class="detail-label">Key signature:</span> {{ preamble.key_signature }}<br>
+                <span class="detail-label">Tempo:</span> {{ preamble.tempo|default:'no tempo specified' }}
+            </p>
+            <p class="description">Music, both hands, a bar at a time, beat by beat</p>
+        </div>
+    </div>
+</section>

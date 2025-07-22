@@ -1,0 +1,40 @@
+<!-- Global Playback Controls -->
+<section id="global-controls" aria-labelledby="global-controls-heading">
+    <h2 id="global-controls-heading">Entire score:</h2>
+    
+    <!-- Tempo and Click Controls -->
+    {% include 'partials/tempo_click_controls.html' %}
+    
+    <!-- Main Playback Options -->
+    <div class="playback-options" role="group" aria-labelledby="main-playback-heading">
+        <h3 id="main-playback-heading" class="sr-only">Main playback options</h3>
+        
+        {% if play_all %}
+            <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_all }}" 
+               aria-label="Play all instruments for entire score">
+                Play All Instruments
+            </a><br>
+        {% endif %}
+        
+        {% if play_selected %}
+            <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_sel }}"
+               aria-label="Play selected instruments for entire score">
+                Play Selected Instruments
+            </a><br>
+        {% endif %}
+        
+        {% if play_unselected %}
+            <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_un }}"
+               aria-label="Play unselected instruments for entire score">
+                Play Unselected Instruments
+            </a><br>
+        {% endif %}
+    </div>
+
+    <!-- Individual Instruments -->
+    <div class="instrument-controls" role="group" aria-labelledby="instrument-heading">
+        <h3 id="instrument-heading">Instrument MIDIs</h3>
+        
+        {% include 'partials/instrument_list.html' with instrument_midis=full_score_midis.selected_instruments_midis segment_label="" %}
+    </div>
+</section>

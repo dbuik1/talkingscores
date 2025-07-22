@@ -1,3 +1,11 @@
+"""
+MIDI Handler for Talking Scores
+
+This module handles the generation of MIDI files from MusicXML scores,
+creating various combinations of tempo, click tracks, and instrument selections
+for the Talking Scores application.
+"""
+
 __author__ = 'PMarchant'
 
 import os
@@ -15,140 +23,172 @@ logger = logging.getLogger("TSScore")
 
 
 class MidiHandler:
-    # Changed 'get' to 'request' for clarity, as the whole request object is passed in.
-    # lib/midiHandler.py
+    """
+    Handles MIDI file generation for musical scores with various playback options.
+    
+    This class manages the creation of MIDI files from MusicXML scores, supporting
+    different tempo variations, click tracks, and instrument combinations.
+    """
 
     def __init__(self, request, folder, filename):
-        self.queryString = request
+        """
+        Initialize the MIDI handler.
+
+        Args:
+            request: Django request object containing query parameters
+            folder (str): Directory name where files are stored
+            filename (str): Base filename of the MusicXML file (without .mid extension)
+        """
+        self.request = request
         self.folder = folder
         self.filename = filename.replace(".mid", "")
-        # This will hold a pre-parsed music21 score object to avoid re-parsing
-        self.score = None
-
-    def get_selected_instruments(self):
-        # Corrected to use .GET
-        bsi = int(self.queryString.GET.get("bsi"))
+        self.score = None  # Pre-parsed music21 score object to avoid re-parsing
+        
+        # Initialize collections for instrument and part management
         self.selected_instruments = []
-        while (bsi > 1):
-            if (bsi & 1 == True):
-                self.selected_instruments.append(True)
-            else:
-                self.selected_instruments.append(False)
-            bsi = bsi >> 1
-        self.selected_instruments.reverse()
-
         self.all_selected_parts = []
         self.all_unselected_parts = []
-        self.selected_instruement_parts = {}
+        self.selected_instrument_parts = {}
+        
+        # Playback option flags
+        self.play_together_unselected = False
+        self.play_together_selected = False
+        self.play_together_all = False
+        
+        # Score processing attributes
+        self.score_segment = None
+        self.tempo_shift = 0
 
+    def get_selected_instruments(self):
+        """
+        Parse the binary selected instruments parameter and determine which parts to include.
+        
+        The 'bsi' parameter is a bitwise representation of selected instruments.
+        This method decodes it and sets up the various instrument and part collections.
+        """
+        try:
+            binary_selected_instruments = int(self.request.GET.get("bsi", 0))
+        except (ValueError, TypeError):
+            logger.error("Invalid binary selected instruments parameter")
+            binary_selected_instruments = 0
+
+        # Decode binary representation to boolean list
+        self.selected_instruments = []
+        current_value = binary_selected_instruments
+        while current_value > 1:
+            self.selected_instruments.append(bool(current_value & 1))
+            current_value = current_value >> 1
+        self.selected_instruments.reverse()
+
+        # Initialize part collections
+        self.all_selected_parts = []
+        self.all_unselected_parts = []
+        self.selected_instrument_parts = {}
+
+        # Map instruments to their corresponding parts
         instrument_index = -1
-        prev_instrument = ""
+        previous_instrument = ""
+        
         for part_index, part in enumerate(self.score.flatten().getInstruments()):
-            if part.partId != prev_instrument:
+            if part.partId != previous_instrument:
                 instrument_index += 1
             
-            if self.selected_instruments[instrument_index]:
+            if instrument_index < len(self.selected_instruments) and self.selected_instruments[instrument_index]:
                 self.all_selected_parts.append(part_index)
-                if instrument_index in self.selected_instruement_parts:
-                    self.selected_instruement_parts[instrument_index].append(part_index)
+                if instrument_index in self.selected_instrument_parts:
+                    self.selected_instrument_parts[instrument_index].append(part_index)
                 else:
-                    self.selected_instruement_parts[instrument_index] = [part_index]
+                    self.selected_instrument_parts[instrument_index] = [part_index]
             else:
                 self.all_unselected_parts.append(part_index)
-                # This line was not needed and could cause issues.
-                # self.selected_instruement_parts[instrument_index] = []
-            prev_instrument = part.partId
+                
+            previous_instrument = part.partId
 
-        # Corrected typo from .Get to .GET
-        bpi = int(self.queryString.GET.get("bpi"))
-        self.play_together_unselected = bpi & 1
-        bpi = bpi >> 1
-        self.play_together_selected = bpi & 1
-        bpi = bpi >> 1
-        self.play_together_all = bpi & 1
+        # Parse playback options from binary parameter
+        try:
+            binary_playback_info = int(self.request.GET.get("bpi", 0))
+        except (ValueError, TypeError):
+            logger.error("Invalid binary playback info parameter")
+            binary_playback_info = 0
 
-    def make_midi_files(self):
-        # If a score object wasn't passed in, parse it from the file.
+        self.play_together_unselected = bool(binary_playback_info & 1)
+        binary_playback_info = binary_playback_info >> 1
+        self.play_together_selected = bool(binary_playback_info & 1)
+        binary_playback_info = binary_playback_info >> 1
+        self.play_together_all = bool(binary_playback_info & 1)
+
+    def _validate_parameters(self):
+        """
+        Validate request parameters and score availability.
+        
+        Returns:
+            tuple: (start_bar, end_bar) if valid, (None, None) if invalid
+        """
         if not self.score:
             xml_file_path = os.path.join(MEDIA_ROOT, self.folder, self.filename)
-            self.score = converter.parse(xml_file_path)
+            if not os.path.exists(xml_file_path):
+                logger.error(f"MusicXML file not found: {xml_file_path}")
+                return None, None
+            
+            try:
+                self.score = converter.parse(xml_file_path)
+            except Exception as e:
+                logger.error(f"Failed to parse MusicXML file: {e}")
+                return None, None
 
-        self.get_selected_instruments()
-        
-        start_param = self.queryString.GET.get("start")
+        # Determine bar range
+        start_param = self.request.GET.get("start")
         if start_param is not None:
-            start = int(start_param)
-            end = int(self.queryString.GET.get("end"))
+            try:
+                start_bar = int(start_param)
+                end_bar = int(self.request.GET.get("end"))
+            except (ValueError, TypeError):
+                logger.error("Invalid start/end bar parameters")
+                return None, None
         else:
-            start = self.score.parts[0].getElementsByClass('Measure')[0].number
-            end = self.score.parts[0].getElementsByClass('Measure')[-1].number
+            try:
+                start_bar = self.score.parts[0].getElementsByClass('Measure')[0].number
+                end_bar = self.score.parts[0].getElementsByClass('Measure')[-1].number
+            except (IndexError, AttributeError):
+                logger.error("Could not determine bar range from score")
+                return None, None
 
-        is_upfront_call = self.queryString.GET.get("upfront_generate")
+        return start_bar, end_bar
+
+    def _check_cache_flag(self, start_bar, end_bar, is_upfront_call):
+        """
+        Check if MIDI files for this segment have already been generated.
         
-        # --- NEW: Flag File Logic ---
+        Args:
+            start_bar (int): Starting bar number
+            end_bar (int): Ending bar number
+            is_upfront_call (bool): Whether this is an upfront generation call
+            
+        Returns:
+            bool: True if cache hit (files already generated), False otherwise
+        """
         flag_mode = "upfront" if is_upfront_call else "ondemand"
-        flag_name = f"s{start}e{end}_{flag_mode}.generated"
+        flag_name = f"s{start_bar}e{end_bar}_{flag_mode}.generated"
         flag_path = os.path.join(MEDIA_ROOT, self.folder, flag_name)
 
         if os.path.exists(flag_path):
             logger.info(f"MIDI cache hit for {flag_name}. Skipping generation.")
-            return
-        # --- END: Flag File Logic ---
+            return True
+        return False
 
-        if is_upfront_call:
-            tempos_to_generate = [100]
-            clicks_to_generate = ['n']
-        else:
-            tempos_to_generate = [50, 100, 150]
-            clicks_to_generate = ['n', 'be']
-
-        offset = 0.0
-        if self.score.parts and self.score.parts[0].measure(start):
-            offset = self.score.parts[0].measure(start).offset
-
-        self.scoreSegment = stream.Score(id='tempSegment')
-        for p in self.score.parts:
-            measures_in_range = p.measures(start, end)
-            if measures_in_range:
-                for m in measures_in_range.getElementsByClass('Measure'):
-                    m.removeByClass('Repeat')
-                self.scoreSegment.insert(0, measures_in_range)
-
-        # Loop through variations and generate files if they don't exist
-        for click in clicks_to_generate:
-            self.tempo_shift = 0
-            for tempo in tempos_to_generate:
-                if self.play_together_all:
-                    self.make_midi_together(start, end, offset, tempo, click, "all")
-                if self.play_together_selected and self.all_selected_parts:
-                    self.make_midi_together(start, end, offset, tempo, click, "sel")
-                if self.play_together_unselected and self.all_unselected_parts:
-                    self.make_midi_together(start, end, offset, tempo, click, "un")
-
-                for index, parts_list in enumerate(self.selected_instruement_parts.values()):
-                    if not parts_list: continue
-                    path = self.make_midi_path_from_options(start=start, end=end, ins=index+1, tempo=tempo, click=click)
-                    if not os.path.exists(path):
-                        s = stream.Score(id='temp')
-                        for pi in parts_list:
-                            if len(self.scoreSegment.parts) > pi: s.insert(0, self.scoreSegment.parts[pi])
-                        if s.parts:
-                            self.insert_tempos(s, offset, tempo/100)
-                            self.insert_click_track(s, click)
-                            s.write('midi', path)
-
-                    if len(parts_list) > 1:
-                        for pi in parts_list:
-                            part_path = self.make_midi_path_from_options(start=start, end=end, part=pi, tempo=tempo, click=click)
-                            if not os.path.exists(part_path):
-                                s_part = stream.Score(id='temp_part')
-                                if len(self.scoreSegment.parts) > pi: s_part.insert(0, self.scoreSegment.parts[pi])
-                                if s_part.parts:
-                                    self.insert_tempos(s_part, offset, tempo/100)
-                                    self.insert_click_track(s_part, click)
-                                    s_part.write('midi', part_path)
+    def _create_cache_flag(self, start_bar, end_bar, is_upfront_call):
+        """
+        Create a flag file indicating MIDI generation is complete for this segment.
         
-        # --- NEW: Create flag file on successful completion ---
+        Args:
+            start_bar (int): Starting bar number
+            end_bar (int): Ending bar number
+            is_upfront_call (bool): Whether this is an upfront generation call
+        """
+        flag_mode = "upfront" if is_upfront_call else "ondemand"
+        flag_name = f"s{start_bar}e{end_bar}_{flag_mode}.generated"
+        flag_path = os.path.join(MEDIA_ROOT, self.folder, flag_name)
+
         try:
             with open(flag_path, 'w') as f:
                 f.write("generated")
@@ -156,123 +196,413 @@ class MidiHandler:
         except OSError as e:
             logger.error(f"Could not write cache flag file {flag_path}: {e}")
 
-    def make_midi_together(self, start, end, offset, tempo, click, which_parts):
-        path = self.make_midi_path_from_options(start=start, end=end, sel=which_parts, tempo=tempo, click=click)
-        if os.path.exists(path):
+    def _get_tempo_click_combinations(self, is_upfront_call):
+        """
+        Determine which tempo and click track combinations to generate.
+        
+        Args:
+            is_upfront_call (bool): Whether this is an upfront generation call
+            
+        Returns:
+            tuple: (tempos_to_generate, clicks_to_generate)
+        """
+        if is_upfront_call:
+            return [100], ['n']
+        else:
+            return [50, 100, 150], ['n', 'be']
+
+    def _create_score_segment(self, start_bar, end_bar):
+        """
+        Create a score segment for the specified bar range.
+        
+        Args:
+            start_bar (int): Starting bar number
+            end_bar (int): Ending bar number
+        """
+        offset = 0.0
+        if self.score.parts and self.score.parts[0].measure(start_bar):
+            offset = self.score.parts[0].measure(start_bar).offset
+
+        self.score_segment = stream.Score(id='tempSegment')
+        for part in self.score.parts:
+            measures_in_range = part.measures(start_bar, end_bar)
+            if measures_in_range:
+                # Remove repeat marks to avoid music21 expansion issues
+                for measure in measures_in_range.getElementsByClass('Measure'):
+                    measure.removeByClass('Repeat')
+                self.score_segment.insert(0, measures_in_range)
+
+    def _generate_group_midis(self, start_bar, end_bar, offset, tempo, click):
+        """
+        Generate MIDI files for different groupings (all, selected, unselected).
+        
+        Args:
+            start_bar (int): Starting bar number
+            end_bar (int): Ending bar number
+            offset (float): Time offset for the segment
+            tempo (int): Tempo as percentage of original
+            click (str): Click track type ('n' for none, 'be' for bars/beats)
+        """
+        if self.play_together_all:
+            self._make_midi_together(start_bar, end_bar, offset, tempo, click, "all")
+        
+        if self.play_together_selected and self.all_selected_parts:
+            self._make_midi_together(start_bar, end_bar, offset, tempo, click, "sel")
+        
+        if self.play_together_unselected and self.all_unselected_parts:
+            self._make_midi_together(start_bar, end_bar, offset, tempo, click, "un")
+
+    def _generate_individual_instrument_midis(self, start_bar, end_bar, offset, tempo, click):
+        """
+        Generate MIDI files for individual instruments and their parts.
+        
+        Args:
+            start_bar (int): Starting bar number
+            end_bar (int): Ending bar number
+            offset (float): Time offset for the segment
+            tempo (int): Tempo as percentage of original
+            click (str): Click track type
+        """
+        for index, parts_list in enumerate(self.selected_instrument_parts.values()):
+            if not parts_list:
+                continue
+                
+            # Generate MIDI for the entire instrument
+            instrument_path = self._make_midi_path_from_options(
+                start=start_bar, end=end_bar, ins=index+1, tempo=tempo, click=click
+            )
+            
+            if not os.path.exists(instrument_path):
+                instrument_score = stream.Score(id='temp')
+                for part_index in parts_list:
+                    if len(self.score_segment.parts) > part_index:
+                        instrument_score.insert(0, self.score_segment.parts[part_index])
+                
+                if instrument_score.parts:
+                    self._insert_tempos(instrument_score, offset, tempo/100)
+                    self._insert_click_track(instrument_score, click)
+                    try:
+                        instrument_score.write('midi', instrument_path)
+                    except Exception as e:
+                        logger.error(f"Failed to write instrument MIDI {instrument_path}: {e}")
+
+            # Generate MIDI files for individual parts if instrument has multiple parts
+            if len(parts_list) > 1:
+                for part_index in parts_list:
+                    part_path = self._make_midi_path_from_options(
+                        start=start_bar, end=end_bar, part=part_index, tempo=tempo, click=click
+                    )
+                    
+                    if not os.path.exists(part_path):
+                        part_score = stream.Score(id='temp_part')
+                        if len(self.score_segment.parts) > part_index:
+                            part_score.insert(0, self.score_segment.parts[part_index])
+                        
+                        if part_score.parts:
+                            self._insert_tempos(part_score, offset, tempo/100)
+                            self._insert_click_track(part_score, click)
+                            try:
+                                part_score.write('midi', part_path)
+                            except Exception as e:
+                                logger.error(f"Failed to write part MIDI {part_path}: {e}")
+
+    def make_midi_files(self):
+        """
+        Main method to generate all required MIDI files for the current request.
+        
+        This method orchestrates the entire MIDI generation process, including
+        validation, caching checks, and creation of all tempo/click/instrument combinations.
+        """
+        # Validate parameters and get bar range
+        start_bar, end_bar = self._validate_parameters()
+        if start_bar is None:
+            logger.error("Invalid parameters for MIDI generation")
             return
 
-        parts_in = []
-        if (which_parts == "sel"): parts_in = self.all_selected_parts
-        elif (which_parts == "un"): parts_in = self.all_unselected_parts
+        # Set up instrument selections
+        self.get_selected_instruments()
         
-        s = stream.Score(id='temp')
-        for part_index, p in enumerate(self.scoreSegment.parts):
-            if which_parts == "all" or part_index in parts_in:
+        # Check if this segment has already been generated
+        is_upfront_call = bool(self.request.GET.get("upfront_generate"))
+        if self._check_cache_flag(start_bar, end_bar, is_upfront_call):
+            return
+
+        # Determine tempo and click combinations to generate
+        tempos_to_generate, clicks_to_generate = self._get_tempo_click_combinations(is_upfront_call)
+
+        # Calculate segment offset
+        offset = 0.0
+        if self.score.parts and self.score.parts[0].measure(start_bar):
+            offset = self.score.parts[0].measure(start_bar).offset
+
+        # Create the score segment for this bar range
+        self._create_score_segment(start_bar, end_bar)
+
+        # Generate MIDI files for all combinations
+        try:
+            for click in clicks_to_generate:
+                self.tempo_shift = 0
+                for tempo in tempos_to_generate:
+                    # Generate group MIDI files (all, selected, unselected)
+                    self._generate_group_midis(start_bar, end_bar, offset, tempo, click)
+                    
+                    # Generate individual instrument and part MIDI files
+                    self._generate_individual_instrument_midis(start_bar, end_bar, offset, tempo, click)
+
+            # Create flag file on successful completion
+            self._create_cache_flag(start_bar, end_bar, is_upfront_call)
+            
+        except Exception as e:
+            logger.error(f"Failed to generate MIDI files for segment {start_bar}-{end_bar}: {e}")
+            raise
+
+    def _make_midi_together(self, start_bar, end_bar, offset, tempo, click, which_parts):
+        """
+        Create a MIDI file combining multiple parts together.
+        
+        Args:
+            start_bar (int): Starting bar number
+            end_bar (int): Ending bar number
+            offset (float): Time offset for the segment
+            tempo (int): Tempo as percentage of original
+            click (str): Click track type
+            which_parts (str): "all", "sel" (selected), or "un" (unselected)
+        """
+        midi_path = self._make_midi_path_from_options(
+            start=start_bar, end=end_bar, sel=which_parts, tempo=tempo, click=click
+        )
+        
+        if os.path.exists(midi_path):
+            return
+
+        # Determine which parts to include
+        if which_parts == "sel":
+            parts_to_include = self.all_selected_parts
+        elif which_parts == "un":
+            parts_to_include = self.all_unselected_parts
+        else:  # "all"
+            parts_to_include = None
+
+        combined_score = stream.Score(id='temp')
+        
+        for part_index, part in enumerate(self.score_segment.parts):
+            if which_parts == "all" or part_index in parts_to_include:
                 # Re-fetch measures for this specific stream to avoid cloning issues
-                part_measures = self.score.parts[part_index].measures(start, end, collect=('Clef', 'TimeSignature', 'Instrument', 'KeySignature'))
-                s.insert(0, part_measures)
+                part_measures = self.score.parts[part_index].measures(
+                    start_bar, end_bar, 
+                    collect=('Clef', 'TimeSignature', 'Instrument', 'KeySignature')
+                )
+                combined_score.insert(0, part_measures)
         
-        if not s.parts:
+        if not combined_score.parts:
             logger.info(f"Skipping MIDI generation for '{which_parts}' because there are no parts to include.")
             return
 
-        self.insert_tempos(s, offset, tempo/100)
-        self.insert_click_track(s, click)
-        s.write('midi', path)
-
-    def insert_click_track(self, s, click):
-        if click == 'n':
-            return
-        clicktrack = stream.Stream()
-        ins = instrument.Percussion()
-        ins.midiChannel = 9
-        clicktrack.insert(0, ins)
-        ts: meter.TimeSignature = None
-        shift_measure_offset = 0
-        for m in s.getElementsByClass(stream.Part)[0].getElementsByClass(stream.Measure):
-            if len(m.getElementsByClass(meter.TimeSignature)) > 0:
-                ts = m.getElementsByClass(meter.TimeSignature)[0]
-            else:
-                if (ts == None):
-                    ts: meter.TimeSignature = m.previous('TimeSignature')
-                if (ts == None):
-                    ts = meter.TimeSignature('1/4')
-            clickmeasure = stream.Measure()
-            clickmeasure.mergeAttributes(m)
-            clickmeasure.duration = ts.barDuration
-            clickNote = note.Note('D2')
-            clickNote.duration = ts.getBeatDuration(0)
-            clickmeasure.append(clickNote)
-            beatpos = ts.getBeatDuration(0).quarterLength
-            if (m.duration.quarterLength < ts.barDuration.quarterLength and len(m.getElementsByClass(['Note', 'Rest'])) > 0):
-                rest_duration = ts.barDuration.quarterLength - m.duration.quarterLength
-                r = note.Rest()
-                r.duration.quarterLength = rest_duration
-                for p in self.scoreSegment.parts:
-                    r = note.Rest()
-                    r.duration.quarterLength = rest_duration
-                    p.getElementsByClass(stream.Measure)[0].insertAndShift(0, r)
-                    for ms in p.getElementsByClass(stream.Measure)[1:]:
-                        ms.offset += rest_duration
-                for p in s.parts:
-                    for ms in p.getElementsByClass(stream.Measure)[1:]:
-                        ms.offset += rest_duration
-                shift_measure_offset = rest_duration
-                for t in s.getElementsByClass(tempo.MetronomeMark):
-                    if (t.offset > 0):
-                        t.offset += shift_measure_offset
-                self.tempo_shift = rest_duration
-            for b in range(0, ts.beatCount-1):
-                clickNote = note.Note('F#2')
-                clickNote.duration = ts.getBeatDuration(beatpos)
-                beatpos += clickNote.duration.quarterLength
-                clickmeasure.append(clickNote)
-            clicktrack.append(clickmeasure)
-        s.insert(clicktrack)
-
-    def insert_tempos(self, stream, offset_start, scale):
-        for mmb in self.score.metronomeMarkBoundaries():
-            if (mmb[0] >= offset_start+stream.duration.quarterLength):
-                return
-            if (mmb[1] > offset_start):
-                tempoNumber = Music21TalkingScore.fix_tempo_number(tempo=mmb[2]).number
-                if (mmb[0]) <= offset_start:
-                    stream.insert(0.001, tempo.MetronomeMark(number=tempoNumber*scale, referent=mmb[2].referent))
-                else:
-                    stream.insert(mmb[0]-offset_start + self.tempo_shift, tempo.MetronomeMark(number=tempoNumber*scale, referent=mmb[2].referent))
-
-    def make_midi_path_from_options(self, sel=None, part=None, ins=None, start=None, end=None, click=None, tempo=None):
-        midiname = self.filename
-        if (sel is not None): midiname += "sel-"+str(sel)
-        if (part is not None): midiname += "p"+str(part)
-        if (ins is not None): midiname += "i"+str(ins)
-        if (start is not None): midiname += "s"+str(start)
-        if (end is not None): midiname += "e"+str(end)
-        if (click is not None): midiname += "c"+str(click)
-        if (tempo is not None): midiname += "t"+str(tempo)
-        midiname += ".mid"
+        self._insert_tempos(combined_score, offset, tempo/100)
+        self._insert_click_track(combined_score, click)
         
-        return os.path.join(MEDIA_ROOT, self.folder, midiname)
+        try:
+            combined_score.write('midi', midi_path)
+        except Exception as e:
+            logger.error(f"Failed to write combined MIDI {midi_path}: {e}")
+
+    def _insert_click_track(self, score, click_type):
+        """
+        Add a click track (metronome) to the score.
+        
+        Args:
+            score: The music21 score to add the click track to
+            click_type (str): Type of click track ('n' for none, 'be' for bars/beats)
+        """
+        if click_type == 'n':
+            return
+
+        click_track = stream.Stream()
+        percussion_instrument = instrument.Percussion()
+        percussion_instrument.midiChannel = 9
+        click_track.insert(0, percussion_instrument)
+        
+        current_time_signature = None
+        shift_measure_offset = 0
+        
+        for measure in score.getElementsByClass(stream.Part)[0].getElementsByClass(stream.Measure):
+            # Get time signature for this measure
+            measure_time_sigs = measure.getElementsByClass(meter.TimeSignature)
+            if measure_time_sigs:
+                current_time_signature = measure_time_sigs[0]
+            elif current_time_signature is None:
+                previous_time_sig = measure.previous('TimeSignature')
+                current_time_signature = previous_time_sig if previous_time_sig else meter.TimeSignature('4/4')
+            
+            # Create click measure
+            click_measure = stream.Measure()
+            click_measure.mergeAttributes(measure)
+            click_measure.duration = current_time_signature.barDuration
+            
+            # Add downbeat click (stronger sound)
+            downbeat_click = note.Note('D2')
+            downbeat_click.duration = current_time_signature.getBeatDuration(0)
+            click_measure.append(downbeat_click)
+            
+            # Add beat clicks for remaining beats
+            beat_position = current_time_signature.getBeatDuration(0).quarterLength
+            if (measure.duration.quarterLength < current_time_signature.barDuration.quarterLength and 
+                len(measure.getElementsByClass(['Note', 'Rest'])) > 0):
+                
+                # Handle short measures by adding rests
+                rest_duration = current_time_signature.barDuration.quarterLength - measure.duration.quarterLength
+                rest = note.Rest()
+                rest.duration.quarterLength = rest_duration
+                
+                # Add rests to all parts
+                for part in self.score_segment.parts:
+                    rest_copy = note.Rest()
+                    rest_copy.duration.quarterLength = rest_duration
+                    part.getElementsByClass(stream.Measure)[0].insertAndShift(0, rest_copy)
+                    for subsequent_measure in part.getElementsByClass(stream.Measure)[1:]:
+                        subsequent_measure.offset += rest_duration
+                
+                # Adjust offsets in the combined score
+                for part in score.parts:
+                    for subsequent_measure in part.getElementsByClass(stream.Measure)[1:]:
+                        subsequent_measure.offset += rest_duration
+                
+                # Adjust tempo marks
+                for tempo_mark in score.getElementsByClass(tempo.MetronomeMark):
+                    if tempo_mark.offset > 0:
+                        tempo_mark.offset += rest_duration
+                
+                shift_measure_offset = rest_duration
+                self.tempo_shift = rest_duration
+            
+            # Add remaining beat clicks
+            for beat_num in range(0, current_time_signature.beatCount - 1):
+                beat_click = note.Note('F#2')
+                beat_click.duration = current_time_signature.getBeatDuration(beat_position)
+                beat_position += beat_click.duration.quarterLength
+                click_measure.append(beat_click)
+            
+            click_track.append(click_measure)
+        
+        score.insert(click_track)
+
+    def _insert_tempos(self, score_stream, offset_start, scale):
+        """
+        Insert tempo markings into a score stream.
+        
+        Args:
+            score_stream: The music21 stream to add tempos to
+            offset_start (float): Starting offset of the stream
+            scale (float): Tempo scaling factor (e.g., 0.5 for half speed)
+        """
+        for metronome_boundary in self.score.metronomeMarkBoundaries():
+            boundary_start, boundary_end, tempo_mark = metronome_boundary
+            
+            # Skip if this tempo boundary is completely after our stream
+            if boundary_start >= offset_start + score_stream.duration.quarterLength:
+                return
+            
+            # Only process if the boundary overlaps with our stream
+            if boundary_end > offset_start:
+                fixed_tempo = Music21TalkingScore.fix_tempo_number(tempo=tempo_mark)
+                scaled_tempo_number = fixed_tempo.number * scale
+                
+                if boundary_start <= offset_start:
+                    # Tempo starts before our stream, so insert it at the beginning
+                    score_stream.insert(0.001, tempo.MetronomeMark(
+                        number=scaled_tempo_number, 
+                        referent=tempo_mark.referent
+                    ))
+                else:
+                    # Tempo starts within our stream
+                    insert_offset = boundary_start - offset_start + self.tempo_shift
+                    score_stream.insert(insert_offset, tempo.MetronomeMark(
+                        number=scaled_tempo_number, 
+                        referent=tempo_mark.referent
+                    ))
+
+    def _make_midi_path_from_options(self, sel=None, part=None, ins=None, start=None, end=None, click=None, tempo=None):
+        """
+        Generate a file path for a MIDI file based on the given options.
+        
+        Args:
+            sel (str, optional): Selection type ("all", "sel", "un")
+            part (int, optional): Part number
+            ins (int, optional): Instrument number
+            start (int, optional): Starting bar
+            end (int, optional): Ending bar
+            click (str, optional): Click track type
+            tempo (int, optional): Tempo percentage
+            
+        Returns:
+            str: Complete file path for the MIDI file
+        """
+        midi_filename = self.filename
+        
+        # Build filename based on options
+        if sel is not None:
+            midi_filename += f"sel-{sel}"
+        if part is not None:
+            midi_filename += f"p{part}"
+        if ins is not None:
+            midi_filename += f"i{ins}"
+        if start is not None:
+            midi_filename += f"s{start}"
+        if end is not None:
+            midi_filename += f"e{end}"
+        if click is not None:
+            midi_filename += f"c{click}"
+        if tempo is not None:
+            midi_filename += f"t{tempo}"
+        
+        midi_filename += ".mid"
+        
+        return os.path.join(MEDIA_ROOT, self.folder, midi_filename)
 
     def get_or_make_midi_file(self):
-        midiname = self.filename
+        """
+        Get an existing MIDI file or create it if it doesn't exist.
         
-        if (self.queryString.GET.get("sel") is not None): midiname += "sel-"+self.queryString.GET.get("sel")
-        if (self.queryString.GET.get("part") is not None): midiname += "p"+self.queryString.GET.get("part")
-        if (self.queryString.GET.get("ins") is not None): midiname += "i"+self.queryString.GET.get("ins")
-        if (self.queryString.GET.get("start") is not None): midiname += "s"+self.queryString.GET.get("start")
-        if (self.queryString.GET.get("end") is not None): midiname += "e"+self.queryString.GET.get("end")
-        if (self.queryString.GET.get("c") is not None): midiname += "c"+self.queryString.GET.get("c")
-        if (self.queryString.GET.get("t") is not None): midiname += "t"+self.queryString.GET.get("t")
-
-        self.midiname = midiname + ".mid"
+        This method builds the MIDI filename from request parameters and either
+        returns the path to an existing file or triggers generation of a new one.
         
-        midi_filepath = os.path.join(MEDIA_ROOT, self.folder, self.midiname)
+        Returns:
+            str: Path to the MIDI file
+        """
+        # Build MIDI filename from request parameters
+        midi_filename = self.filename
         
-        os.makedirs(os.path.dirname(midi_filepath), exist_ok=True)
+        # Add parameters to filename in consistent order
+        param_mapping = [
+            ("sel", "sel"),
+            ("part", "p"),
+            ("ins", "i"),
+            ("start", "s"),
+            ("end", "e"),
+            ("c", "c"),
+            ("t", "t")
+        ]
+        
+        for param_name, prefix in param_mapping:
+            param_value = self.request.GET.get(param_name)
+            if param_value is not None:
+                midi_filename += f"{prefix}{param_value}"
 
-        if not os.path.exists(midi_filepath):
-            logger.debug(f"MIDI file not found - {midi_filepath} - making it...")
-            self.make_midi_files()
+        self.midi_filename = midi_filename + ".mid"
+        
+        # Construct full file path
+        midi_file_path = os.path.join(MEDIA_ROOT, self.folder, self.midi_filename)
+        
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(midi_file_path), exist_ok=True)
 
-        return midi_filepath
+        # Generate MIDI file if it doesn't exist
+        if not os.path.exists(midi_file_path):
+            logger.debug(f"MIDI file not found - {midi_file_path} - generating it...")
+            try:
+                self.make_midi_files()
+            except Exception as e:
+                logger.error(f"Failed to generate MIDI file {midi_file_path}: {e}")
+                raise
+
+        return midi_file_path

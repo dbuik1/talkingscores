@@ -463,17 +463,25 @@ class AnalysePart:
             mg_index += 1
         return -1
 
-    # from_measures_dictionary will be eg measure_analyse_indexes_dictionary eg {0: [1,3], 1:[2,4]}
-    # not_full_match - when true, find eg rhythm or interval measures that are not a complete match
-    # returns eg [[1, 3], [2, 4]]
-    # does not return measures that are only used once
-    def calculate_repeated_measures_lists(self, from_measure_dictionary, not_full_match):
+    # MODERNIZED: Updated method signature with default parameter and clear naming
+    def calculate_repeated_measures_lists(self, from_measure_dictionary, exclude_full_matches=False):
+        """
+        Calculate lists of repeated measures.
+        
+        Args:
+            from_measure_dictionary: Dictionary mapping measure types to lists of measure numbers
+            exclude_full_matches: If True, exclude measures that are complete matches elsewhere
+        
+        Returns:
+            List of lists containing repeated measure numbers
+        """
         to_list = []
         for measure_indexes in from_measure_dictionary.values():
             if len(measure_indexes) > 1:  # this measure is used more than once
                 measures = []
                 for measure_index in measure_indexes:
-                    if (not_full_match == False or len(self.measure_analyse_indexes_dictionary[self.measure_analyse_indexes_all[measure_index][0]]) == 1):
+                    if (not exclude_full_matches or 
+                        len(self.measure_analyse_indexes_dictionary[self.measure_analyse_indexes_all[measure_index][0]]) == 1):
                         measures.append(measure_index)
                 if len(measures) > 1:
                     to_list.append(measures)
@@ -853,7 +861,7 @@ class AnalysePart:
 
         # at this point if you have some bars that are the same pitch and rhythm - and some bars that are the same rhythm and also the same rhythm as the previous full matches - but neither is more than 33% - then nothing gets mentioned...
         if repetition == "":
-            check_rhythm_match = self.calculate_repeated_measures_lists(self.measure_rhythm_analyse_indexes_dictionary, False)
+            check_rhythm_match = self.calculate_repeated_measures_lists(self.measure_rhythm_analyse_indexes_dictionary, exclude_full_matches=False)
             check_rhythm_match.sort(reverse=True, key=lambda item: len(item))
             for check in check_rhythm_match:
                 percent_usage = (len(check) / len(self.measure_indexes))*100
@@ -865,7 +873,7 @@ class AnalysePart:
                     break
 
             # check intervals too
-            check_intervals_match = self.calculate_repeated_measures_lists(self.measure_intervals_analyse_indexes_dictionary, False)
+            check_intervals_match = self.calculate_repeated_measures_lists(self.measure_intervals_analyse_indexes_dictionary, exclude_full_matches=False)
             check_intervals_match.sort(reverse=True, key=lambda item: len(item))
             for check in check_intervals_match:
                 percent_usage = (len(check) / len(self.measure_indexes))*100
@@ -1389,15 +1397,16 @@ class AnalysePart:
         print("self.measure_analyse_indexes_all")
         print(self.measure_analyse_indexes_all)
 
-        self.repeated_measures_lists = self.calculate_repeated_measures_lists(self.measure_analyse_indexes_dictionary, False)
+        # MODERNIZED: Updated all method calls to use named parameters
+        self.repeated_measures_lists = self.calculate_repeated_measures_lists(self.measure_analyse_indexes_dictionary, exclude_full_matches=False)
         self.measure_groups_list = self.calculate_measure_groups(self.measure_analyse_indexes_all, self.measure_analyse_indexes_dictionary)
         self.repeated_measures_not_in_groups_dictionary = self.calculate_repeated_measures_not_in_groups(self.measure_analyse_indexes_dictionary.values(), self.measure_groups_list)
 
-        self.repeated_measures_lists_rhythm = self.calculate_repeated_measures_lists(self.measure_rhythm_analyse_indexes_dictionary, True)
+        self.repeated_measures_lists_rhythm = self.calculate_repeated_measures_lists(self.measure_rhythm_analyse_indexes_dictionary, exclude_full_matches=True)
         self.measure_rhythm_not_full_match_groups_list = self.calculate_measure_groups(self.measure_rhythm_analyse_indexes_all, self.measure_rhythm_analyse_indexes_dictionary)
         self.repeated_rhythm_measures_not_full_match_not_in_groups_dictionary = self.calculate_repeated_measures_not_in_groups(self.repeated_measures_lists_rhythm, self.measure_rhythm_not_full_match_groups_list)
 
-        self.repeated_measures_lists_intervals = self.calculate_repeated_measures_lists(self.measure_intervals_analyse_indexes_dictionary, True)
+        self.repeated_measures_lists_intervals = self.calculate_repeated_measures_lists(self.measure_intervals_analyse_indexes_dictionary, exclude_full_matches=True)
         self.repeated_intervals_measures_not_full_match_not_in_groups_dictionary = self.calculate_repeated_measures_not_in_groups(self.repeated_measures_lists_intervals, self.measure_intervals_not_full_match_groups_list)
         self.repeated_intervals_measures_not_full_match_not_in_groups_dictionary = self.calculate_repeated_measures_not_in_groups(self.repeated_measures_lists_intervals, self.measure_intervals_not_full_match_groups_list)
 

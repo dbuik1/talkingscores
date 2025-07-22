@@ -1,0 +1,29 @@
+<!-- Reusable Instrument List Component -->
+{% for index, ins in instrument_midis.items %}
+    <div class="instrument-group" role="group" aria-labelledby="instrument-{{ ins.ins }}-{{ segment_label|slugify }}">
+        <!-- Main Instrument Playback -->
+        {% if preamble.number_of_parts > 1 %}
+            <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}"
+               aria-label="Play {{ instruments[ins.ins][0] }}{% if segment_label %} - {{ segment_label }}{% endif %}">
+                Play - {{ instruments[ins.ins][0] }}{% if segment_label %} - {{ segment_label }}{% endif %}
+            </a><br>
+        {% else %}
+            <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}"
+               aria-label="Play Score{% if segment_label %} - {{ segment_label }}{% endif %}">
+                Play Score{% if segment_label %} - {{ segment_label }}{% endif %}
+            </a><br>
+        {% endif %}
+        
+        <!-- Individual Parts -->
+        {% if ins.midi_parts|length > 0 %}
+            <div class="instrument-parts" style="margin-left:15px; list-style-type:none;">
+                {% for midi_part in ins.midi_parts %}
+                    <a href="#" class="lnkPlay" data-base-url="{{ midi_part }}"
+                       aria-label="Play {{ part_names[instruments[ins.ins][1] + forloop.counter0] }}{% if segment_label %} - {{ segment_label }}{% endif %}">
+                        {{ part_names[instruments[ins.ins][1] + forloop.counter0] }}
+                    </a><br>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+{% endfor %}

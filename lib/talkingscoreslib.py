@@ -1,26 +1,34 @@
-from datetime import datetime  # start_time = datetime.now()
-import time
-from jinja2 import Template
-from abc import ABCMeta, abstractmethod
-from collections import OrderedDict
-from jinja2.loaders import FileSystemLoader
+"""
+Talking Scores Library - Main Coordination Module
 
-__author__ = 'BTimms'
+This module provides the main coordination classes for the Talking Scores application,
+integrating musical analysis, MIDI generation, and HTML rendering with a clean,
+modular architecture prepared for future enhancements.
+"""
 
 import os
 import json
-import math
-import pprint
 import logging
-import logging.handlers
-import logging.config
-from music21 import *
-from lib.musicAnalyser import *
-import re
-from types import SimpleNamespace
-us = environment.UserSettings()
-us['warnings'] = 0
+import math
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Tuple, Union
+from dataclasses import dataclass
+from abc import ABC, abstractmethod
+
+# Import refactored modules with absolute imports  
+from lib.settings_manager import SettingsManager, TalkingScoresSettings
+from lib.color_utilities import ColorRenderer, ColorPaletteManager
+from lib.musical_events import MusicalEventFactory, RenderContext
+from lib.midi_coordinator import MIDICoordinator, MIDIRequest
+from lib.template_renderer import TemplateManager
+from lib.musicAnalyser import MusicAnalyser
+from lib.score_analyzer import ScoreAnalyzer
+
+# Music21 imports
+from music21 import converter, stream, meter, key, tempo, note, interval, duration
+
 logger = logging.getLogger("TSScore")
+
 
 global settings
 settings = {
@@ -30,272 +38,75 @@ settings = {
     'pitchDescription': 'noteName',
 }
 
-def get_contrast_color(hex_color):
-    """
-    Calculates whether black or white text has a better contrast against a given hex color.
-    """
-    try:
-        hex_color = hex_color.lstrip('#')
-        rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        # Formula for luminance
-        luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255
-        # Return black for light backgrounds, white for dark backgrounds
-        return 'black' if luminance > 0.5 else 'white'
-    except ValueError:
-        # Fallback for invalid hex codes
-        return 'white'
 
-# Place this at the top of your talkingscoreslib.py file
+class TalkingScoreError(Exception):
+    """Base exception for Talking Score operations."""
+    pass
 
-def render_colourful_output(text, pitchLetter, elementType, settings):
+
+class ScoreParsingError(TalkingScoreError):
+    """Exception raised when score parsing fails."""
+    pass
+
+
+class AnalysisError(TalkingScoreError):
+    """Exception raised when musical analysis fails."""
+    pass
+
+
+@dataclass
+class ScoreMetadata:
+    """Container for basic score metadata."""
+    title: str = "Unknown Title"
+    composer: str = "Unknown Composer"
+    number_of_bars: int = 0
+    number_of_parts: int = 0
+    time_signature: str = ""
+    key_signature: str = ""
+    tempo: str = ""
+
+
+class TalkingScoreBase(ABC):
     """
-    Wraps text in a styled <span>. Supports independent and inherited colouring.
-    """
-    toRender = text
-    color_to_use = None
-    pitch_color = settings.get("figureNoteColours", {}).get(pitchLetter)
-
-    if elementType == "pitch" and settings.get("colourPitch"):
-        color_to_use = pitch_color
-
-    elif elementType == "rhythm":
-        mode = settings.get("rhythm_colour_mode", "none")
-        if mode == 'inherit' and settings.get("colourPitch"):
-            color_to_use = pitch_color
-        elif mode == 'custom':
-            rhythm_colours = settings.get("advanced_rhythm_colours", {})
-            slug_text = text.lower().replace(" ", "-")
-            for rhythm_slug, color in rhythm_colours.items():
-                if rhythm_slug in slug_text:
-                    color_to_use = color
-                    break
+    Abstract base class for talking score implementations.
     
-    elif elementType == "octave":
-        mode = settings.get("octave_colour_mode", "none")
-        if mode == 'inherit' and settings.get("colourPitch"):
-            color_to_use = pitch_color
-        elif mode == 'custom':
-            octave_colours = settings.get("advanced_octave_colours", {})
-            octave_text = text.lower()
-            if any(term in octave_text for term in ["high", "top", "5", "6", "7"]):
-                color_to_use = octave_colours.get("high")
-            elif any(term in octave_text for term in ["mid", "4"]):
-                color_to_use = octave_colours.get("mid")
-            elif any(term in octave_text for term in ["low", "bottom", "1", "2", "3"]):
-                color_to_use = octave_colours.get("low")
+    This class defines the interface that all talking score implementations
+    must provide, allowing for different backends in the future.
+    """
     
-    if settings.get("colourPosition") != "none" and color_to_use:
-        style_type = settings.get("colourPosition")
-        if style_type == "background":
-            contrast_color = get_contrast_color(color_to_use)
-            toRender = f"<span style='color:{contrast_color}; background-color:{color_to_use};'>{text}</span>"
-        else: # 'text'
-            toRender = f"<span style='color:{color_to_use};'>{text}</span>"
-
-    return toRender
-
-class TSEvent(object, metaclass=ABCMeta):
-    duration = None
-    tuplets = ""
-    endTuplets = ""
-    bar = None
-    part = None
-    tie = None
-    start_offset = 0.0
-    beat = 0.0
-
-    def render(self, settings, context=None, noteLetter=None):
-        rendered_elements = []
-        # MODIFIED: Check if rhythm description is turned off
-        if settings.get('rhythmDescription', 'british') != 'none' and \
-           (context is None or context.duration != self.duration or self.tuplets != "" or settings['rhythmAnnouncement'] == "everyNote"):
-            rendered_elements.append(self.tuplets)
-            if (noteLetter != None):
-                rendered_elements.append(render_colourful_output(self.duration, noteLetter, "rhythm", settings))
-            else:
-                rendered_elements.append(self.duration)
-            rendered_elements.append(self.endTuplets)
-
-        if self.tie and settings.get('include_ties', True):
-            rendered_elements.append(f"tie {self.tie}")
-
-        return list(filter(None, rendered_elements))
-
-
-class TSDynamic(TSEvent):
-    short_name = None
-    long_name = None
-
-    def __init__(self, long_name=None, short_name=None):
-        if (long_name != None):
-            self.long_name = long_name.capitalize()
-        else:
-            self.long_name = short_name
-
-        self.short_name = short_name
-
-    def render(self, settings, context=None):
-        if self.long_name:
-            return [f'[{self.long_name}]']
-        return []
-
-
-class TSPitch(TSEvent):
-    pitch_name = None
-    octave = None
-    pitch_letter = None  # used for looking up colour based on pitch and fixes sharp / flat problem when modulus and the pitch number
-
-    def __init__(self, pitch_name, octave, pitch_number, pitch_letter):
-        self.pitch_name = pitch_name
-        self.octave = octave
-        self.pitch_number = pitch_number
-        self.pitch_letter = pitch_letter
-
-    def render(self, settings, context=None):
-        rendered_elements = []
-        if settings['octavePosition'] == "before":
-            rendered_elements.append(self.render_octave(settings, context))
-        rendered_elements.append(render_colourful_output(self.pitch_name, self.pitch_letter, "pitch", settings))
-        if settings['octavePosition'] == "after":
-            rendered_elements.append(self.render_octave(settings, context))
-        
-        return list(filter(None, rendered_elements))
-
-    def render_octave(self, settings, context=None):
-        show_octave = False
-        if settings['octaveAnnouncement'] == "brailleRules":
-            if context == None:
-                show_octave = True
-            else:
-                pitch_difference = abs(context.pitch_number - self.pitch_number)
-                # if it is a 3rd or less, don't say octave
-                if pitch_difference <= 4:
-                    show_octave = False  # it already is...
-                # if it is a 4th or 5th and octave changes, say octave
-                elif pitch_difference >= 5 and pitch_difference <= 7:
-                    if context.octave != self.octave:
-                        show_octave = True
-                # if it is more than a 5th, say octave
-                else:
-                    show_octave = True
-        elif settings['octaveAnnouncement'] == "everyNote":
-            show_octave = True
-        elif settings['octaveAnnouncement'] == "firstNote" and context == None:
-            show_octave = True
-        elif settings['octaveAnnouncement'] == "onChange":
-            if context == None or (context != None and context.octave != self.octave):
-                show_octave = True
-
-        if show_octave:
-            return render_colourful_output(self.octave, self.pitch_letter, "octave", settings)
-        else:
-            return ""
-
-
-class TSUnpitched(TSEvent):
-    pitch = None
-
-    def render(self, settings, context=None):
-        rendered_elements = []
-        # Render the duration
-        rendered_elements.append(' '.join(super(TSUnpitched, self).render(settings, context)))
-        # Render the pitch
-        rendered_elements.append(' unpitched')
-        return rendered_elements
-
-
-class TSRest(TSEvent):
-    pitch = None
-
-    def render(self, settings, context=None):
-        if not settings.get('include_rests', True):
-            return [] 
-
-        rendered_elements = []
-        rendered_elements.extend(super(TSRest, self).render(settings, context))
-        rendered_elements.append('rest')
-        
-        return list(filter(None, rendered_elements))
-
-
-class TSNote(TSEvent):
-    pitch = None
-    expressions = []
-
-    def render(self, settings, context=None):
-        rendered_elements = []
-        for exp in self.expressions:
-            is_arpeggio = 'arpeggio' in exp.name.lower()
-            if not is_arpeggio or (is_arpeggio and settings.get('include_arpeggios', True)):
-                rendered_elements.append(exp.name)
-
-        rendered_elements.extend(super().render(settings, context, self.pitch.pitch_letter))
-        rendered_elements.extend(self.pitch.render(settings, getattr(context, 'pitch', None)))
-        
-        return list(filter(None, rendered_elements))
-
-class TSChord(TSEvent):
-    pitches = []
-
-    def name(self):
-        return ''
-
-    def render(self, settings, context=None):
-        rendered_elements = []
-        if settings.get('describe_chords', True):
-            rendered_elements.append(f'{len(self.pitches)}-note chord')
-        
-        rendered_elements.extend(super(TSChord, self).render(settings, context))
-        previous_pitch = None
-        for pitch in sorted(self.pitches, key=lambda TSPitch: TSPitch.pitch_number):
-            rendered_elements.extend(pitch.render(settings, previous_pitch))
-            previous_pitch = pitch
-        
-        return list(filter(None, rendered_elements))
-
-
-class TalkingScoreBase(object, metaclass=ABCMeta):
     @abstractmethod
-    def get_title(self):
+    def get_title(self) -> str:
+        """Get the title of the musical work."""
         pass
-
+    
     @abstractmethod
-    def get_composer(self):
+    def get_composer(self) -> str:
+        """Get the composer of the musical work."""
+        pass
+    
+    @abstractmethod
+    def get_metadata(self) -> ScoreMetadata:
+        """Get comprehensive metadata about the score."""
+        pass
+    
+    @abstractmethod
+    def analyze_score(self, settings: TalkingScoresSettings) -> Dict[str, Any]:
+        """Analyze the musical content of the score."""
         pass
 
 
-class Music21TalkingScore(TalkingScoreBase):
-
-    _OCTAVE_MAP = {
-        1: 'bottom',
-        2: 'lower',
-        3: 'low',
-        4: 'mid',
-        5: 'high',
-        6: 'higher',
-        7: 'top'
-    }
-
-    _OCTAVE_FIGURENOTES_MAP = {
-        1: 'bottom',
-        2: 'cross',
-        3: 'square',
-        4: 'circle',
-        5: 'triangle',
-        6: 'higher',
-        7: 'top'
-    }
-
-    _DOTS_MAP = {
-        0: '',
-        1: 'dotted ',
-        2: 'double dotted ',
-        3: 'triple dotted '
-    }
-
-    _DURATION_MAP = {
+class DurationMapper:
+    """
+    Handles mapping between music21 durations and human-readable descriptions.
+    
+    This class encapsulates all duration-related mapping logic that was
+    previously scattered throughout the codebase.
+    """
+    
+    # British terminology mapping
+    BRITISH_DURATION_MAP = {
         'whole': 'semibreve',
-        'half': 'minim',
+        'half': 'minim', 
         'quarter': 'crotchet',
         'eighth': 'quaver',
         '16th': 'semi-quaver',
@@ -303,727 +114,644 @@ class Music21TalkingScore(TalkingScoreBase):
         '64th': 'hemi-demi-semi-quaver',
         'zero': 'grace note',
     }
-
-    _PITCH_FIGURENOTES_MAP = {
-        'C': 'red',
-        'D': 'brown',
-        'E': 'grey',
-        'F': 'blue',
-        'G': 'black',
-        'A': 'yellow',
-        'B': 'green',
+    
+    # American terminology (music21 default)
+    AMERICAN_DURATION_MAP = {
+        'whole': 'whole note',
+        'half': 'half note',
+        'quarter': 'quarter note',
+        'eighth': 'eighth note',
+        '16th': 'sixteenth note',
+        '32nd': 'thirty-second note',
+        '64th': 'sixty-fourth note',
+        'zero': 'grace note',
     }
-
-    _PITCH_PHONETIC_MAP = {
-        'C': 'charlie',
-        'D': 'bravo',
-        'E': 'echo',
-        'F': 'foxtrot',
-        'G': 'golf',
-        'A': 'alpha',
-        'B': 'bravo',
+    
+    DOTS_MAP = {
+        0: '',
+        1: 'dotted ',
+        2: 'double dotted ',
+        3: 'triple dotted '
     }
-
-    last_tempo_inserted_index = 0  # insert_tempos() doesn't need to recheck MetronomeMarkBoundaries that have already been used
-    music_analyser = None
-
-    def __init__(self, musicxml_filepath):
-        self.filepath = os.path.realpath(musicxml_filepath)
-        self.score = converter.parse(musicxml_filepath)
-        super(Music21TalkingScore, self).__init__()
-
-    def get_title(self):
-        if self.score.metadata.title is not None:
-            return self.score.metadata.title
-        # Have a guess
-        for tb in self.score.flatten().getElementsByClass('TextBox'):
-            # in some musicxml files - a textbox might not have those attributes - so we use hasattr()...
-            if hasattr(tb, 'justifty') and tb.justify == 'center' and hasattr(tb, 'alignVertical') and tb.alignVertical == 'top' and hasattr(tb, 'size') and tb.size > 18:
-                return tb.content
-        return "Error reading title"
-
-    def get_composer(self):
-        if self.score.metadata.composer != None:
-            return self.score.metadata.composer
-        # Look for a text box in the top right of the first page
-        for tb in self.score.getElementsByClass('TextBox'):
-            if tb.style.justify == 'right':
-                return tb.content
-        return "Unknown"
-
-    def get_initial_time_signature(self):
-        # Get the first measure of the first part
-        m1 = self.score.parts[0].measures(1, 1)
-        initial_time_signature = None
-        if (len(self.score.parts[0].getElementsByClass('Measure')[0].getElementsByClass(meter.TimeSignature)) > 0):
-            initial_time_signature = self.score.parts[0].getElementsByClass('Measure')[0].getElementsByClass(meter.TimeSignature)[0]
-        return self.describe_time_signature(initial_time_signature)
-
-    def describe_time_signature(self, ts):
-        if ts != None:
-            return " ".join(ts.ratioString.split("/"))
-        else:
-            return " error reading time signature...  "
-
-    def get_initial_key_signature(self):
-        m1 = self.score.parts[0].measures(1, 1)
-        if len(m1.flatten().getElementsByClass('KeySignature')) == 0:
-            ks = key.KeySignature(0)
-        else:
-            ks = m1.flatten().getElementsByClass('KeySignature')[0]
-        return self.describe_key_signature(ks)
-
-    def describe_key_signature(self, ks):
-        strKeySig = "No sharps or flats"
-        if (ks.sharps > 0):
-            strKeySig = str(ks.sharps) + " sharps"
-        elif (ks.sharps < 0):
-            strKeySig = str(abs(ks.sharps)) + " flats"
-        return strKeySig
-
-    # this was used to get the first tempo - but MetronomeMarkBoundary is better
-    def get_initial_text_expression(self):
-        # Get the first measure of the first part
-        m1 = self.score.parts[0].measures(1, 1)
-        # Get the text expressions from that measure
-        text_expressions = m1.flatten().getElementsByClass('TextExpression')
-        for te in text_expressions:
-            return te.content
-
-    def get_initial_tempo(self):
-        global settings
-        try:
-            settings
-        except NameError:
-            settings = None
-        if settings == None:
-            settings = {}
-            settings['dotPosition'] = "before"
-            settings['rhythmDescription'] = "british"
-        return self.describe_tempo(self.score.metronomeMarkBoundaries()[0][2])
-
-    # In lib/talkingscoreslib.py, inside the Music21TalkingScore class
-
-    def get_beat_division_options(self):
+    
+    def __init__(self, settings: TalkingScoresSettings):
+        self.settings = settings
+    
+    def map_duration(self, duration_obj) -> str:
         """
-        Analyzes the initial time signature of the score and returns a list
-        of valid beat division options for the user.
+        Map a music21 duration to a human-readable description.
+        
+        Args:
+            duration_obj: music21 Duration object
+            
+        Returns:
+            Human-readable duration description
         """
-        ts = None
-        try:
-            # Directly iterate through the first measure to find the TimeSignature object
-            first_measure = self.score.parts[0].getElementsByClass('Measure')[0]
-            for item in first_measure:
-                if isinstance(item, meter.TimeSignature):
-                    ts = item
-                    break  # Stop once we've found the first one
-            
-            if not ts:
-                # If still not found, try the stream-level fallback
-                ts = self.score.getTimeSignatures()[0]
-        except Exception as e:
-            self.logger.error(f"Could not find any TimeSignature in the score. Error: {e}")
-            return []
-
-        options = []
-        seen_values = set()
-
-        def add_option(display, value):
-            if value not in seen_values:
-                options.append({'display': display, 'value': value})
-                seen_values.add(value)
-
-        # 1. Add the "No Beats" option
-        add_option('Group by Bar (continuous)', 'bar')
-
-        # 2. Add the default music21 interpretation
-        default_beat_string = self.map_duration(ts.beatDuration)
-        default_display = f"{ts.beatCount} {default_beat_string} beats (Default)"
-        default_value = f"{ts.beatCount}/{ts.beatDuration.quarterLength}"
-        add_option(default_display, default_value)
+        if self.settings.rendering.rhythm_description == 'none':
+            return ""
         
-        # 3. Add the "face value" interpretation
-        face_value_beat_string = self.map_duration(duration.Duration(1.0 / ts.denominator))
-        face_value_display = f"{ts.numerator} {face_value_beat_string} beats"
-        face_value_value = f"{ts.numerator}/{ts.denominator}"
-        add_option(face_value_display, face_value_value)
-
-        # 4. Add compound meter interpretation if applicable
-        if ts.numerator % 3 == 0 and ts.numerator > 3:
-            compound_beat_count = ts.numerator / 3
-            # Get the name of the simple beat (e.g., for 6/8, the 8th is a 'quaver')
-            simple_beat_name = self.map_duration(duration.Duration(1.0 / ts.denominator))
-            
-            # Construct the compound beat name (e.g., 'Dotted quaver')
-            compound_beat_string = f"Dotted {simple_beat_name}"
-            compound_display = f"{int(compound_beat_count)} {compound_beat_string} beats"
-            
-            # The value remains a calculation of its quarterLength
-            compound_beat_duration_ql = (1.0 / ts.denominator) * 3
-            compound_value = f"{int(compound_beat_count)}/{compound_beat_duration_ql}"
-            add_option(compound_display, compound_value)
-
-        return options
-
-    # some tempos have soundingNumber set but not number
-    # we would get an error trying to scale a tempo.number of None
-    # static so that it can be called by eg midiHandler when scaling tempos
-    @staticmethod
-    def fix_tempo_number(tempo):
-        if (tempo.number == None):
-            if (tempo.numberSounding != None):
-                tempo.number = tempo.numberSounding
-            else:
-                tempo.number = 120
-                tempo.text = "Error - " + tempo.text
-        return tempo
-
-    def describe_tempo(self, tempo):
-        tempo_text = ""
-        tempo = self.fix_tempo_number(tempo)
-        if (tempo.text != None):
-            tempo_text += tempo.text + " (" + str(math.floor(tempo.number)) + " bpm @ " + self.describe_tempo_referent(tempo) + ")"
-        else:
-            tempo_text += str(math.floor(tempo.number)) + " bpm @ " + self.describe_tempo_referent(tempo)
-        return tempo_text
-
-    # the referent is the beat duration ie are you counting crotchets or minims etc
-    def describe_tempo_referent(self, tempo):
-        global settings
-        tempo_text = ""
-        if settings['dotPosition'] == "before":
-            tempo_text = self._DOTS_MAP.get(tempo.referent.dots)
-        tempo_text += self.map_duration(tempo.referent)
-        if settings['dotPosition'] == "after":
-            tempo_text += " " + self._DOTS_MAP.get(tempo.referent.dots)
-
-        return tempo_text
-
-    def get_number_of_bars(self):
-        return len(self.score.parts[0].getElementsByClass('Measure'))
-
-    # eg flute, piano, recorder, piano
-    # part_instruments = {1: ['Flute', 0, 1, 'P1'], 2: ['Piano', 1, 2, 'P2'], 3: ['Recorder', 3, 1, 'P3'], 4: ['Piano', 4, 2, 'P4']}
-    # part_names = {1: 'Right hand', 2: 'Left hand', 4: 'Right hand', 5: 'Left hand'}
-    # instrument names = ['Flute', 'Piano', 'Recorder', 'Piano']
-    def get_instruments(self):
-        # eg instrument.Name = Piano, instrument.partId = 1.  A piano has 2 staves ie two parts with the same name and same ID.  But if you have a second piano, it will have the same name but a different partId
-        self.part_instruments = {}  # key = instrument (1 based), value = ["part name", 1st part index 0 based, number of parts, instrument.partId]
-        self.part_names = {}  # key = part index 0 based, {part name eg "left hand" or "right hand" etc} - but part only included if instrument has multiple parts.
-        instrument_names = []  # each instrument instrument once even if it has multiple parts.  still needed for Info / Options page
-        ins_count = 1
-        for c, instrument in enumerate(self.score.flatten().getInstruments()):
-            if len(self.part_instruments) == 0 or self.part_instruments[ins_count-1][3] != instrument.partId:
-                pname = instrument.partName
-                if pname == None:
-                    pname = "Instrument  " + str(ins_count) + " (unnamed)"
-                self.part_instruments[ins_count] = [pname, c, 1, instrument.partId]
-                instrument_names.append(pname)
-
-                ins_count += 1
-            else:
-                self.part_instruments[ins_count-1][2] += 1
-                # todo - there is a more efficient way of doing this - or just let the user enter part names on the options screen - but these are OK for defaults
-                if self.part_instruments[ins_count-1][2] == 2:
-                    self.part_names[c-1] = "Right hand"
-                    self.part_names[c] = "Left hand"
-                elif self.part_instruments[ins_count-1][2] == 3:
-                    self.part_names[c-2] = "Part 1"
-                    self.part_names[c-1] = "Part 2"
-                    self.part_names[c] = "Part 3"
-                else:
-                    self.part_names[c] = "Part " + str(self.part_instruments[ins_count-1][2])
-
-        logger.debug(f"part instruments = {self.part_instruments}")
-        print("part names = " + str(self.part_names))
-        print("instrument names = " + str(instrument_names))
-        return instrument_names
-
-    def compare_parts_with_selected_instruments(self):
-        global settings
-        self.selected_instruments = []  # 1 based list of keys from part_instruments eg [1, 4]
-        self.unselected_instruments = []  # eg [2,3]
-        self.binary_selected_instruments = 1  # bitwise representation of all instruments - 0=not included, 1=included
-        self.selected_part_names = []
-        for ins in self.part_instruments.keys():
-            self.binary_selected_instruments = self.binary_selected_instruments << 1
-            if ins in settings.get('instruments', []): # Use .get() for safety
-                self.selected_instruments.append(ins)
-                self.binary_selected_instruments += 1
-            else:
-                self.unselected_instruments.append(ins)
-
-        for ins in self.selected_instruments:
-            ins_name = self.part_instruments[ins][0]
-            if self.part_instruments[ins][2] == 1:  # instrument only has one part
-                self.selected_part_names.append(ins_name)
-            else:  # instrument has multiple parts
-                pn1index = self.part_instruments[ins][1]
-                for pni in range(pn1index, pn1index+self.part_instruments[ins][2]):
-                    self.selected_part_names.append(ins_name + " - " + self.part_names[pni])
-
-        # --- START: MODIFIED LOGIC ---
-        # 1. Preserve the user's original choices for pre-generation.
-        play_all_choice = settings.get('playAll', False)
-        play_selected_choice = settings.get('playSelected', False)
-        play_unselected_choice = settings.get('playUnselected', False)
-
-        # 2. Apply "smart" logic to hide redundant links in the template.
-        # If there's only one instrument total, "Play All" is the same as playing the instrument.
-        if len(self.part_instruments) == 1:
-            settings['playAll'] = False
-            settings['playSelected'] = False
+        duration_text = ""
         
-        # Original logic for multi-instrument scores
-        if len(self.unselected_instruments) == 0:
-            settings['playUnselected'] = False
-        if len(self.selected_instruments) == len(self.part_instruments) and settings.get('playAll', False):
-            settings['playSelected'] = False
-        if len(self.selected_instruments) == 1:
-            settings['playSelected'] = False
-        # --- END: MODIFIED LOGIC ---
-
-        # 3. Calculate the binary flags for the URL based on the *original* choices.
-        self.binary_play_all = 1  # placeholder,all,selected,unselected
-        self.binary_play_all = self.binary_play_all << 1
-        if play_all_choice:
-            self.binary_play_all += 1
-        self.binary_play_all = self.binary_play_all << 1
-        if play_selected_choice:
-            self.binary_play_all += 1
-        self.binary_play_all = self.binary_play_all << 1
-        if play_unselected_choice:
-            self.binary_play_all += 1
-
-        print("selected_part_names = " + str(self.selected_part_names))
-        print("selected_instruments = " + str(self.selected_instruments))
-
-    def get_number_of_parts(self):
-        self.get_instruments()
-        return len(self.part_instruments)
-
-    def get_bar_range(self, range_start, range_end):
-        measures = self.score.measures(range_start, range_end)
-        bars_for_parts = {}
-        for part in measures.parts:
-            bars_for_parts.setdefault(part.id, []).extend(part.getElementsByClass('Measure'))
-
-        return bars_for_parts
-
-    def get_events_for_bar_range(self, start_bar, end_bar, part_index):
-        # This intermediate structure collects all events, grouped by bar, then precise offset, then voice.
-        # { bar_num: { offset: { voice: [events] } } }
-        intermediate_events = {}
-
-        measures = self.score.parts[part_index].measures(start_bar, end_bar)
-        if measures.measure(start_bar) != None and len(measures.measure(start_bar).getElementsByClass(meter.TimeSignature)) == 0:
-            measures.measure(start_bar).insert(0, self.timeSigs[start_bar])
-
-        logger.info(f'Processing part - {part_index} - bars {start_bar} to {end_bar}')
+        # Add dots before if configured
+        if self.settings.rendering.dot_position == "before":
+            dots = getattr(duration_obj, 'dots', 0)
+            duration_text += self.DOTS_MAP.get(dots, '')
         
-        # Determine the correct bar range, handling pickup bars.
-        first_bar_num = start_bar
-        last_bar_num = end_bar
-
-        # Iterate over bars to collect notes, rests, chords, etc.
-        for bar_index in range(first_bar_num, last_bar_num + 1):
-            measure = measures.measure(bar_index)
-            if measure is not None:
-                self.update_events_for_measure(measure, intermediate_events)
+        # Add main duration name
+        duration_type = getattr(duration_obj, 'type', 'quarter')
         
-        # Check if dynamics should be included before processing spanners
-        if settings.get('include_dynamics', True):
-            for spanner in self.score.parts[part_index].spanners.elements:
-                first = spanner.getFirst()
-                last = spanner.getLast()
+        if self.settings.rendering.rhythm_description == 'british':
+            duration_text += self.BRITISH_DURATION_MAP.get(duration_type, f'Unknown duration {duration_type}')
+        else:  # american
+            duration_text += self.AMERICAN_DURATION_MAP.get(duration_type, duration_type)
+        
+        # Add dots after if configured
+        if self.settings.rendering.dot_position == "after":
+            dots = getattr(duration_obj, 'dots', 0)
+            if dots > 0:
+                duration_text += " " + self.DOTS_MAP.get(dots, '').strip()
+        
+        return duration_text
 
-                if first.measureNumber is None or last.measureNumber is None:
-                    continue
 
-                # Only process spanners that overlap with the current segment
-                if first.measureNumber <= last_bar_num and last.measureNumber >= first_bar_num:
-                    spanner_type = type(spanner).__name__
-                    if spanner_type == 'Crescendo' or spanner_type == 'Diminuendo':
-                        # Process spanner start
-                        if first.measureNumber >= first_bar_num:
-                            event = TSDynamic(long_name=f'{spanner_type} Start')
-                            event.start_offset = first.offset
-                            event.beat = first.beat
-                            intermediate_events.setdefault(first.measureNumber, {}).setdefault(first.offset, {}).setdefault(1, []).append(event)
-                        
-                        # Process spanner end
-                        if last.measureNumber <= last_bar_num:
-                            event = TSDynamic(long_name=f'{spanner_type} End')
-                            event.start_offset = last.offset + last.duration.quarterLength
-                            event.beat = last.beat + last.duration.quarterLength
-                            intermediate_events.setdefault(last.measureNumber, {}).setdefault(event.start_offset, {}).setdefault(1, []).append(event)
-
-        # Final step: Convert the intermediate structure into the final, template-friendly sorted list.
-        final_events_by_bar = {}
-        # Loop only over the requested bar range to prevent data leakage
-        for bar_num in range(first_bar_num, last_bar_num + 1):
-            if bar_num in intermediate_events:
-                time_points = intermediate_events[bar_num]
-                sorted_time_points = []
-                for offset, voices in sorted(time_points.items()):
-                    # Get the beat from the first event at this time_point for display purposes.
-                    first_event = next(iter(next(iter(voices.values()))))
-                    
-                    sorted_time_points.append({
-                        'offset': offset,
-                        'beat': first_event.beat,
-                        'voices': voices
-                    })
-                final_events_by_bar[bar_num] = sorted_time_points
+class PitchMapper:
+    """
+    Handles mapping between music21 pitches and human-readable descriptions.
+    
+    This class manages pitch naming, octave descriptions, and accidental handling
+    according to the application settings.
+    """
+    
+    OCTAVE_NAME_MAP = {
+        1: 'bottom', 2: 'lower', 3: 'low', 4: 'mid',
+        5: 'high', 6: 'higher', 7: 'top'
+    }
+    
+    OCTAVE_FIGURENOTES_MAP = {
+        1: 'bottom', 2: 'cross', 3: 'square', 4: 'circle',
+        5: 'triangle', 6: 'higher', 7: 'top'
+    }
+    
+    PITCH_FIGURENOTES_MAP = {
+        'C': 'red', 'D': 'brown', 'E': 'grey', 'F': 'blue',
+        'G': 'black', 'A': 'yellow', 'B': 'green'
+    }
+    
+    PITCH_PHONETIC_MAP = {
+        'C': 'charlie', 'D': 'delta', 'E': 'echo', 'F': 'foxtrot',
+        'G': 'golf', 'A': 'alpha', 'B': 'bravo'
+    }
+    
+    def __init__(self, settings: TalkingScoresSettings):
+        self.settings = settings
+    
+    def map_pitch(self, pitch, state: Optional[Dict] = None) -> str:
+        """
+        Map a music21 pitch to a human-readable description.
+        
+        Args:
+            pitch: music21 Pitch object
+            state: State dictionary for tracking accidental context
             
-        return final_events_by_bar
-
-    def update_events_for_measure(self, measure_stream, events, voice: int = 1, state=None):
+        Returns:
+            Human-readable pitch description
+        """
         if state is None:
             state = {}
-
-        for element in measure_stream.elements:
-            element_type = type(element).__name__
-            event = None
-            
-            if element_type == 'Note':
-                event = TSNote()
-                pitch_name = self.map_pitch(element.pitch, state)
-                event.pitch = TSPitch(pitch_name, self.map_octave(element.pitch.octave), element.pitch.ps, element.pitch.name[0])
-                if element.tie:
-                    event.tie = element.tie.type
-                event.expressions = element.expressions
-            elif element_type == 'Rest':
-                event = TSRest()
-            elif element_type == 'Chord':
-                event = TSChord()
-                chord_pitches = []
-                for p in element.pitches:
-                    pitch_name = self.map_pitch(p, state)
-                    chord_pitches.append(TSPitch(pitch_name, self.map_octave(p.octave), p.ps, p.name[0]))
-                event.pitches = chord_pitches
-                if element.tie:
-                    event.tie = element.tie.type
-            elif element_type == 'Dynamic':
-                # MODIFIED: Check settings before creating dynamic events
-                if settings.get('include_dynamics', True):
-                    event = TSDynamic(long_name=element.longName, short_name=element.value)
-            elif element_type == 'Voice':
-                self.update_events_for_measure(element, events, int(element.id), state=state)
-                continue
-            
-            if event is None:
-                continue
-
-            event.start_offset = element.offset
-            event.beat = element.beat
-            event.duration = ""
-            if (len(element.duration.tuplets) > 0):
-                if (element.duration.tuplets[0].type == "start"):
-                    if (element.duration.tuplets[0].fullName == "Triplet"):
-                        event.tuplets = "triplets "
-                    else:
-                        event.tuplets = element.duration.tuplets[0].fullName + " (" + str(element.duration.tuplets[0].tupletActual[0]) + " in " + str(element.duration.tuplets[0].tupletNormal[0]) + ") "
-                elif (element.duration.tuplets[0].type == "stop" and element.duration.tuplets[0].fullName != "Triplet"):
-                    event.endTuplets = "end tuplet "
-
-            if settings['dotPosition'] == "before":
-                event.duration += self.map_dots(element.duration.dots)
-            event.duration += self.map_duration(element.duration)
-            if settings['dotPosition'] == "after":
-                event.duration += " " + self.map_dots(element.duration.dots)
-            
-            events.setdefault(measure_stream.measureNumber, {})\
-                .setdefault(element.offset, {})\
-                .setdefault(voice, [])\
-                .append(event)
-
-    def group_chord_pitches_by_octave(self, chord):
-        chord_pitches_by_octave = {}
-        for pitch in chord.pitches:
-            chord_pitches_by_octave.setdefault(self._PITCH_MAP.get(str(pitch.octave), '?'), []).append(pitch.name)
-
-        return chord_pitches_by_octave
-
-    # for all / selected / unselected
-    def generate_midi_filename_sel(self, base_url, range_start=None, range_end=None, sel=""):
-        """Generates a MIDI URL for a selection of parts (all, selected, unselected)."""
-        # Build query parameters, now correctly including bsi and bpi
-        query_params = f"bsi={self.binary_selected_instruments}&bpi={self.binary_play_all}"
-        if sel:
-            query_params += f"&sel={sel}"
-        if range_start is not None:
-            query_params += f"&start={range_start}&end={range_end}"
-        # Return the full URL
-        return f"{base_url}?{query_params}"
-
-    def generate_part_descriptions(self, instrument, start_bar, end_bar):
-        part_descriptions = []
-        for pi in range(self.part_instruments[instrument][1], self.part_instruments[instrument][1]+self.part_instruments[instrument][2]):
-            part_descriptions.append(self.get_events_for_bar_range(start_bar, end_bar, pi))
-
-        return part_descriptions
-
-    def generate_midi_filenames(self, base_url, range_start=None, range_end=None, add_instruments=[]):
-        """Generates MIDI URLs for a specific instrument and its constituent parts."""
-        part_midis = []
-        instrument_midi = ""
-        last_ins = add_instruments[-1] if add_instruments else None
-
-        # Base query string now correctly includes bsi and bpi
-        query_string = f"bsi={self.binary_selected_instruments}&bpi={self.binary_play_all}"
-        if range_start is not None:
-            query_string += f"&start={range_start}&end={range_end}"
-
-        # Generate URLs for individual parts
-        for ins in add_instruments:
-            if self.part_instruments[ins][2] > 1:
-                start_part_index = self.part_instruments[ins][1]
-                end_part_index = start_part_index + self.part_instruments[ins][2]
-                for pi in range(start_part_index, end_part_index):
-                    part_midis.append(f"{base_url}?part={pi}&{query_string}")
-
-        # Generate the URL for the whole instrument
-        if last_ins is not None:
-            instrument_midi = f"{base_url}?ins={last_ins}&{query_string}"
-
-        return (instrument_midi, part_midis)
-
-    def generate_midi_for_instruments(self, prefix, range_start=None, range_end=None, add_instruments=[], output_path="", postfix_filename=""):
-        part_midis = []
-        s = stream.Score(id='temp')
-
-        if range_start is None and range_end is None:
-            for ins in add_instruments:
-                for pi in range(self.part_instruments[ins][1], self.part_instruments[ins][1]+self.part_instruments[ins][2]):
-                    s.insert(self.score.parts[pi])
-                    if self.part_instruments[ins][2] > 1:
-                        part_midis.append(self.generate_midi_parts_for_instrument(range_start, range_end, ins, pi-self.part_instruments[ins][1], output_path, postfix_filename))
-
-        else:  # specific measures
-            postfix_filename += "_" + str(range_start) + str(range_end)
-            for ins in add_instruments:
-                firstPart = True
-                for pi in range(self.part_instruments[ins][1], self.part_instruments[ins][1]+self.part_instruments[ins][2]):
-                    if self.part_instruments[ins][2] > 1:
-                        part_midis.append(self.generate_midi_parts_for_instrument(range_start, range_end, ins, pi-self.part_instruments[ins][1], output_path, postfix_filename))
-                    pi_measures = self.score.parts[pi].measures(range_start, range_end, collect=('Clef', 'TimeSignature', 'Instrument', 'KeySignature', 'TempoIndication'))
-                    if firstPart:
-                        if pi != 0:  # only part 0 has tempos
-                            self.insert_tempos(pi_measures, self.score.parts[0].measure(range_start).offset)
-                        firstPart = False
-
-                    # music21 v6.3.0 tries to expand repeats - which causes error if segment only includes the start repeat mark
-                    for m in pi_measures.getElementsByClass('Measure'):
-                        m.removeByClass('Repeat')
-                    s.insert(pi_measures)
-
-        base_filename = os.path.splitext(os.path.basename(self.filepath))[0]
-        midi_filename = os.path.join(output_path, f"{base_filename}{postfix_filename}.mid")
-        # todo - might need to add in tempos if part 0 is not included
-        if not os.path.exists(midi_filename):
-            s.write('midi', midi_filename)
-        part_midis = [prefix + os.path.basename(s) for s in part_midis]
-        return (prefix+os.path.basename(midi_filename), part_midis)
-
-    def generate_midi_parts_for_instrument(self, range_start=None, range_end=None, instrument=0, part=0, output_path="", postfix_filename=""):
-        s = stream.Score(id='temp')
-        if range_start is None and range_end is None:
-            s = stream.Score(id='temp')
-            s.insert(self.score.parts[self.part_instruments[instrument][1]+part])
-            base_filename = os.path.splitext(os.path.basename(self.filepath))[0]
-            midi_filename = os.path.join(output_path, f"{base_filename}{postfix_filename}_p{(part+1)}.mid")
-            if not os.path.exists(midi_filename):
-                s.write('midi', midi_filename)
-        else:  # specific measures
-            postfix_filename += "_" + str(range_start) + str(range_end)
-            s = stream.Score(id='temp')
-            print("506 instrument = " + str(instrument) + " part = " + str(part))
-            pi_measures = self.score.parts[self.part_instruments[instrument][1]+part].measures(range_start, range_end, collect=('Clef', 'TimeSignature', 'Instrument', 'KeySignature', 'TempoIndication'))
-            if self.part_instruments[instrument][1]+part != 0:  # only part 0 has tempos
-                self.insert_tempos(pi_measures, self.score.parts[0].measure(range_start).offset)
-
-            # music21 v6.3.0 tries to expand repeats - which causes error if segment only includes the start repeat mark
-            for m in pi_measures.getElementsByClass('Measure'):
-                m.removeByClass('Repeat')
-            s.insert(pi_measures)
-
-            base_filename = os.path.splitext(os.path.basename(self.filepath))[0]
-            midi_filename = os.path.join(output_path, f"{base_filename}{postfix_filename}_p{(part+1)}.mid")
-            if not os.path.exists(midi_filename):
-                s.write('midi', midi_filename)
-        return midi_filename
-
-    def generate_midi_for_part_range(self, range_start=None, range_end=None, parts=[], output_path=""):
-
-        base_filename = os.path.splitext(os.path.basename(self.filepath))[0]
-        if range_start is None and range_end is None:
-            # Export the whole score
-            midi_filename = os.path.join(output_path, f"{base_filename}.mid")
-            if not os.path.exists(midi_filename):
-                self.score.write('midi', midi_filename)
-            return midi_filename
-        elif len(parts) > 0:  # individual parts
-            for p in self.score.parts:
-                if p.id not in parts:
-                    continue
-
-                midi_filename = os.path.join(output_path, f"{base_filename}_p{p.id}_{range_start}_{range_end}.mid")
-                if not os.path.exists(midi_filename):
-                    midi_stream = p.measures(range_start, range_end, collect=('Clef', 'TimeSignature', 'Instrument', 'KeySignature', 'TempoIndication'))
-                    if p != self.score.parts[0]:  # only part 0 has tempos
-                        self.insert_tempos(midi_stream, self.score.parts[0].measure(range_start).offset)
-                    # music21 v6.3.0 tries to expand repeats - which causes error if segment only includes the start repeat mark
-                    for m in midi_stream.getElementsByClass('Measure'):
-                        m.removeByClass('Repeat')
-                    midi_stream.write('midi', midi_filename)
-                return midi_filename
-        else:  # both hands
-            midi_filename = os.path.join(output_path, f"{base_filename}_{range_start}_{range_end}.mid")
-            if not os.path.exists(midi_filename):
-                midi_stream = self.score.measures(range_start, range_end, collect=('Clef', 'TimeSignature', 'Instrument', 'KeySignature', 'TempoIndication'))
-                # music21 v6.3.0 tries to expand repeats - which causes error if segment only includes the start repeat mark
-                for pa in midi_stream.getElementsByClass('Part'):
-                    for m in pa.getElementsByClass('Measure'):
-                        m.removeByClass('Repeat')
-                midi_stream.write('midi', midi_filename)
-            return midi_filename
-
-        return None
-
-    # TODO need to make more efficient when working with multiple parts ie more than just the left hand piano part
-    # music21 might have a better way of doing this.  If part 0 is included then tempos are already present.
-    def insert_tempos(self, stream, offset_start):
-        if (self.last_tempo_inserted_index > 0):  # one tempo change might need to be in many segments - especially the last tempo change in the score
-            self.last_tempo_inserted_index -= 1
-        for mmb in self.score.metronomeMarkBoundaries()[self.last_tempo_inserted_index:]:
-            if (mmb[0] >= offset_start+stream.duration.quarterLength):  # ignore tempos that start after stream ends
-                return
-            if (mmb[1] > offset_start):  # if mmb ends during the segment
-                if (mmb[0]) <= offset_start:  # starts before segment so insert it at the start of the stream
-                    stream.insert(0, tempo.MetronomeMark(number=mmb[2].number))
-                    self.last_tempo_inserted_index += 1
-                else:  # starts during segment so insert it part way through the stream
-                    stream.insert(mmb[0]-offset_start, tempo.MetronomeMark(number=mmb[2].number))
-                    self.last_tempo_inserted_index += 1
-
-    def map_octave(self, octave):
-        global settings
-        if settings['octaveDescription'] == "figureNotes":
-            return self._OCTAVE_FIGURENOTES_MAP.get(octave, "?")
-        elif settings['octaveDescription'] == "name":
-            return self._OCTAVE_MAP.get(octave, "?")
-        elif settings['octaveDescription'] == "none":
-            return ""
-        elif settings['octaveDescription'] == "number":
-            return str(octave)
-
-        # return f"{self._PITCH_MAP.get(pitch[-1], '')} {pitch[0]}"
-
-    def map_pitch(self, pitch, state):
-        global settings
-        mode = settings.get('key_signature_accidentals', 'applied')
         
-        # Determine the base name (e.g., C, D, E or red, brown, green)
-        if settings['pitchDescription'] == "colourNotes":
-            base_name = self._PITCH_FIGURENOTES_MAP.get(pitch.step, "?")
-        elif settings['pitchDescription'] == "phonetic":
-            base_name = self._PITCH_PHONETIC_MAP.get(pitch.step, "?")
-        else: # Default to noteName or none
-             base_name = pitch.step if settings['pitchDescription'] == 'noteName' else ''
-
-        # If there's no accidental object, we're done.
-        if not pitch.accidental:
-            return base_name
-
-        # 1. Decide IF an accidental should be shown based on the mode
+        # Determine base name based on pitch description setting
+        if self.settings.rendering.pitch_description == "colourNotes":
+            base_name = self.PITCH_FIGURENOTES_MAP.get(pitch.step, "?")
+        elif self.settings.rendering.pitch_description == "phonetic":
+            base_name = self.PITCH_PHONETIC_MAP.get(pitch.step, "?")
+        elif self.settings.rendering.pitch_description == "noteName":
+            base_name = pitch.step
+        else:  # none
+            return ''
+        
+        # Handle accidentals if present
+        if pitch.accidental:
+            return self._add_accidental_to_pitch(base_name, pitch, state)
+        
+        return base_name
+    
+    def map_octave(self, octave_number: int) -> str:
+        """
+        Map an octave number to a human-readable description.
+        
+        Args:
+            octave_number: Numeric octave (1-7)
+            
+        Returns:
+            Human-readable octave description
+        """
+        octave_desc = self.settings.rendering.octave_description
+        
+        if octave_desc == "figureNotes":
+            return self.OCTAVE_FIGURENOTES_MAP.get(octave_number, "?")
+        elif octave_desc == "name":
+            return self.OCTAVE_NAME_MAP.get(octave_number, "?")
+        elif octave_desc == "number":
+            return str(octave_number)
+        else:  # none
+            return ""
+    
+    def _add_accidental_to_pitch(self, base_name: str, pitch, state: Dict) -> str:
+        """Add accidental information to a pitch name."""
+        mode = self.settings.rendering.key_signature_accidentals
+        
+        # Determine if accidental should be shown
         show_accidental = False
+        
         if mode == 'applied':
-            # Per user request: In "applied" mode, show sharps/flats, but NEVER naturals.
+            # Show sharps/flats but never naturals
             if pitch.accidental.name != 'natural':
                 show_accidental = True
         elif mode == 'standard':
-            # Show only accidentals that are explicitly displayed on the page
+            # Show only explicitly displayed accidentals
             if pitch.accidental.displayStatus:
                 show_accidental = True
         elif mode == 'onChange':
+            # Show when accidental changes from previous occurrence
             current_alter = pitch.alter
             step = pitch.step
             last_seen_alter = state.get(step)
             if last_seen_alter is None or current_alter != last_seen_alter:
-                state[step] = current_alter # Update state
+                state[step] = current_alter
                 show_accidental = True
         
         if not show_accidental:
             return base_name
-
-        # 2. If we should show it, decide HOW to format it
-        if settings.get('accidental_style') == 'symbols':
+        
+        # Format the accidental
+        if self.settings.rendering.accidental_style == 'symbols':
             symbol_map = {
                 'sharp': '♯', 'flat': '♭', 'natural': '♮',
                 'double-sharp': '𝄪', 'double-flat': '♭♭'
             }
             accidental_text = symbol_map.get(pitch.accidental.name, '')
             return f"{base_name}{accidental_text}"
-        else: # 'words'
+        else:  # 'words'
             accidental_text = pitch.accidental.fullName
             return f"{base_name} {accidental_text}"
 
-    def map_duration(self, duration):
-        global settings
-        if settings['rhythmDescription'] == "american":
-            return duration.type
-        elif settings['rhythmDescription'] == "british":
-            return self._DURATION_MAP.get(duration.type, f'Unknown duration {duration.type}')
-        elif settings['rhythmDescription'] == "none":
-            return ""
 
-    def map_dots(self, dots):
-        if settings['rhythmDescription'] == "none":
-            return ""
+class Music21TalkingScore(TalkingScoreBase):
+    """
+    Main implementation of talking score functionality using music21.
+    
+    This class coordinates all aspects of talking score generation including
+    parsing, analysis, and rendering while maintaining a clean interface.
+    """
+    
+    def __init__(self, musicxml_filepath):
+        # FIXED: Ensure filepath is always stored as a string for consistency
+        self.filepath = str(os.path.realpath(musicxml_filepath))
+        self.score = converter.parse(musicxml_filepath)
+        super(Music21TalkingScore, self).__init__()
+        
+        # Initialize component managers
+        self.settings_manager = SettingsManager()
+        self.duration_mapper = DurationMapper(self.settings_manager.settings)
+        self.pitch_mapper = PitchMapper(self.settings_manager.settings)
+        
+        # Score analysis data
+        self.part_instruments = {}
+        self.part_names = {}
+        self.selected_instruments = []
+        self.selected_part_names = []
+        self.binary_selected_instruments = 1
+        self.binary_play_all = 1
+        
+        # Initialize analysis components
+        self._initialize_analysis_components()
+    
+    def _initialize_analysis_components(self):
+        """Initialize musical analysis components."""
+        try:
+            self.music_analyser = MusicAnalyser()
+            self.score_analyzer = ScoreAnalyzer(self.score)
+        except Exception as e:
+            logger.warning(f"Failed to initialize analysis components: {e}")
+            self.music_analyser = None
+            self.score_analyzer = None
+    
+    def get_title(self) -> str:
+        """Get the title of the musical work."""
+        if self.score.metadata and self.score.metadata.title:
+            return self.score.metadata.title
+        
+        # Try to find title in text boxes (fallback)
+        for text_box in self.score.flatten().getElementsByClass('TextBox'):
+            if (hasattr(text_box, 'justify') and text_box.justify == 'center' and
+                hasattr(text_box, 'alignVertical') and text_box.alignVertical == 'top' and
+                hasattr(text_box, 'size') and text_box.size > 18):
+                return text_box.content
+        
+        return "Unknown Title"
+    
+    def get_composer(self) -> str:
+        """Get the composer of the musical work."""
+        if self.score.metadata and self.score.metadata.composer:
+            return self.score.metadata.composer
+        
+        # Try to find composer in text boxes (fallback)
+        for text_box in self.score.getElementsByClass('TextBox'):
+            if hasattr(text_box, 'style') and text_box.style.justify == 'right':
+                return text_box.content
+        
+        return "Unknown Composer"
+    
+    def get_metadata(self) -> ScoreMetadata:
+        """Get comprehensive metadata about the score."""
+        return ScoreMetadata(
+            title=self.get_title(),
+            composer=self.get_composer(),
+            number_of_bars=self.get_number_of_bars(),
+            number_of_parts=self.get_number_of_parts(),
+            time_signature=self.get_initial_time_signature(),
+            key_signature=self.get_initial_key_signature(),
+            tempo=self.get_initial_tempo()
+        )
+    
+    def get_number_of_bars(self) -> int:
+        """Get the number of measures in the score."""
+        try:
+            return len(self.score.parts[0].getElementsByClass('Measure'))
+        except (IndexError, AttributeError):
+            return 0
+    
+    def get_number_of_parts(self) -> int:
+        """Get the number of parts in the score."""
+        self.get_instruments()  # Ensure instruments are analyzed
+        return len(self.part_instruments)
+    
+    def get_initial_time_signature(self) -> str:
+        """Get the initial time signature of the score."""
+        try:
+            first_measure = self.score.parts[0].getElementsByClass('Measure')[0]
+            time_sigs = first_measure.getElementsByClass(meter.TimeSignature)
+            if time_sigs:
+                return self.describe_time_signature(time_sigs[0])
+        except (IndexError, AttributeError):
+            pass
+        return "Error reading time signature"
+    
+    def describe_time_signature(self, time_sig) -> str:
+        """Describe a time signature in human-readable format."""
+        if time_sig:
+            return " ".join(time_sig.ratioString.split("/"))
+        return "Unknown time signature"
+    
+    def get_initial_key_signature(self) -> str:
+        """Get the initial key signature of the score."""
+        try:
+            first_measure = self.score.parts[0].measures(1, 1)
+            key_sigs = first_measure.flatten().getElementsByClass('KeySignature')
+            if key_sigs:
+                return self.describe_key_signature(key_sigs[0])
+            else:
+                # Default to no accidentals
+                return self.describe_key_signature(key.KeySignature(0))
+        except (IndexError, AttributeError):
+            return "Error reading key signature"
+    
+    def describe_key_signature(self, key_sig) -> str:
+        """Describe a key signature in human-readable format."""
+        if key_sig.sharps > 0:
+            return f"{key_sig.sharps} sharps"
+        elif key_sig.sharps < 0:
+            return f"{abs(key_sig.sharps)} flats"
         else:
-            return self._DOTS_MAP.get(dots)
+            return "No sharps or flats"
+    
+    def get_initial_tempo(self) -> str:
+        """Get the initial tempo marking of the score."""
+        try:
+            tempo_boundaries = self.score.metronomeMarkBoundaries()
+            if tempo_boundaries:
+                first_tempo = tempo_boundaries[0][2]
+                return self.describe_tempo(first_tempo)
+        except (IndexError, AttributeError):
+            pass
+        return "No tempo specified"
+    
+    def describe_tempo(self, tempo_mark) -> str:
+        """Describe a tempo marking in human-readable format."""
+        tempo_mark = self.fix_tempo_number(tempo_mark)
         
-    def get_rhythm_range(self):
+        tempo_text = ""
+        if hasattr(tempo_mark, 'text') and tempo_mark.text:
+            tempo_text += f"{tempo_mark.text} ({math.floor(tempo_mark.number)} bpm @ {self._describe_tempo_referent(tempo_mark)})"
+        else:
+            tempo_text += f"{math.floor(tempo_mark.number)} bpm @ {self._describe_tempo_referent(tempo_mark)}"
+        
+        return tempo_text
+    
+    def _describe_tempo_referent(self, tempo_mark) -> str:
+        """Describe the referent (beat unit) of a tempo marking."""
+        if not hasattr(tempo_mark, 'referent'):
+            return "quarter note"
+        
+        return self.duration_mapper.map_duration(tempo_mark.referent)
+    
+    @staticmethod
+    def fix_tempo_number(tempo_mark):
+        """Fix tempo marks that have soundingNumber but not number."""
+        if not hasattr(tempo_mark, 'number') or tempo_mark.number is None:
+            if hasattr(tempo_mark, 'numberSounding') and tempo_mark.numberSounding is not None:
+                tempo_mark.number = tempo_mark.numberSounding
+            else:
+                tempo_mark.number = 120
+                if hasattr(tempo_mark, 'text'):
+                    tempo_mark.text = "Error - " + (tempo_mark.text or "")
+        return tempo_mark
+    
+    def get_instruments(self) -> List[str]:
         """
-        Finds all unique rhythm types present in the score, independent of user settings.
+        Analyze and return the instruments in the score.
+        
+        Returns:
+            List of instrument names
         """
-        # The _DURATION_MAP contains the canonical list of rhythm names we support.
-        # Its keys are the music21 duration types (e.g., 'quarter', 'half').
-        # Its values are the British English names (e.g., 'crotchet', 'minim').
-        valid_rhythm_types = self._DURATION_MAP.keys()
+        self.part_instruments = {}
+        self.part_names = {}
+        instrument_names = []
+        
+        try:
+            instrument_count = 1
+            
+            for part_index, instrument in enumerate(self.score.flatten().getInstruments()):
+                part_name = instrument.partName or f"Instrument {instrument_count} (unnamed)"
+                
+                # Check if this is a new instrument or continuation of previous
+                if (len(self.part_instruments) == 0 or 
+                    self.part_instruments[instrument_count-1][3] != instrument.partId):
+                    
+                    # New instrument
+                    self.part_instruments[instrument_count] = [part_name, part_index, 1, instrument.partId]
+                    instrument_names.append(part_name)
+                    instrument_count += 1
+                else:
+                    # Additional part of previous instrument
+                    self.part_instruments[instrument_count-1][2] += 1
+                    self._assign_part_names(instrument_count-1, part_index)
+            
+            logger.debug(f"Found {len(self.part_instruments)} instruments")
+            
+        except Exception as e:
+            logger.error(f"Error analyzing instruments: {e}")
+            
+        return instrument_names
+    
+    def _assign_part_names(self, instrument_index: int, part_index: int):
+        """Assign names to multiple parts of an instrument."""
+        num_parts = self.part_instruments[instrument_index + 1][2]
+        
+        if num_parts == 2:
+            # Piano-style naming
+            first_part_index = part_index - 1
+            self.part_names[first_part_index] = "Right hand"
+            self.part_names[part_index] = "Left hand"
+        else:
+            # Generic part naming
+            first_part_index = self.part_instruments[instrument_index + 1][1]
+            for i in range(num_parts):
+                self.part_names[first_part_index + i] = f"Part {i + 1}"
+    
+    def get_beat_division_options(self) -> List[Dict[str, str]]:
+        """
+        Get available beat division options based on the time signature.
+        
+        Returns:
+            List of dictionaries with 'display' and 'value' keys
+        """
+        try:
+            # Find the first time signature
+            time_sig = None
+            first_measure = self.score.parts[0].getElementsByClass('Measure')[0]
+            
+            for item in first_measure:
+                if isinstance(item, meter.TimeSignature):
+                    time_sig = item
+                    break
+            
+            if not time_sig:
+                time_sigs = self.score.getTimeSignatures()
+                if time_sigs:
+                    time_sig = time_sigs[0]
+            
+            if not time_sig:
+                return [{'display': 'Group by Bar (continuous)', 'value': 'bar'}]
+            
+            options = []
+            seen_values = set()
+            
+            def add_option(display: str, value: str):
+                if value not in seen_values:
+                    options.append({'display': display, 'value': value})
+                    seen_values.add(value)
+            
+            # Add "No Beats" option
+            add_option('Group by Bar (continuous)', 'bar')
+            
+            # Default music21 interpretation
+            default_beat_string = self.duration_mapper.map_duration(time_sig.beatDuration)
+            default_display = f"{time_sig.beatCount} {default_beat_string} beats (Default)"
+            default_value = f"{time_sig.beatCount}/{time_sig.beatDuration.quarterLength}"
+            add_option(default_display, default_value)
+            
+            # Face value interpretation
+            face_value_duration = duration.Duration(1.0 / time_sig.denominator)
+            face_value_beat_string = self.duration_mapper.map_duration(face_value_duration)
+            face_value_display = f"{time_sig.numerator} {face_value_beat_string} beats"
+            face_value_value = f"{time_sig.numerator}/{time_sig.denominator}"
+            add_option(face_value_display, face_value_value)
+            
+            # Compound meter interpretation
+            if time_sig.numerator % 3 == 0 and time_sig.numerator > 3:
+                compound_beat_count = time_sig.numerator // 3
+                simple_beat_name = self.duration_mapper.map_duration(face_value_duration)
+                compound_beat_string = f"Dotted {simple_beat_name}"
+                compound_display = f"{compound_beat_count} {compound_beat_string} beats"
+                compound_beat_duration_ql = (1.0 / time_sig.denominator) * 3
+                compound_value = f"{compound_beat_count}/{compound_beat_duration_ql}"
+                add_option(compound_display, compound_value)
+            
+            return options
+            
+        except Exception as e:
+            logger.error(f"Error generating beat division options: {e}")
+            return [{'display': 'Group by Bar (continuous)', 'value': 'bar'}]
+    
+    def get_rhythm_range(self) -> List[str]:
+        """Get all unique rhythm types present in the score."""
         found_rhythms = set()
-
-        for n in self.score.flatten().notesAndRests:
-            # We check the note's actual type directly against our map.
-            if n.duration.type in valid_rhythm_types:
-                # We add the corresponding British English name to our set.
-                found_rhythms.add(self._DURATION_MAP[n.duration.type])
         
-        # We sort the found rhythms based on the order they appear in the map (longest to shortest)
-        return sorted(list(found_rhythms), key=lambda r: list(self._DURATION_MAP.values()).index(r))
-
-
-    def get_octave_range(self):
-        """
-        Finds the highest and lowest octaves used in the score,
-        correctly handling both Notes and Chords.
-        """
+        try:
+            for element in self.score.flatten().notesAndRests:
+                rhythm_name = self.duration_mapper.map_duration(element.duration)
+                if rhythm_name and rhythm_name != "Unknown duration":
+                    found_rhythms.add(rhythm_name)
+        except Exception as e:
+            logger.error(f"Error finding rhythm range: {e}")
+        
+        # Sort rhythms by typical duration length
+        duration_order = ['semibreve', 'minim', 'crotchet', 'quaver', 'semi-quaver']
+        found_list = list(found_rhythms)
+        
+        def rhythm_sort_key(rhythm):
+            for i, standard in enumerate(duration_order):
+                if standard in rhythm:
+                    return i
+            return len(duration_order)  # Unknown rhythms at end
+        
+        return sorted(found_list, key=rhythm_sort_key)
+    
+    def get_octave_range(self) -> Dict[str, int]:
+        """Get the range of octaves used in the score."""
         all_octaves = []
-        # Iterate through all note and chord elements in the score
-        for element in self.score.flatten().notes:
-            if 'Chord' in element.classes:
-                # For a Chord, get the octave of each pitch within it
-                for p in element.pitches:
-                    all_octaves.append(p.octave)
-            elif 'Note' in element.classes:
-                # For a Note, get its single octave
-                all_octaves.append(element.pitch.octave)
+        
+        try:
+            for element in self.score.flatten().notes:
+                if hasattr(element, 'pitches'):  # Chord
+                    for pitch in element.pitches:
+                        all_octaves.append(pitch.octave)
+                elif hasattr(element, 'pitch'):  # Note
+                    all_octaves.append(element.pitch.octave)
+        except Exception as e:
+            logger.error(f"Error finding octave range: {e}")
         
         if not all_octaves:
             return {'min': 0, 'max': 0}
         
         return {'min': min(all_octaves), 'max': max(all_octaves)}
+    
+    def analyze_score(self, settings: TalkingScoresSettings) -> Dict[str, Any]:
+        """
+        Perform comprehensive analysis of the musical score.
+        
+        Args:
+            settings: Application settings for analysis
+            
+        Returns:
+            Dictionary containing analysis results
+        """
+        try:
+            # Update internal settings
+            self.settings_manager._settings = settings
+            self.duration_mapper = DurationMapper(settings)
+            self.pitch_mapper = PitchMapper(settings)
+            
+            # Perform musical analysis
+            if self.music_analyser:
+                self.music_analyser.setScore(self)
+            
+            # Compile analysis results
+            analysis_results = {
+                'general_summary': getattr(self.music_analyser, 'general_summary', ''),
+                'parts_summary': getattr(self.music_analyser, 'summary_parts', []),
+                'repetition_in_contexts': getattr(self.music_analyser, 'repetition_in_contexts', {}),
+                'immediate_repetition_contexts': getattr(self.music_analyser, 'immediate_repetition_contexts', {}),
+                'time_and_keys': self._analyze_structural_changes()
+            }
+            
+            return analysis_results
+            
+        except Exception as e:
+            logger.error(f"Error during score analysis: {e}")
+            raise AnalysisError(f"Failed to analyze score: {e}")
+    
+    def _analyze_structural_changes(self) -> Dict[int, List[str]]:
+        """Analyze time signature, key signature, and tempo changes."""
+        changes_by_bar = {}
+        
+        try:
+            first_part = self.score.parts[0]
+            
+            # Time signature changes
+            time_sigs = first_part.flatten().getElementsByClass('TimeSignature')
+            for i, ts in enumerate(time_sigs):
+                if hasattr(ts, 'measureNumber'):
+                    description = f"Time signature - {i+1} of {len(time_sigs)} is {self.describe_time_signature(ts)}."
+                    changes_by_bar.setdefault(ts.measureNumber, []).append(description)
+            
+            # Key signature changes
+            key_sigs = first_part.flatten().getElementsByClass('KeySignature')
+            for i, ks in enumerate(key_sigs):
+                if hasattr(ks, 'measureNumber'):
+                    description = f"Key signature - {i+1} of {len(key_sigs)} is {self.describe_key_signature(ks)}."
+                    changes_by_bar.setdefault(ks.measureNumber, []).append(description)
+            
+            # Tempo changes  
+            tempos = self.score.flatten().getElementsByClass('MetronomeMark')
+            for i, tempo_mark in enumerate(tempos):
+                if hasattr(tempo_mark, 'measureNumber'):
+                    description = f"Tempo - {i+1} of {len(tempos)} is {self.describe_tempo(tempo_mark)}."
+                    changes_by_bar.setdefault(tempo_mark.measureNumber, []).append(description)
+                    
+        except Exception as e:
+            logger.error(f"Error analyzing structural changes: {e}")
+        
+        return changes_by_bar
+    
+    def compare_parts_with_selected_instruments(self):
+        """
+        Compare available parts with selected instruments and update internal state.
+        
+        This method handles the complex logic of determining what MIDI files
+        to generate based on user selections.
+        """
+        settings = self.settings_manager.settings
+        
+        # Initialize selection tracking
+        self.selected_instruments = []
+        self.unselected_instruments = []
+        self.binary_selected_instruments = 1
+        self.selected_part_names = []
+        
+        # Build selected instruments list
+        for instrument_num in self.part_instruments.keys():
+            self.binary_selected_instruments = self.binary_selected_instruments << 1
+            if instrument_num in settings.playback.instruments:
+                self.selected_instruments.append(instrument_num)
+                self.binary_selected_instruments += 1
+            else:
+                self.unselected_instruments.append(instrument_num)
+        
+        # Build selected part names
+        for instrument_num in self.selected_instruments:
+            instrument_info = self.part_instruments[instrument_num]
+            instrument_name = instrument_info[0]
+            
+            if instrument_info[2] == 1:  # Single part instrument
+                self.selected_part_names.append(instrument_name)
+            else:  # Multi-part instrument
+                start_part_index = instrument_info[1]
+                for part_offset in range(instrument_info[2]):
+                    part_index = start_part_index + part_offset
+                    part_name = self.part_names.get(part_index, f"Part {part_offset + 1}")
+                    self.selected_part_names.append(f"{instrument_name} - {part_name}")
+        
+        # Calculate binary playback flags
+        self.binary_play_all = 1
+        if settings.playback.play_all:
+            self.binary_play_all = (self.binary_play_all << 1) + 1
+        else:
+            self.binary_play_all = self.binary_play_all << 1
+            
+        if settings.playback.play_selected:
+            self.binary_play_all = (self.binary_play_all << 1) + 1
+        else:
+            self.binary_play_all = self.binary_play_all << 1
+            
+        if settings.playback.play_unselected:
+            self.binary_play_all = (self.binary_play_all << 1) + 1
+        else:
+            self.binary_play_all = self.binary_play_all << 1
+        
+        logger.debug(f"Selected instruments: {self.selected_instruments}")
+        logger.debug(f"Binary flags - instruments: {self.binary_selected_instruments}, playback: {self.binary_play_all}")
 
 class HTMLTalkingScoreFormatter():
     def __init__(self, talking_score):
@@ -1031,7 +759,10 @@ class HTMLTalkingScoreFormatter():
         self.score: Music21TalkingScore = talking_score
         self.options = {}
 
-        options_path = self.score.filepath + '.opts'
+        # FIXED: Convert filepath to string to handle both str and Path objects
+        filepath_str = str(self.score.filepath)
+        options_path = filepath_str + '.opts'
+        
         try:
             with open(options_path, "r") as options_fh:
                 self.options = json.load(options_fh)
@@ -1039,10 +770,7 @@ class HTMLTalkingScoreFormatter():
             logger.warning(f"Options file not found: {options_path}. Using default settings.")
             pass
 
-        # --- THIS IS THE FIX ---
-        # Instead of creating a new dictionary, we update the global 'settings' object
-        # with the values loaded from the user's options file.
-        settings.update({
+        settings = {
             'barsAtATime': int(self.options.get("bars_at_a_time", 2)),
             'beat_division': self.options.get("beat_division"),
             'include_rests': self.options.get("include_rests", True),
@@ -1071,107 +799,215 @@ class HTMLTalkingScoreFormatter():
             'figureNoteColours': self.options.get("figureNoteColours", {}),
             'advanced_rhythm_colours': self.options.get("advanced_rhythm_colours", {}),
             'advanced_octave_colours': self.options.get("advanced_octave_colours", {}),
-        })
-    def _create_music_segment(self, start_bar, end_bar, web_path):
-        """Internal helper to generate a music segment dictionary for a given bar range."""
-        self._trigger_midi_generation(start_bar=start_bar, end_bar=end_bar)
-        
-        selected_instruments_midis = {}
-        for index, ins in enumerate(self.score.selected_instruments):
-            midis = self.score.generate_midi_filenames(base_url=web_path, range_start=start_bar, range_end=end_bar, add_instruments=[ins])
-            selected_instruments_midis[ins] = {"ins": ins,  "midi": midis[0], "midi_parts": midis[1]}
-        
-        midiAll = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start_bar, range_end=end_bar, sel="all")
-        midiSelected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start_bar, range_end=end_bar, sel="sel")
-        midiUnselected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start_bar, range_end=end_bar, sel="un")
-
-        selected_instruments_descriptions = {}
-        for index, ins in enumerate(self.score.selected_instruments):
-            # THE FIX IS HERE: We no longer modify the end_bar.
-            # The generate_part_descriptions function will now receive the correct, inclusive range.
-            selected_instruments_descriptions[ins] = self.score.generate_part_descriptions(instrument=ins, start_bar=start_bar, end_bar=end_bar)
-
-        return {
-            'start_bar': start_bar, 
-            'end_bar': end_bar, 
-            'selected_instruments_descriptions': selected_instruments_descriptions, 
-            'selected_instruments_midis': selected_instruments_midis, 
-            'midi_all': midiAll, 
-            'midi_sel': midiSelected, 
-            'midi_un': midiUnselected
+            'repetition_mode': self.options.get('repetition_mode', 'learning')
         }
-
+        
+        # FIXED: Initialize components with proper parameters
+        try:
+            # FIXED: Determine cache directory from score filepath (convert to string)
+            cache_directory = os.path.dirname(filepath_str)
+            
+            # Initialize MIDI coordinator with both required parameters
+            self.midi_coordinator = MIDICoordinator("", cache_directory)  # URL will be set in generateHTML
+            
+            # Initialize settings manager
+            self.settings_manager = SettingsManager(self.options)
+            
+            # Initialize other components
+            self.template_manager = TemplateManager()
+            self.color_renderer = ColorRenderer(self.settings_manager.settings.colors if hasattr(self.settings_manager.settings, 'colors') else None)
+            
+        except Exception as e:
+            logger.warning(f"Could not initialize advanced components: {e}. Using fallback mode.")
+            # Fallback: set to None and handle gracefully in other methods
+            self.midi_coordinator = None
+            self.settings_manager = None
+            self.template_manager = None
+            self.color_renderer = None
+    
+    def _load_settings_from_file(self):
+        """Load settings from the .opts file if available."""
+        options_path = str(self.score.filepath) + '.opts'
+        if os.path.exists(options_path):
+            self.score.settings_manager.load_from_file(options_path)
+            logger.debug(f"Loaded settings from {options_path}")
+    
     def generateHTML(self, output_path="", web_path=""):
-        global settings
-        from jinja2 import Environment, FileSystemLoader
-        env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)))
-        template = env.get_template('talkingscore.html')
+        """Generate HTML for the talking score."""
+        try:
+            from jinja2 import Environment, FileSystemLoader
+            env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)))
+            template = env.get_template('talkingscore.html')
 
-        self.score.get_instruments()
-        self.score.compare_parts_with_selected_instruments()
+            self.score.get_instruments()
+            self.score.compare_parts_with_selected_instruments()
 
-        self.music_analyser = MusicAnalyser()
-        self.music_analyser.setScore(self.score)
-        
-        start = self.score.score.parts[0].getElementsByClass('Measure')[0].number
-        end = self.score.score.parts[0].getElementsByClass('Measure')[-1].number
-
-        self._trigger_midi_generation(start, end)
-        
-        # Pass the clean web_path to all MIDI generation functions
-        selected_instruments_midis = {}
-        for index, ins in enumerate(self.score.selected_instruments):
-            # CORRECTED CALL
-            midis = self.score.generate_midi_filenames(base_url=web_path, range_start=start, range_end=end, add_instruments=[ins])
-            selected_instruments_midis[ins] = {"ins": ins,  "midi": midis[0], "midi_parts": midis[1]}
-
-        # CORRECTED CALLS
-        midiAll = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start, range_end=end, sel="all")
-        midiSelected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start, range_end=end, sel="sel")
-        midiUnselected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start, range_end=end, sel="un")
-        full_score_midis = {'selected_instruments_midis': selected_instruments_midis, 'midi_all': midiAll, 'midi_sel': midiSelected, 'midi_un': midiUnselected}
-
-        # Also pass the clean web_path here
-        music_segments = self.get_music_segments(output_path, web_path)
-        # Get beat division options to pass to the template
-        beat_division_options = self.score.get_beat_division_options()
-
-         # ADD THIS DEBUGGING CODE
-        print("--- DEBUG INFO: Beat Division Options ---")
-        print(beat_division_options)
-        # END DEBUGGING CODE
-
-        return template.render({
-            'settings': settings,
-            'basic_information': self.get_basic_information(),
-            'preamble': self.get_preamble(),
-            'full_score_midis': full_score_midis,
-            'music_segments': music_segments,
-            'beat_division_options': beat_division_options,
-            'instruments': self.score.part_instruments,
-            'part_names': self.score.part_names,
-            'binary_selected_instruments': self.score.binary_selected_instruments,
-            'binary_play_all': self.score.binary_play_all,
-            'play_all': settings['playAll'],
-            'play_selected': settings['playSelected'],
-            'play_unselected': settings['playUnselected'],
-            'time_and_keys': self.time_and_keys,
-            'parts_summary': self.music_analyser.summary_parts,
-            'general_summary': self.music_analyser.general_summary,
-            'repetition_in_contexts': self.music_analyser.repetition_in_contexts,
-            'selected_part_names': self.score.selected_part_names,
-            'immediate_repetition_contexts': self.music_analyser.immediate_repetition_contexts,
-        })
-    def _trigger_midi_generation(self, start_bar, end_bar):
-            # Local imports to prevent circular dependency at startup
-            from lib.midiHandler import MidiHandler
-            from types import SimpleNamespace
+            self.music_analyser = MusicAnalyser()
+            self.music_analyser.setScore(self.score)
             
-            logger.info(f"Pre-generating all MIDI files for bars {start_bar}-{end_bar}...")
-            
-            id_hash = os.path.basename(os.path.dirname(self.score.filepath))
-            xml_filename = os.path.basename(self.score.filepath)
+            start = self.score.score.parts[0].getElementsByClass('Measure')[0].number
+            end = self.score.score.parts[0].getElementsByClass('Measure')[-1].number
 
+            # FIXED: Initialize or update MIDI coordinator with proper paths
+            if self.midi_coordinator is None or not hasattr(self.midi_coordinator, 'base_url'):
+                cache_directory = output_path or os.path.dirname(self.score.filepath)
+                self.midi_coordinator = MIDICoordinator(web_path, cache_directory)
+            else:
+                # Update existing coordinator with new paths
+                self.midi_coordinator.base_url = web_path
+                self.midi_coordinator.cache_directory = output_path or os.path.dirname(self.score.filepath)
+
+            self._trigger_midi_generation(start, end)
+            
+            # Generate MIDI contexts
+            selected_instruments_midis = {}
+            for index, ins in enumerate(self.score.selected_instruments):
+                midis = self.score.generate_midi_filenames(base_url=web_path, range_start=start, range_end=end, add_instruments=[ins])
+                selected_instruments_midis[ins] = {"ins": ins,  "midi": midis[0], "midi_parts": midis[1]}
+
+            midiAll = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start, range_end=end, sel="all")
+            midiSelected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start, range_end=end, sel="sel")
+            midiUnselected = self.score.generate_midi_filename_sel(base_url=web_path, range_start=start, range_end=end, sel="un")
+            full_score_midis = {'selected_instruments_midis': selected_instruments_midis, 'midi_all': midiAll, 'midi_sel': midiSelected, 'midi_un': midiUnselected}
+
+            music_segments = self.get_music_segments(output_path, web_path)
+            beat_division_options = self.score.get_beat_division_options()
+
+            # FIXED: Create properly structured basic_information
+            basic_info = {
+                'title': self.score.get_title(),
+                'composer': self.score.get_composer()
+            }
+            
+            # FIXED: Create properly structured preamble
+            preamble_info = {
+                'time_signature': self.score.get_initial_time_signature(),
+                'key_signature': self.score.get_initial_key_signature(),
+                'tempo': self.score.get_initial_tempo(),
+                'number_of_bars': self.score.get_number_of_bars(),
+                'number_of_parts': self.score.get_number_of_parts(),
+            }
+
+            return template.render({
+                'settings': settings,  # Use the global settings dict for now
+                'basic_information': basic_info,  # FIXED: Now a proper dict
+                'preamble': preamble_info,  # FIXED: Now a proper dict
+                'full_score_midis': full_score_midis,
+                'music_segments': music_segments,
+                'beat_division_options': beat_division_options,
+                'instruments': self.score.part_instruments,
+                'part_names': self.score.part_names,
+                'binary_selected_instruments': self.score.binary_selected_instruments,
+                'binary_play_all': self.score.binary_play_all,
+                'play_all': settings['playAll'],
+                'play_selected': settings['playSelected'],
+                'play_unselected': settings['playUnselected'],
+                'time_and_keys': self.time_and_keys,
+                'parts_summary': self.music_analyser.summary_parts,
+                'general_summary': self.music_analyser.general_summary,
+                'repetition_in_contexts': self.music_analyser.repetition_in_contexts,
+                'selected_part_names': self.score.selected_part_names,
+                'immediate_repetition_contexts': self.music_analyser.immediate_repetition_contexts,
+            })
+            
+        except Exception as e:
+            logger.error(f"Error generating HTML: {e}")
+            raise TalkingScoreError(f"Failed to generate HTML: {e}")
+    
+    def _generate_music_segments(self, output_path: str, web_path: str) -> List[Dict[str, Any]]:
+        """Generate music segments with MIDI coordination."""
+        segments = []
+        settings = self.score.settings_manager.settings
+        
+        try:
+            # Get segment boundaries
+            start_bar, end_bar = self._get_score_range()
+            bars_at_a_time = settings.playback.bars_at_a_time
+            
+            # Handle pickup bars
+            segments.extend(self._handle_pickup_bars(start_bar, web_path))
+            
+            # Generate regular segments
+            current_bar = start_bar
+            while current_bar <= end_bar:
+                segment_end = min(current_bar + bars_at_a_time - 1, end_bar)
+                
+                segment = self._create_music_segment(current_bar, segment_end, output_path, web_path)
+                segments.append(segment)
+                
+                current_bar += bars_at_a_time
+            
+            return segments
+            
+        except Exception as e:
+            logger.error(f"Error generating music segments: {e}")
+            return []
+    
+    def _get_score_range(self) -> Tuple[int, int]:
+        """Get the start and end bar numbers for the score."""
+        try:
+            first_measure = self.score.score.parts[0].getElementsByClass('Measure')[0]
+            last_measure = self.score.score.parts[0].getElementsByClass('Measure')[-1]
+            return first_measure.number, last_measure.number
+        except (IndexError, AttributeError):
+            return 1, 1
+    
+    def _handle_pickup_bars(self, start_bar: int, web_path: str) -> List[Dict[str, Any]]:
+        """Handle pickup bars (anacrusis) if present."""
+        segments = []
+        
+        try:
+            first_measure = self.score.score.parts[0].getElementsByClass('Measure')[0]
+            
+            # Check for pickup bar
+            time_sig = first_measure.timeSignature or first_measure.previous('TimeSignature')
+            if (time_sig and 
+                first_measure.duration.quarterLength < time_sig.barDuration.quarterLength):
+                
+                logger.info(f"Pickup bar detected at measure {first_measure.number}")
+                
+                segment = self._create_music_segment(first_measure.number, first_measure.number, "", web_path)
+                segment['start_bar'] = 'Pickup'
+                segment['end_bar'] = ''
+                segments.append(segment)
+                
+        except Exception as e:
+            logger.warning(f"Error handling pickup bars: {e}")
+        
+        return segments
+    
+    def _create_music_segment(self, start_bar: int, end_bar: int, output_path: str, web_path: str) -> Dict[str, Any]:
+        """Create a single music segment with all necessary data."""
+        # Trigger MIDI generation for this segment
+        self._trigger_midi_generation(start_bar, end_bar)
+        
+        # Generate MIDI URLs
+        midi_context = self._generate_midi_context(start_bar, end_bar, web_path)
+        
+        # Generate musical descriptions
+        descriptions = self._generate_segment_descriptions(start_bar, end_bar)
+        
+        # Combine into segment
+        segment = {
+            'start_bar': start_bar,
+            'end_bar': end_bar,
+            'selected_instruments_descriptions': descriptions,
+            **midi_context
+        }
+        
+        return segment
+    
+    def _trigger_midi_generation(self, start_bar: int, end_bar: int):
+        """Trigger MIDI generation for a segment."""
+        from lib.midiHandler import MidiHandler
+        from types import SimpleNamespace
+        
+        try:
+            # FIXED: Ensure proper path handling
+            filepath_str = str(self.score.filepath)
+            file_id = os.path.basename(os.path.dirname(filepath_str))
+            xml_filename = os.path.basename(filepath_str)
+            
             get_params = {
                 'start': str(start_bar),
                 'end': str(end_bar),
@@ -1181,112 +1017,143 @@ class HTMLTalkingScoreFormatter():
             }
             dummy_request = SimpleNamespace(GET=get_params)
             
-            try:
-                # Instantiate the handler
-                mh = MidiHandler(dummy_request, id_hash, xml_filename)
-                # --- PERFORMANCE FIX: Pass the already-parsed score object ---
-                mh.score = self.score.score
-                # Call the master generation function
-                mh.make_midi_files()
-                logger.info(f"Successfully generated MIDIs for bars {start_bar}-{end_bar}.")
-            except Exception as e:
-                logger.error(f"Failed to pre-generate MIDI files for bars {start_bar}-{end_bar}: {e}", exc_info=True)
-
-    def get_basic_information(self):
-        return {
-            'title': self.score.get_title(),
-            'composer': self.score.get_composer(),
-        }
-
-    def get_preamble(self):
-        return {
-            'time_signature': self.score.get_initial_time_signature(),
-            'key_signature': self.score.get_initial_key_signature(),
-            'tempo': self.score.get_initial_tempo(),
-            'number_of_bars': self.score.get_number_of_bars(),
-            'number_of_parts': self.score.get_number_of_parts(),
-        }
-
-    def get_music_segments(self, output_path, web_path):
-        global settings
-        logger.info("Start of get_music_segments")
-
-        music_segments = []
-        
-        # --- PREAMBLE DATA COLLECTION ---
-        self.time_and_keys = {}
-        total = len(self.score.score.parts[0].flatten().getElementsByClass('TimeSignature'))
-        for count, ts in enumerate(self.score.score.parts[0].flatten().getElementsByClass('TimeSignature')):
-            description = "Time signature - " + str(count+1) + " of " + str(total) + " is " + self.score.describe_time_signature(ts) + ".  "
-            self.time_and_keys.setdefault(ts.measureNumber, []).append(description)
-
-        total = len(self.score.score.parts[0].flatten().getElementsByClass('KeySignature'))
-        for count, ks in enumerate(self.score.score.parts[0].flatten().getElementsByClass('KeySignature')):
-            description = "Key signature - " + str(count+1) + " of " + str(total) + " is " + self.score.describe_key_signature(ks) + ".  "
-            self.time_and_keys.setdefault(ks.measureNumber, []).append(description)
-        
-        self.score.timeSigs = {}
-        previous_ts = self.score.score.parts[0].getElementsByClass('Measure')[0].getTimeSignatures()[0] if self.score.score.parts[0].hasMeasures() else self.score.get_initial_time_signature()
-
-        # --- CORRECTED ANACRUSIS HANDLING ---
-        start_bar_for_loop = self.score.score.parts[0].getElementsByClass('Measure')[0].number
-        first_measure = self.score.score.parts[0].getElementsByClass('Measure')[0]
-        
-        # A pickup measure's duration is shorter than the time signature's bar duration.
-        active_time_sig = first_measure.timeSignature or previous_ts
-        if active_time_sig and first_measure.duration.quarterLength < active_time_sig.barDuration.quarterLength:
-            pickup_bar_num = first_measure.number
-            logger.info(f"Anacrusis (pickup bar) detected at measure {pickup_bar_num}.")
+            # Create MIDI handler and trigger generation
+            midi_handler = MidiHandler(dummy_request, file_id, xml_filename)
+            midi_handler.score = self.score.score  # Pass pre-parsed score
+            midi_handler.make_midi_files()
             
-            self.score.timeSigs[pickup_bar_num] = previous_ts
-
-            segment = self._create_music_segment(start_bar=pickup_bar_num, end_bar=pickup_bar_num, web_path=web_path)
+            logger.debug(f"Triggered MIDI generation for bars {start_bar}-{end_bar}")
             
-            segment['start_bar'] = 'Pickup'
-            segment['end_bar'] = ''
-            music_segments.append(segment)
-            
-            # Ensure the main loop starts after the pickup bar
-            start_bar_for_loop = pickup_bar_num + 1
-
-        # --- MAIN LOOP FOR REGULAR BARS ---
-        # Adjust total bars count if there was a pickup bar not numbered 0
-        total_measures = self.score.score.parts[0].getElementsByClass('Measure')[-1].number
+        except Exception as e:
+            logger.error(f"Failed to trigger MIDI generation for bars {start_bar}-{end_bar}: {e}")
+    
+    def _generate_midi_context(self, start_bar: int, end_bar: int, web_path: str) -> Dict[str, Any]:
+        """Generate MIDI URLs and context for a segment."""
+        from .midi_coordinator import MIDIUrlGenerator
         
-        for bar_index in range(start_bar_for_loop, total_measures + 1, settings['barsAtATime']):
-            end_bar_index = bar_index + settings['barsAtATime'] - 1
-            if end_bar_index > total_measures:
-                end_bar_index = total_measures
-
-            if self.score.score.parts[0].measure(bar_index) is None:
-                break
+        try:
+            url_generator = MIDIUrlGenerator(web_path)
             
-            # Pre-populate time signatures for the segment
-            for checkts in range(bar_index, end_bar_index + 1):
-                measure_at_ts = self.score.score.parts[0].measure(checkts)
-                if measure_at_ts and len(measure_at_ts.getElementsByClass(meter.TimeSignature)) > 0:
-                    previous_ts = measure_at_ts.getElementsByClass(meter.TimeSignature)[0]
-                self.score.timeSigs[checkts] = previous_ts
+            # Base parameters for this segment
+            base_params = {
+                'bsi': self.score.binary_selected_instruments,
+                'bpi': self.score.binary_play_all,
+                'start': start_bar,
+                'end': end_bar
+            }
+            
+            # Generate selection URLs (all/selected/unselected)
+            selection_urls = url_generator.generate_selection_urls(base_params)
+            
+            # Generate individual instrument URLs
+            instrument_midis = {}
+            for instrument_num in self.score.selected_instruments:
+                instrument_params = base_params.copy()
+                instrument_params['ins'] = instrument_num
+                instrument_url = url_generator.generate_midi_url("", **instrument_params)
+                
+                # Generate part URLs if instrument has multiple parts
+                part_urls = []
+                instrument_info = self.score.part_instruments[instrument_num]
+                if instrument_info[2] > 1:  # Multiple parts
+                    start_part_index = instrument_info[1]
+                    for part_offset in range(instrument_info[2]):
+                        part_index = start_part_index + part_offset
+                        part_params = base_params.copy()
+                        part_params['part'] = part_index
+                        part_url = url_generator.generate_midi_url("", **part_params)
+                        part_urls.append(part_url)
+                
+                instrument_midis[instrument_num] = {
+                    'ins': instrument_num,
+                    'midi': instrument_url,
+                    'midi_parts': part_urls
+                }
+            
+            return {
+                'midi_all': selection_urls.get('midi_all', ''),
+                'midi_sel': selection_urls.get('midi_sel', ''),
+                'midi_un': selection_urls.get('midi_un', ''),
+                'selected_instruments_midis': instrument_midis
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating MIDI context: {e}")
+            return {
+                'midi_all': '', 'midi_sel': '', 'midi_un': '',
+                'selected_instruments_midis': {}
+            }
+    
+    def _generate_segment_descriptions(self, start_bar: int, end_bar: int) -> Dict[int, List[Dict[int, Any]]]:
+        """Generate musical descriptions for a segment."""
+        descriptions = {}
+        
+        try:
+            for instrument_num in self.score.selected_instruments:
+                instrument_descriptions = []
+                instrument_info = self.score.part_instruments[instrument_num]
+                
+                # Generate descriptions for each part of this instrument
+                start_part_index = instrument_info[1]
+                for part_offset in range(instrument_info[2]):
+                    part_index = start_part_index + part_offset
+                    
+                    # Get events for this part and bar range
+                    part_events = self.score.get_events_for_bar_range(start_bar, end_bar, part_index)
+                    instrument_descriptions.append(part_events)
+                
+                descriptions[instrument_num] = instrument_descriptions
+            
+            return descriptions
+            
+        except Exception as e:
+            logger.error(f"Error generating segment descriptions: {e}")
+            return {}
 
-            segment = self._create_music_segment(start_bar=bar_index, end_bar=end_bar_index, web_path=web_path)
-            music_segments.append(segment)
 
-        return music_segments
+# Global settings compatibility - will be deprecated in future versions
+settings = {}
+
+def get_contrast_color(hex_color: str) -> str:
+    """
+    Legacy function for color contrast calculation.
+    
+    This function is maintained for backwards compatibility.
+    New code should use ColorUtilities.get_contrast_color() instead.
+    """
+    from .color_utilities import ColorUtilities
+    return ColorUtilities.get_contrast_color(hex_color)
+
+def render_colourful_output(text: str, pitch_letter: str, element_type: str, settings_dict: Dict[str, Any]) -> str:
+    """
+    Legacy function for colored text rendering.
+    
+    This function is maintained for backwards compatibility.
+    New code should use ColorRenderer.render_colored_text() instead.
+    """
+    try:
+        from .color_utilities import ColorRenderer
+        from .settings_manager import TalkingScoresSettings
+        
+        # Convert settings dict to proper settings object
+        settings_obj = TalkingScoresSettings.from_dict(settings_dict)
+        color_renderer = ColorRenderer(settings_obj.colors)
+        
+        return color_renderer.render_colored_text(text, pitch_letter, element_type)
+    except Exception as e:
+        logger.error(f"Error in legacy color rendering: {e}")
+        return text  # Fallback to uncolored text
 
 
-# if __name__ == '__main__':
-# 
-#     # testScoreFilePath = '../talkingscoresapp/static/data/macdowell-to-a-wild-rose.xml'
-#     testScoreFilePath = '../media/172a28455fa5cfbdaa4eecd5f63a0a2ebaddd92d569980fb402811b9cd5cce4a/MozartPianoSonata.xml'
-#     # testScoreFilePath = '../talkingscores/talkingscoresapp/static/data/bach-2-part-invention-no-13.xml'
-# 
-#     testScoreOutputFilePath = testScoreFilePath.replace('.xml', '.html')
-# 
-#     testScore = Music21TalkingScore(testScoreFilePath)
-#     tsf = HTMLTalkingScoreFormatter(testScore)
-#     html = tsf.generateHTML()
-# 
-#     with open(testScoreOutputFilePath, "wb") as fh:
-#         fh.write(html)
-# 
-#     os.system(f'open http://0.0.0.0:8000/static/data/{os.path.basename(testScoreOutputFilePath)}')
+# Backwards compatibility exports
+__all__ = [
+    'Music21TalkingScore',
+    'HTMLTalkingScoreFormatter', 
+    'TalkingScoreBase',
+    'TalkingScoreError',
+    'ScoreParsingError',
+    'AnalysisError',
+    'get_contrast_color',
+    'render_colourful_output'
+]
+                

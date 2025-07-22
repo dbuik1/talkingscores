@@ -1,0 +1,8 @@
+<!-- Beat-by-Beat Musical Content Rendering -->
+{% if settings.beat_division == 'bar' or segment.start_bar == 'Pickup' %}
+    {# Render as continuous paragraph #}
+    {% include 'partials/continuous_rendering.html' %}
+{% else %}
+    {# Render beat-by-beat #}
+    {% include 'partials/beat_by_beat_rendering.html' %}
+{% endif %}

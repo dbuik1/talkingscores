@@ -1,0 +1,24 @@
+<!-- Individual Bar Descriptions -->
+{% for bar, time_point_list in part_description.items %}
+    <div class="bar-description" role="region" aria-labelledby="bar-heading-{{ bar }}-{{ segment.start_bar }}">
+        
+        <h5 id="bar-heading-{{ bar }}-{{ segment.start_bar }}">
+            Bar: {% if segment.start_bar == 'Pickup' %}Pickup{% else %}{{ bar }}{% endif %}
+        </h5>
+        
+        <!-- Metadata Information -->
+        {% if bar in time_and_keys %}
+            <div class="meta-info" role="note" aria-label="Bar metadata">
+                {% for metadata in time_and_keys[bar] %}
+                    {{ metadata }}<br>
+                {% endfor %}
+            </div>
+        {% endif %}
+        
+        <!-- Repetition Information -->
+        {% include 'partials/repetition_info.html' %}
+        
+        <!-- Musical Events -->
+        {% include 'partials/musical_events.html' %}
+    </div>
+{% endfor %}

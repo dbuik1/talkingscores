@@ -1,0 +1,253 @@
+<!-- JavaScript for Score Functionality -->
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Initialize score functionality
+        const scoreController = new ScoreController();
+        scoreController.init();
+    });
+    
+    /**
+     * Main controller for score page functionality
+     */
+    class ScoreController {
+        constructor() {
+            this.elements = {
+                body: document.body,
+                navRibbon: document.querySelector('.score-nav-ribbon'),
+                ribbonLinks: document.querySelectorAll('.score-nav-ribbon li a'),
+                segments: document.querySelectorAll('div[id^="segment-"]'),
+                stopBtn: document.getElementById('stop-playback-btn'),
+                playLinks: document.querySelectorAll('.lnkPlay'),
+                tempoSelects: document.querySelectorAll('.ddlTempo'),
+                clickSelects: document.querySelectorAll('.ddlClick')
+            };
+        }
+    
+        /**
+         * Initialize all score functionality
+         */
+        init() {
+            this.initializeLinkUrls();
+            this.setupEventListeners();
+            this.setupIntersectionObserver();
+        }
+    
+        /**
+         * Initialize all play links with proper URLs
+         */
+        initializeLinkUrls() {
+            this.elements.playLinks.forEach(link => this.updateLinkUrl(link));
+        }
+    
+        /**
+         * Set up all event listeners
+         */
+        setupEventListeners() {
+            // Playback controls
+            this.setupPlaybackControls();
+            
+            // Dropdown controls
+            this.setupDropdownControls();
+            
+            // Navigation controls
+            this.setupNavigationControls();
+            
+            // Stop button
+            this.setupStopButton();
+        }
+    
+        /**
+         * Set up playback link event handling
+         */
+        setupPlaybackControls() {
+            this.elements.body.addEventListener('click', (e) => {
+                if (e.target.matches('.lnkPlay')) {
+                    e.preventDefault();
+                    this.handlePlaybackClick(e.target);
+                }
+            });
+        }
+    
+        /**
+         * Handle playback link clicks
+         */
+        handlePlaybackClick(link) {
+            const finalUrl = link.dataset.finalUrl;
+            if (finalUrl) {
+                try {
+                    MIDIjs.play(finalUrl);
+                } catch (error) {
+                    console.error('Failed to play MIDI:', error);
+                }
+            } else {
+                console.error('No final URL found for playback link:', link);
+            }
+        }
+    
+        /**
+         * Set up dropdown control event handling
+         */
+        setupDropdownControls() {
+            this.elements.body.addEventListener('change', (e) => {
+                if (e.target.matches('.ddlTempo, .ddlClick')) {
+                    this.handleDropdownChange(e.target);
+                }
+            });
+        }
+    
+        /**
+         * Handle dropdown changes and sync across sections
+         */
+        handleDropdownChange(changedElement) {
+            const isGlobalControl = changedElement.closest('#global-controls');
+            
+            if (isGlobalControl) {
+                this.syncDropdownValues(changedElement);
+            }
+            
+            // Update all play links after any dropdown change
+            this.elements.playLinks.forEach(link => this.updateLinkUrl(link));
+        }
+    
+        /**
+         * Sync dropdown values across all sections
+         */
+        syncDropdownValues(changedElement) {
+            const isTempo = changedElement.matches('.ddlTempo');
+            const newValue = changedElement.value;
+            const selector = isTempo ? '.ddlTempo' : '.ddlClick';
+            
+            document.querySelectorAll(selector).forEach(dropdown => {
+                dropdown.value = newValue;
+            });
+        }
+    
+        /**
+         * Update a play link's final URL based on current dropdown values
+         */
+        updateLinkUrl(link) {
+            const parentScope = link.closest('#global-controls, div[id^="segment-"]');
+            if (!parentScope) return;
+    
+            const baseUrl = link.dataset.baseUrl;
+            if (!baseUrl) return;
+    
+            const tempo = parentScope.querySelector('.ddlTempo')?.value || '100';
+            const click = parentScope.querySelector('.ddlClick')?.value || 'n';
+    
+            const finalUrl = `${baseUrl}&t=${tempo}&c=${click}`;
+            link.dataset.finalUrl = finalUrl;
+        }
+    
+        /**
+         * Set up navigation controls
+         */
+        setupNavigationControls() {
+            if (!this.elements.navRibbon) return;
+    
+            this.elements.navRibbon.addEventListener('click', (e) => {
+                this.handleNavigationClick(e);
+            });
+        }
+    
+        /**
+         * Handle navigation link clicks
+         */
+        handleNavigationClick(event) {
+            const targetLink = event.target.closest('a');
+            if (!targetLink) return;
+    
+            const href = targetLink.getAttribute('href');
+            
+            if (href === '#') {
+                event.preventDefault();
+                this.scrollToTop();
+                return;
+            }
+    
+            const targetElement = document.querySelector(href);
+            if (targetElement) {
+                event.preventDefault();
+                this.smoothScrollTo(targetElement);
+                history.replaceState(null, null, href);
+            }
+        }
+    
+        /**
+         * Scroll to top of page
+         */
+        scrollToTop() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            history.replaceState(null, null, ' ');
+        }
+    
+        /**
+         * Smooth scroll to target element
+         */
+        smoothScrollTo(element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    
+        /**
+         * Set up stop button functionality
+         */
+        setupStopButton() {
+            if (this.elements.stopBtn) {
+                this.elements.stopBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    try {
+                        MIDIjs.stop();
+                    } catch (error) {
+                        console.error('Failed to stop MIDI playback:', error);
+                    }
+                });
+            }
+        }
+    
+        /**
+         * Set up intersection observer for active navigation highlighting
+         */
+        setupIntersectionObserver() {
+            if (!('IntersectionObserver' in window) || 
+                this.elements.segments.length === 0 || 
+                this.elements.ribbonLinks.length === 0) {
+                return;
+            }
+    
+            const observerOptions = {
+                root: null,
+                rootMargin: '0px 0px -50% 0px',
+                threshold: 0
+            };
+    
+            const observer = new IntersectionObserver((entries) => {
+                this.handleIntersectionChanges(entries);
+            }, observerOptions);
+    
+            this.elements.segments.forEach(segment => {
+                observer.observe(segment);
+            });
+        }
+    
+        /**
+         * Handle intersection observer changes for navigation highlighting
+         */
+        handleIntersectionChanges(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const segmentId = entry.target.getAttribute('id');
+                    const correspondingLink = document.querySelector(
+                        `.score-nav-ribbon li a[href="#${segmentId}"]`
+                    );
+                    
+                    if (correspondingLink) {
+                        this.elements.ribbonLinks.forEach(link => {
+                            link.classList.remove('active');
+                        });
+                        correspondingLink.classList.add('active');
+                    }
+                }
+            });
+        }
+    }
+    </script>

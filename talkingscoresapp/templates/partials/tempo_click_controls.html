@@ -1,0 +1,19 @@
+<!-- Tempo and Click Track Controls -->
+<div class="tempo-click-controls" role="group" aria-label="Tempo and click track settings">
+    <label for="tempo-{{ forloop.parentloop.counter0|default:'global' }}">
+        Tempo:
+        <select class="ddlTempo" name="tempo" id="tempo-{{ forloop.parentloop.counter0|default:'global' }}">
+            <option value="50">50%</option>
+            <option value="100" selected>100%</option>
+            <option value="150">150%</option>
+        </select>
+    </label>
+    
+    <label for="click-{{ forloop.parentloop.counter0|default:'global' }}">
+        Click:
+        <select class="ddlClick" name="click" id="click-{{ forloop.parentloop.counter0|default:'global' }}">
+            <option value="n">None</option>
+            <option value="be">Bars / Beats</option>
+        </select>
+    </label>
+</div>

@@ -1,0 +1,61 @@
+<!-- Individual Music Segment -->
+<section id="segment-{{ segment.start_bar }}" class="music-segment" 
+         aria-labelledby="segment-heading-{{ segment.start_bar }}">
+    
+    <!-- Segment Header -->
+    <header>
+        <h2 id="segment-heading-{{ segment.start_bar }}">
+            {% if segment.start_bar == 'Pickup' %}
+                Pickup Bar
+            {% else %}
+                Bar{% if segment.start_bar != segment.end_bar %}s{% endif %} 
+                {{ segment.start_bar }}
+                {% if segment.start_bar != segment.end_bar %} to {{ segment.end_bar }}{% endif %}
+            {% endif %}
+        </h2>
+    </header>
+
+    <!-- Segment Controls -->
+    <div class="segment-controls">
+        {% include 'partials/tempo_click_controls.html' %}
+        
+        <!-- Segment Playback Options -->
+        {% set segment_label = "bars " ~ segment.start_bar ~ " to " ~ segment.end_bar if segment.start_bar != 'Pickup' and segment.start_bar != segment.end_bar else "bar " ~ segment.start_bar if segment.start_bar != 'Pickup' else "Pickup Bar" %}
+        
+        <div class="segment-playback" role="group" aria-labelledby="segment-playback-{{ segment.start_bar }}">
+            <h3 id="segment-playback-{{ segment.start_bar }}" class="sr-only">Playback options for {{ segment_label }}</h3>
+            
+            {% if play_all %}
+                <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_all }}"
+                   aria-label="Play all instruments for {{ segment_label }}">
+                    Play All - {{ segment_label }}
+                </a><br>
+            {% endif %}
+            
+            {% if play_selected %}
+                <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_sel }}"
+                   aria-label="Play selected instruments for {{ segment_label }}">
+                    Play Selected - {{ segment_label }}
+                </a><br>
+            {% endif %}
+            
+            {% if play_unselected %}
+                <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_un }}"
+                   aria-label="Play unselected instruments for {{ segment_label }}">
+                    Play Unselected - {{ segment_label }}
+                </a><br>
+            {% endif %}
+        </div>
+
+        <!-- Instrument MIDIs for Segment -->
+        <div class="segment-instruments" role="group" aria-labelledby="segment-instruments-{{ segment.start_bar }}">
+            <h3 id="segment-instruments-{{ segment.start_bar }}">Instrument MIDIs</h3>
+            {% include 'partials/instrument_list.html' with instrument_midis=segment.selected_instruments_midis segment_label=segment_label %}
+        </div>
+    </div>
+
+    <!-- Musical Content -->
+    <div class="segment-content">
+        {% include 'partials/segment_descriptions.html' %}
+    </div>
+</section>

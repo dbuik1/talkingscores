@@ -1,0 +1,53 @@
+<!-- Beat-by-Beat Rendering -->
+{% set current_integer_beat = 0 %}
+{% set previous_event = None %}
+{% set is_first_event = true %}
+
+{% for time_point in time_point_list %}
+    {% set integer_beat = (time_point.beat - 0.001)|round|int if time_point.beat is number and time_point.beat > 0 else current_integer_beat %}
+    
+    {% if integer_beat > current_integer_beat %}
+        {% if not is_first_event %}</span></p>{% endif %}
+        <p class="beat-group">
+            <strong>Beat {{ integer_beat }}:</strong> 
+            <span class="beat-content">
+        {% set current_integer_beat = integer_beat %}
+    {% elif not is_first_event %}
+        , 
+    {% endif %}
+    
+    {# Filter and render events for this time point #}
+    {% set filtered_events = [] %}
+    {% set has_note_or_chord = false %}
+    
+    {% for voice, events_in_voice in time_point.voices|dictsort %}
+        {% for event in events_in_voice %}
+            {% if event.__class__.__name__ in ['TSNote', 'TSChord'] %}
+                {% set has_note_or_chord = true %}
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+    
+    {% for voice, events_in_voice in time_point.voices|dictsort %}
+        {% for event in events_in_voice %}
+            {% set event_type = event.__class__.__name__ %}
+            {% if has_note_or_chord %}
+                {% if event_type in ['TSNote', 'TSChord', 'TSDynamic'] %}
+                    {% set filtered_events = filtered_events + [event] %}
+                {% endif %}
+            {% else %}
+                {% set filtered_events = filtered_events + [event] %}
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+    
+    {% for event in filtered_events %}
+        {% if not forloop.first %} - together with {% endif %}
+        {{ event.render(settings, previous_event)|join(' ')|safe }}
+        {% set previous_event = event %}
+    {% endfor %}
+    
+    {% set is_first_event = false %}
+{% endfor %}
+
+{% if not is_first_event %}</span></p>{% endif %}

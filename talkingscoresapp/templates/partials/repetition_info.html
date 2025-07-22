@@ -1,0 +1,13 @@
+<!-- Repetition Analysis Information -->
+{% set detailed_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
+{% set learning_info = immediate_repetition_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
+
+{% if settings.repetition_mode == 'learning' and learning_info %}
+    <div class="repetition-info" role="note" aria-label="Repetition information">
+        {{ learning_info.text }}
+    </div>
+{% elif settings.repetition_mode == 'detailed' and detailed_info %}
+    <div class="repetition-info" role="note" aria-label="Detailed repetition analysis">
+        <strong>Repetition:</strong> {{ detailed_info }}
+    </div>
+{% endif %}
