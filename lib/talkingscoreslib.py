@@ -89,6 +89,10 @@ def render_colourful_output(text, pitch_letter, element_type, settings):
     Returns:
         str: HTML-wrapped text with styling, or original text if no coloring
     """
+    # CHECK FOR GLOBAL DISABLE FIRST
+    if settings.get('disable_all_coloring', False):
+        return text
+    
     rendered_text = text
     color_to_use = None
     pitch_color = settings.get("figureNoteColours", {}).get(pitch_letter)
@@ -2123,6 +2127,7 @@ class HTMLTalkingScoreFormatter():
             'advanced_rhythm_colours': self.options.get("advanced_rhythm_colours", {}),
             'advanced_octave_colours': self.options.get("advanced_octave_colours", {}),
             'enharmonic_conversion': self.options.get("enharmonic_conversion", False),
+            'disable_all_coloring': self.options.get("disable_all_coloring", False),
         })
 
     def _create_music_segment(self, start_bar, end_bar, web_path):

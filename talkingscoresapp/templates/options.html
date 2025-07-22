@@ -182,6 +182,17 @@
             </fieldset>
 
             <fieldset class="mt-4 p-3 border rounded">
+                <div class="form-group">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="chk_disable_all_coloring" name="chk_disable_all_coloring">
+                        <label class="form-check-label" for="chk_disable_all_coloring">
+                            <strong>Disable All Coloring</strong>
+                            <br>
+                            <small class="text-muted">Override all color settings - no pitch, rhythm, or octave coloring will be applied</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-separator">Color Options</div>
                 <legend class="h2 bold">Note Colouring</legend>
                 <div class="form-group">
                     <label for="colour_style" class="h4">Colouring Style</label>
@@ -594,4 +605,21 @@
         updateColorFormDisplay();
     });
     </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const disableAllCheckbox = document.getElementById('chk_disable_all_coloring');
+            const colorInputs = document.querySelectorAll('input[type="color"], input[name*="colour"], input[name*="color"]');
+            
+            function toggleColorInputs() {
+                const isDisabled = disableAllCheckbox.checked;
+                colorInputs.forEach(input => {
+                    input.disabled = isDisabled;
+                    input.style.opacity = isDisabled ? '0.5' : '1';
+                });
+            }
+            
+            disableAllCheckbox.addEventListener('change', toggleColorInputs);
+            toggleColorInputs(); // Initial state
+        });
+        </script>
 {% endblock %}

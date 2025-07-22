@@ -136,18 +136,22 @@ body {
 .skip-link {
     position: absolute;
     left: -9999px;
-    z-index: 999;
+    z-index: 9999;
     padding: var(--spacing-md);
     background-color: var(--accent-highlight-bg);
     color: var(--accent-highlight-color);
     text-decoration: none;
     font-weight: bold;
+    border-radius: var(--border-radius);
+    transition: all 0.2s ease;
 }
 
 .skip-link:focus {
     left: 50%;
     top: 60px;
     transform: translateX(-50%);
+    outline: 3px solid var(--focus-outline-color);
+    outline-offset: 2px;
 }
 
 /* --- 4. LAYOUT COMPONENTS --- */
@@ -444,6 +448,41 @@ html[data-theme="dark"] .score-nav-ribbon {
     border-top: 1px solid var(--form-control-border);
     margin: var(--spacing-md) 0;
 }
+html[data-theme="dark"] .score-nav-ribbon {
+    background-color: var(--form-control-bg);
+    border-color: var(--form-control-border);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+html[data-theme="dark"] .score-nav-ribbon .nav-link-top {
+    color: var(--text-color);
+}
+
+html[data-theme="dark"] .score-nav-ribbon .nav-link-top:hover,
+html[data-theme="dark"] .score-nav-ribbon .nav-link-top:focus-visible {
+    background-color: var(--accent-highlight-bg);
+    color: var(--accent-highlight-color);
+}
+
+html[data-theme="dark"] .score-nav-ribbon li a {
+    color: var(--text-color);
+}
+
+html[data-theme="dark"] .score-nav-ribbon li a:hover,
+html[data-theme="dark"] .score-nav-ribbon li a:focus-visible,
+html[data-theme="dark"] .score-nav-ribbon li a.active {
+    background-color: var(--accent-highlight-bg);
+    color: var(--accent-highlight-color);
+}
+
+html[data-theme="dark"] .score-nav-ribbon .nav-link-stop {
+    background-color: var(--clear-btn-color);
+    color: var(--accent-highlight-color);
+}
+
+html[data-theme="dark"] .score-nav-ribbon hr {
+    border-top-color: var(--form-control-border);
+}
 
 /* Main Content Layout */
 #score-main-content {
@@ -453,39 +492,58 @@ html[data-theme="dark"] .score-nav-ribbon {
     padding-bottom: var(--spacing-xl);
 }
 
-/* Visual Info Blocks */
+/* --- Enhanced Visual Info Blocks --- */
+/* --- Enhanced Visual Info Blocks - Fixed Text Colors --- */
 .meta-info,
-.repetition-info {
-    padding: 12px 16px;
-    margin: 16px 0;
+.repetition-info,
+.bar-info {
+    padding: 16px 20px;
+    margin: 18px 0;
     font-size: 1.1em;
     font-weight: 500;
-    border-radius: 4px;
+    border-radius: 8px;
+    border-left: 4px solid;
+    transition: all 0.2s ease;
+    color: var(--text-color); /* Use consistent text color */
 }
 
-.repetition-info {
-    background-color: #e7f3fe;
-    border-left: 5px solid #2196F3;
-    color: #333;
+/* Bar Information - Warm Orange */
+.bar-info {
+    background-color: #fff4e6;
+    border-left-color: #ff8c42;
 }
 
+/* Time/Key Signature Information - Cool Blue */
 .meta-info {
-    background-color: #fff8e1;
-    border-left: 5px solid #ffc107;
-    color: #333;
+    background-color: #e8f4fd;
+    border-left-color: #2196f3;
 }
 
-html[data-theme="dark"] .repetition-info {
-    background-color: #2a3a4a;
-    border-left-color: #64b5f6;
-    color: #e0e0e0;
+/* Repetition Information - Purple */
+.repetition-info {
+    background-color: #f3e5f5;
+    border-left-color: #9c27b0;
+}
+
+/* Dark Theme Variants */
+html[data-theme="dark"] .bar-info {
+    background-color: #2d1810;
+    border-left-color: #ff8c42;
+    color: var(--text-color); /* Keep consistent text color */
 }
 
 html[data-theme="dark"] .meta-info {
-    background-color: #3e3828;
-    border-left-color: #ffc107;
-    color: #e0e0e0;
+    background-color: #1a2332;
+    border-left-color: #42a5f5;
+    color: var(--text-color); /* Keep consistent text color */
 }
+
+html[data-theme="dark"] .repetition-info {
+    background-color: #251a2d;
+    border-left-color: #ba68c8;
+    color: var(--text-color); /* Keep consistent text color */
+}
+
 
 /* Content Hierarchy */
 div[id^="segment-"] h2 {
@@ -506,30 +564,34 @@ div[id^="segment-"] h5 {
     padding-bottom: var(--spacing-sm);
 }
 /* --- 7.5. SCORE PAGE PLAYBACK CONTROLS --- */
-/* MIDI Play Buttons */
+/* --- Enhanced MIDI Play Buttons --- */
+/* --- Enhanced MIDI Play Buttons - Bigger & Better Aligned --- */
 .play-link {
     display: inline-block;
-    padding: var(--spacing-sm) var(--spacing-md);
-    margin: var(--spacing-xs);
-    background-color: var(--btn-primary-bg);
-    color: var(--btn-primary-color);
-    border: 1px solid var(--btn-primary-bg);
-    border-radius: var(--border-radius);
+    padding: 16px 32px; /* Even bigger padding */
+    margin: 8px 4px; /* Adjusted margins for better alignment */
+    background-color: #4CAF50; /* Fresh green color */
+    color: #ffffff;
+    border: 2px solid #4CAF50;
+    border-radius: 10px; /* More rounded */
     text-decoration: none;
-    font-size: 1rem;
-    font-weight: 500;
-    line-height: 1.5;
+    font-size: 1.2rem; /* Larger text */
+    font-weight: 700; /* Even bolder */
+    line-height: 1.3;
     cursor: pointer;
-    transition: all 0.2s ease-in-out;
+    transition: all 0.25s ease;
     outline-offset: 2px;
+    box-shadow: 0 3px 8px rgba(76, 175, 80, 0.2);
+    min-width: 140px; /* Ensure consistent button widths */
+    text-align: center;
 }
 
 .play-link:hover {
-    background-color: var(--btn-primary-hover-bg);
-    color: var(--btn-primary-color);
+    background-color: #45a049;
+    color: #ffffff;
     text-decoration: none;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3);
 }
 
 .play-link:focus-visible {
@@ -539,64 +601,86 @@ div[id^="segment-"] h5 {
 
 .play-link:active {
     transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    box-shadow: 0 3px 8px rgba(76, 175, 80, 0.2);
 }
 
 .play-link.playing {
-    background-color: #198754;
-    color: var(--btn-primary-color);
-    border-color: #198754;
+    background-color: #FF6B35; /* Orange for playing state */
+    border-color: #FF6B35;
+    color: #ffffff;
+    box-shadow: 0 5px 15px rgba(255, 107, 53, 0.3);
 }
 
 .play-link.playing:hover {
-    background-color: #198754;
-    opacity: 0.9;
+    background-color: #e55a2b;
+    box-shadow: 0 6px 18px rgba(255, 107, 53, 0.4);
 }
 
-/* Part links (smaller, secondary style) */
+/* Main/combined buttons (slightly bigger) */
+.play-link[data-base-url*="sel-all"],
+.play-link[data-base-url*="sel-sel"],
+.play-link[data-base-url*="sel-un"] {
+    padding: 18px 36px;
+    font-size: 1.3rem;
+    min-width: 200px;
+    margin: 10px 4px;
+}
+
+/* Part links (hand parts) - aligned consistently */
 .part-link {
-    font-size: 0.9rem;
-    padding: 0.375rem 0.75rem;
-    margin: 0.125rem;
-    opacity: 0.9;
-}
-
-.part-links {
-    margin-left: var(--spacing-md);
-    margin-top: var(--spacing-sm);
-}
-
-/* Playback Controls Container */
-.playback-controls {
-    margin: var(--spacing-md) 0;
-    padding: var(--spacing-md);
-    background-color: var(--form-control-bg);
-    border: 1px solid var(--form-control-border);
-    border-radius: var(--border-radius-lg);
-    transition: all 0.3s ease;
-}
-
-.playback-controls label {
+    font-size: 1.1rem;
+    padding: 14px 28px; /* Slightly smaller than main buttons */
+    margin: 6px 4px; /* Consistent margins */
     font-weight: 600;
-    margin-right: var(--spacing-sm);
-    color: var(--text-color);
+    min-width: 120px; /* Consistent width for alignment */
+    text-align: center;
 }
 
-.playback-controls select {
-    margin-right: var(--spacing-md);
+/* Container for better alignment */
+.part-links {
+    margin-left: 0; /* Remove left margin for better alignment */
+    margin-top: var(--spacing-md);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px; /* Consistent spacing */
+    align-items: center;
 }
 
-/* Instrument and Segment Grouping */
+/* Instrument grouping improvements */
 .instrument-group {
-    margin: var(--spacing-md) 0;
-    padding: var(--spacing-md);
-    border-left: 3px solid var(--accent-highlight-bg);
-    background-color: rgba(10, 88, 202, 0.05);
-    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    margin: var(--spacing-lg) 0;
+    padding: var(--spacing-lg);
+    border-left: 4px solid #4CAF50; /* Match button color */
+    background-color: rgba(76, 175, 80, 0.08);
+    border-radius: 0 var(--border-radius-lg) var(--border-radius-lg) 0;
+}
+
+/* Dark theme button adjustments */
+html[data-theme="dark"] .play-link {
+    background-color: #66BB6A; /* Lighter green for dark mode */
+    border-color: #66BB6A;
+    box-shadow: 0 3px 8px rgba(102, 187, 106, 0.2);
+}
+
+html[data-theme="dark"] .play-link:hover {
+    background-color: #5CAE60;
+    box-shadow: 0 5px 15px rgba(102, 187, 106, 0.3);
+}
+
+html[data-theme="dark"] .play-link.playing {
+    background-color: #FF8A65; /* Lighter orange for dark mode */
+    border-color: #FF8A65;
+    box-shadow: 0 5px 15px rgba(255, 138, 101, 0.3);
+}
+
+html[data-theme="dark"] .play-link.playing:hover {
+    background-color: #FF7043;
+    box-shadow: 0 6px 18px rgba(255, 138, 101, 0.4);
 }
 
 html[data-theme="dark"] .instrument-group {
-    background-color: rgba(82, 107, 233, 0.1);
+    background-color: rgba(102, 187, 106, 0.12);
+    border-left-color: #66BB6A;
 }
 
 .combined-playback,
@@ -931,6 +1015,29 @@ html[data-theme="dark"] .preview-block-content {
 .active-profile-display strong {
     color: var(--link-color);
     font-weight: bold;
+}
+/* --- Options Page: Disable All Coloring --- */
+#chk_disable_all_coloring {
+    transform: scale(1.2);
+    margin-right: var(--spacing-md);
+}
+
+.form-check-label strong {
+    color: var(--clear-btn-color);
+    font-weight: 700;
+}
+
+.form-group .form-check {
+    padding: var(--spacing-md);
+    background-color: rgba(220, 53, 69, 0.05);
+    border: 2px solid rgba(220, 53, 69, 0.2);
+    border-radius: var(--border-radius-lg);
+    margin-bottom: var(--spacing-lg);
+}
+
+html[data-theme="dark"] .form-group .form-check {
+    background-color: rgba(255, 138, 138, 0.08);
+    border-color: rgba(255, 138, 138, 0.3);
 }
 
 /* --- 10. DARK THEME OVERRIDES --- */

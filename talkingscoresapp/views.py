@@ -66,6 +66,7 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     chk_include_ties = forms.BooleanField(required=False)
     chk_include_arpeggios = forms.BooleanField(required=False)
     chk_describe_chords = forms.BooleanField(required=False)
+    chk_disable_all_coloring = forms.BooleanField(required=False)
     
 
     bars_at_a_time = forms.ChoiceField(choices=(('1', 1), ('2', 2), ('4', 4), ('8', 8)), initial=4,
@@ -283,6 +284,7 @@ def options(request, id, filename):
             "key_signature_accidentals": request.POST.get("key_signature_accidentals", "applied"),
             "advanced_rhythm_colours": {slugify(key.replace('color_rhythm_', '')): value for key, value in request.POST.items() if key.startswith('color_rhythm_')},
             "advanced_octave_colours": {key.replace('color_octave_', ''): value for key, value in request.POST.items() if key.startswith('color_octave_')},
+            "disable_all_coloring": "chk_disable_all_coloring" in request.POST,
             "enharmonic_conversion": "chk_enharmonic_conversion" in request.POST,
             
             
