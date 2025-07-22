@@ -283,6 +283,8 @@ def options(request, id, filename):
             "key_signature_accidentals": request.POST.get("key_signature_accidentals", "applied"),
             "advanced_rhythm_colours": {slugify(key.replace('color_rhythm_', '')): value for key, value in request.POST.items() if key.startswith('color_rhythm_')},
             "advanced_octave_colours": {key.replace('color_octave_', ''): value for key, value in request.POST.items() if key.startswith('color_octave_')},
+            "enharmonic_conversion": "chk_enharmonic_conversion" in request.POST,
+            
             
             # FIX 2: USE THE CORRECTLY CALCULATED `figure_note_colours` VARIABLE
             "figureNoteColours": figure_note_colours

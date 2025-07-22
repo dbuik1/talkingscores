@@ -161,6 +161,24 @@
                         <option value="symbols">Symbols (e.g., ♯, ♭)</option>
                     </select>
                  </div>
+                 <div class="form-group mt-3">
+                    <div class="checkbox">
+                        <input type="checkbox" name="chk_enharmonic_conversion" id="chk_enharmonic_conversion" value="checked" />
+                        <label for="chk_enharmonic_conversion">
+                            Simplify complex accidentals
+                            <button type="button" class="help-btn" aria-label="More info on enharmonic conversion" data-controls="enharmonic-help-text">?</button>
+                        </label>
+                    </div>
+                    <div id="enharmonic-help-text" class="form-text text-muted mt-2 help-text-panel">
+                        <p class="mb-1 small"><strong>Simplify Complex Accidentals</strong> converts hard-to-read notes to their simpler equivalents:</p>
+                        <ul class="list-unstyled mb-0 small">
+                            <li><strong>Double sharps:</strong> F𝄪 becomes G, C𝄪 becomes D, G𝄪 becomes A</li>
+                            <li><strong>Double flats:</strong> B𝄫 becomes A, E𝄫 becomes D, A𝄫 becomes G</li>
+                            <li><strong>Uncommon accidentals:</strong> E♯ becomes F, B♯ becomes C, C♭ becomes B, F♭ becomes E</li>
+                        </ul>
+                        <p class="small mb-0">This makes scores easier to read, especially for learners.</p>
+                    </div>
+                </div>
             </fieldset>
 
             <fieldset class="mt-4 p-3 border rounded">
@@ -284,6 +302,7 @@
             includeArpeggios: 'chk_include_arpeggios', pitch_description: 'pitch_description', octave_description: 'octave_description',
             describe_chords: 'chk_describe_chords',
             dot_position: 'dot_position', rhythm_announcement: 'rhythm_announcement', octave_position: 'octave_position',
+            enharmonic_conversion: 'chk_enharmonic_conversion',
             key_signature_accidentals: 'key_signature_accidentals'
         };
     
@@ -292,7 +311,8 @@
                 bars_at_a_time: '2',
                 rhythmDescription: 'british', pitch_description: 'noteName', octave_description: 'name',
                 octave_position: 'before', repetitionMode: 'learning', includeDynamics: true, includeTies: true, 
-                includeRests: true, includeArpeggios: true, describe_chords: true, accidentalStyle: 'words'
+                includeRests: true, includeArpeggios: true, describe_chords: true, accidentalStyle: 'words',
+                enharmonic_conversion: false
             },
             'notes_only': {
                 // ** THE FIX IS HERE **
@@ -301,7 +321,8 @@
                 repetitionMode: 'none',
                 rhythmDescription: 'none', pitch_description: 'noteName', octave_description: 'name',
                 octave_position: 'before', includeDynamics: false, includeTies: false, 
-                includeRests: false, includeArpeggios: false, describe_chords: false
+                includeRests: false, includeArpeggios: false, describe_chords: false,
+                enharmonic_conversion: true
             }
         };
     

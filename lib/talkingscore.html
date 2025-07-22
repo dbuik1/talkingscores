@@ -1,45 +1,71 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN">
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>Talking score for {{ basic_information['title'] }}</title>
-    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
-    <meta name="robots" content="noindex" />
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
     
-    <script type='text/javascript' src='//www.midijs.net/lib/midi.js'></script> 
-
-    <link href="http://127.0.0.1:8000/static/css/talkingscores.css" rel="stylesheet">
-
-    <script>
-      (function() {
-        const theme = localStorage.getItem('theme-preference') || 'light';
-        document.documentElement.setAttribute('data-theme', theme);
-      })();
-    </script>
+    <title>Talking Score - {{ basic_information.title|default('Untitled Work') }}</title>
     
-    <style type="text/css">
-        /* You can keep these styles as a fallback, but the external CSS will take priority */
-        body{font-family: Georgia; font-size: 26pt}
-        
-        h4 {
-            margin-block-end:1rem;
-        }
-    </style>
+    <!-- External Dependencies -->
+    <script src="//www.midijs.net/lib/midi.js"></script>
+    
+    <!-- Deployment-ready CSS link -->
+    <link href="/static/css/talkingscores.css" rel="stylesheet">
+    
+    <!-- Theme initialization -->
     <script>
         (function() {
-          // Check for a saved theme in localStorage, or default to light
-          const theme = localStorage.getItem('theme-preference') || 'light';
-          // Apply the theme to the root <html> element
-          document.documentElement.setAttribute('data-theme', theme);
+            const saved_theme = localStorage.getItem('theme-preference');
+            const system_prefers_dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = saved_theme || (system_prefers_dark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
         })();
-      </script>
+    </script>
+    
+    <!-- Fallback styles -->
+    <style>
+        body { 
+            font-family: Georgia, serif; 
+            font-size: 26pt; 
+            line-height: 1.4;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        h4 { 
+            margin-bottom: 1rem; 
+        }
+        
+        .score-nav-ribbon {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border: 1px solid #ccc;
+            padding: 1rem;
+            max-width: 200px;
+        }
+        
+        #score-main-content {
+            margin-right: 240px;
+        }
+    </style>
 </head>
-<body class="score-page">
 
-    <nav class="score-nav-ribbon">
-        <a href="#" class="nav-link-top">Back to Top</a>
-        <a href="#" id="stop-playback-btn" class="nav-link-stop">Stop Playback</a>
+<body class="score-page">
+    <!-- Skip link for accessibility -->
+    <a href="#score-main-content" class="skip-link">Skip to main content</a>
+
+    <!-- Navigation ribbon -->
+    <nav class="score-nav-ribbon" role="navigation" aria-label="Score navigation">
+        <a href="#score-main-content" class="nav-link-top">Back to Top</a>
+        <button type="button" id="stop-playback-btn" class="nav-link-stop" aria-label="Stop audio playback">
+            Stop Playback
+        </button>
         <hr>
-        <ul>
+        
+        <ul role="list">
             {% for segment in music_segments %}
                 <li>
                     <a href="#segment-{{ segment.start_bar }}">
@@ -55,312 +81,488 @@
             {% endfor %}
         </ul>
     </nav>
-    <div class="container">
-        <main id="score-main-content">
-        <h1>Info</h1>
 
-            <p>{{ basic_information['title']|default('Untitled work') }} by {{ basic_information['composer']|default('Unknown composer') }}.</p>
+    <main id="score-main-content" role="main">
+        <!-- Score Information Section -->
+        <section aria-labelledby="score-info-heading">
+            <h1 id="score-info-heading">Score Information</h1>
+            
+            <p>
+                <strong>{{ basic_information.title|default('Untitled work') }}</strong> 
+                by {{ basic_information.composer|default('Unknown composer') }}.
+            </p>
 
-            <p>Time signature of {{ preamble['time_signature'] }}, key signature of {{ preamble['key_signature'] }}, tempo of {{ preamble['tempo']|default('no tempo specified') }}</p>
+            <p>
+                Time signature of {{ preamble.time_signature }}, 
+                key of {{ preamble.key_signature }}, 
+                tempo of {{ preamble.tempo|default('no tempo specified') }}
+            </p>
+            
             <p>Music, both hands, a bar at a time, beat by beat</p>
+        </section>
 
-            <div id="global-controls">
-                <h2>Entire score:</h2>
-                <p>
-                    Tempo:
-                    <select class="ddlTempo" name="tempo">
-                        <option value="50">50%</option>
-                        <option value="100" selected>100%</option>
-                        <option value="150">150%</option>
-                    </select>
-                    &nbsp; &nbsp;
-                    Click:
-                    <select class="ddlClick" name="click">
-                        <option value="n">None</option>
-                        <option value="be">Bars / Beats</option>
-                    </select>
-                </p>
-                {% if play_all %}
-                    <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_all }}">Play All Instruments </a>
-                    <br/>
-                {% endif %}
-                {% if play_selected %}
-                    <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_sel }}">Play Selected Instruments </a>
-                    <br/>
-                {% endif %}
-                {% if play_unselected %}
-                    <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_un }}">Play Unselected Instruments</a>
-                    <br/>
-                {% endif %}
-
-                <h3>Instrument MIDIs</h3>
-                {% for index, ins in full_score_midis.selected_instruments_midis.items() %}
-                    {% if preamble.number_of_parts > 1 %}
-                        <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play - {{instruments[ins.ins][0]}} </a><br/>
-                    {% else %}
-                        <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play Score</a><br/>
-                    {% endif %}
-                    
-                    {% if ins.midi_parts|length > 0 %}
-                    <li style="margin-left:15px; list-style-type:none;">
-                        {% for midipart in ins.midi_parts %}
-                            <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1 ]}}  </a><br/>
-                        {% endfor %}
-                    </li>
-                    {% endif %}
-                {% endfor %}
+        <!-- Global Controls Section -->
+        <section id="global-controls" aria-labelledby="global-controls-heading">
+            <h2 id="global-controls-heading">Entire Score</h2>
+            
+            <div class="playback-controls">
+                <label for="global-tempo">Tempo:</label>
+                <select id="global-tempo" class="ddl-tempo" name="tempo" aria-label="Select playback tempo">
+                    <option value="50">50%</option>
+                    <option value="100" selected>100%</option>
+                    <option value="150">150%</option>
+                </select>
+                
+                <label for="global-click">Click:</label>
+                <select id="global-click" class="ddl-click" name="click" aria-label="Select click track">
+                    <option value="n">None</option>
+                    <option value="be">Bars / Beats</option>
+                </select>
             </div>
 
-        <h1>Summary:</h1>
-        {{general_summary}}
-        {% for summary in parts_summary %}
-            <h3>{{selected_part_names[loop.index-1]}}</h3>
-            {{summary}}
-            <br/>
-        {% endfor %}
-        <br/>
+            <!-- Combined Instrument Playback -->
+            {% if play_all %}
+                <button type="button" class="play-link" data-base-url="{{ full_score_midis.midi_all }}" aria-label="Play all instruments">
+                    Play All Instruments
+                </button>
+            {% endif %}
+            
+            {% if play_selected %}
+                <button type="button" class="play-link" data-base-url="{{ full_score_midis.midi_sel }}" aria-label="Play selected instruments">
+                    Play Selected Instruments
+                </button>
+            {% endif %}
+            
+            {% if play_unselected %}
+                <button type="button" class="play-link" data-base-url="{{ full_score_midis.midi_un }}" aria-label="Play unselected instruments">
+                    Play Unselected Instruments
+                </button>
+            {% endif %}
 
-        <h1>Music segment descriptions and playback</h1>
-{% for segment in music_segments %}
-<div id="segment-{{ segment.start_bar }}">
-    <h2>
-        {% if segment.start_bar == 'Pickup' %}
-            Pickup Bar
-        {% elif segment.start_bar == segment.end_bar %}
-            Bar {{ segment.start_bar }}
-        {% else %}
-            Bars {{ segment.start_bar }} to {{ segment.end_bar }}
-        {% endif %}
-    </h2>
+            <!-- Individual Instrument MIDIs -->
+            {% if full_score_midis.selected_instruments_midis|length > 1 %}
+                <h3>Individual Instruments</h3>
+            {% else %}
+                <h3>Instrument Parts</h3>
+            {% endif %}
 
-    <p>
-        Tempo:
-        <select class="ddlTempo" name="tempo">
-            <option value="50">50%</option>
-            <option value="100" selected>100%</option>
-            <option value="150">150%</option>
-        </select>
-        &nbsp; &nbsp;
-        Click:
-        <select class="ddlClick" name="click">
-            <option value="n">None</option>
-            <option value="be">Bars / Beats</option>
-        </select>
-    </p>
-
-    {% set segment_label = "bars " ~ segment.start_bar ~ " to " ~ segment.end_bar if segment.start_bar != 'Pickup' and segment.start_bar != segment.end_bar else "bar " ~ segment.start_bar if segment.start_bar != 'Pickup' else "Pickup Bar" %}
-    {% if play_all %}
-        <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_all }}">Play All - {{ segment_label }}</a><br/>
-    {% endif %}
-    {% if play_selected %}
-        <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_sel }}">Play Selected - {{ segment_label }}</a><br/>
-    {% endif %}
-    {% if play_unselected %}
-        <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_un }}">Play Unselected - {{ segment_label }}</a><br/>
-    {% endif %}
-    
-    <h3>Instrument MIDIs</h3>
-    {% for index, ins in segment.selected_instruments_midis.items() %}
-        {% if preamble.number_of_parts > 1 %}
-             <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play - {{instruments[ins.ins][0]}} - {{ segment_label }}</a><br/>
-        {% else %}
-             <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play Score - {{ segment_label }}</a><br/>
-        {% endif %}
-        
-        {% if ins.midi_parts|length > 0 %}
-        <li style="margin-left:15px; list-style-type:none;">
-            {% for midipart in ins.midi_parts %}
-                <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1 ]}}</a><br/>
-            {% endfor %}
-        </li>
-        {% endif %}
-    {% endfor %}
-    <br/>
-
-    {% for instrument_index, part_descriptions in segment.selected_instruments_descriptions.items() %}
-        {% if segment.selected_instruments_descriptions|length > 1 %}<h3>{{instruments[instrument_index][0]}}</h3>{% endif %}
-        {% for part_description in part_descriptions %}
-            {% set part_index = loop.index0 %}
-            {% if part_descriptions|length > 1 %}<h4>{{part_names[instruments[instrument_index][1] + loop.index-1 ]}}</h4>{% endif %}
-
-            {# This is the corrected inner loop that prevents duplication #}
-            {% for bar, time_point_list in part_description.items()|sort %}
-                <p class="meta-info"><strong>Bar: {{ bar }}</strong></p>
-                {% if bar in time_and_keys %}<p class="meta-info">{% for tk in time_and_keys[bar] %}{{tk}}<br/>{% endfor %}</p>{% endif %}
-                {% set detailed_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
-                {% set learning_info = immediate_repetition_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
-                {% if settings.repetition_mode == 'learning' and learning_info %}<div class="repetition-info">{{ learning_info.text }}</div>
-                {% elif settings.repetition_mode == 'detailed' and detailed_info %}<div class="repetition-info"><strong>Repetition:</strong> {{ detailed_info }}</div>{% endif %}
-
-                {# The rest of the rendering logic remains the same #}
-                {% set N = namespace(has_renderable_event=false) %}
-                {% for time_point in time_point_list %}{% for voice, events_in_voice in time_point.voices|dictsort %}{% for event in events_in_voice %}{% if event.__class__.__name__ in ['TSNote', 'TSChord'] %}{% set N.has_renderable_event = true %}{% endif %}{% endfor %}{% endfor %}{% endfor %}
-
-                {% if not N.has_renderable_event %}
-                    <p>(This part rests for the entire bar)</p>
-                {% elif not (settings.repetition_mode == 'learning' and learning_info and learning_info.type == 'exact') %}
-                    {%- if settings.beat_division == 'bar' or segment.start_bar == 'Pickup' -%}
-                        <p class="beat-group"><span class="beat-content">
-                        {%- set ns = namespace(previous_event=None, is_first_event_in_bar=True) -%}
-                        {%- for time_point in time_point_list -%}
-                            {%- set filtered = namespace(events=[], has_note_or_chord=false) -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- if event.__class__.__name__ in ['TSNote', 'TSChord'] -%}{%- set filtered.has_note_or_chord = true -%}{%- endif -%}{%- endfor -%}{%- endfor -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- set event_type = event.__class__.__name__ -%}{%- if filtered.has_note_or_chord -%}{%- if event_type in ['TSNote', 'TSChord', 'TSDynamic'] -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- else -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
-                            {%- for event in filtered.events -%}
-                                {%- set rendered_event = event.render(settings, ns.previous_event) -%}
-                                {%- if rendered_event -%}
-                                {%- if not ns.is_first_event_in_bar -%},&nbsp;{%- endif -%}
-                                    {{- rendered_event|join(' ') | safe -}}
-                                    {%- set ns.previous_event = event -%}
-                                    {%- set ns.is_first_event_in_bar = false -%}
-                                {%- endif -%}
-                            {%- endfor -%}
-                        {%- endfor -%}
-                        </span></p>
-                    {%- else -%}
-                        {%- set ns = namespace(current_integer_beat=0, previous_event=None, is_first_event_in_bar=True) -%}
-                        {%- for time_point in time_point_list -%}
-                            {%- set integer_beat = (time_point.beat - 0.001)|round|int if time_point.beat is number and time_point.beat > 0 else ns.current_integer_beat -%}
-                            {%- if integer_beat > ns.current_integer_beat -%}
-                                {%- if not ns.is_first_event_in_bar -%}</span></p>{%- endif -%}
-                                <p class="beat-group"><strong>Beat {{ integer_beat }}:</strong> <span class="beat-content">
-                                {%- set ns.current_integer_beat = integer_beat -%}
-                            {%- elif not ns.is_first_event_in_bar -%}, {% endif -%}
-                            {%- set filtered = namespace(events=[], has_note_or_chord=false) -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- if event.__class__.__name__ in ['TSNote', 'TSChord'] -%}{%- set filtered.has_note_or_chord = true -%}{%- endif -%}{%- endfor -%}{%- endfor -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- set event_type = event.__class__.__name__ -%}{%- if filtered.has_note_or_chord -%}{%- if event_type in ['TSNote', 'TSChord', 'TSDynamic'] -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- else -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
-                            {%- for event in filtered.events -%}
-                                {%- if not loop.first %} - together with {% endif -%}
-                                {{- event.render(settings, ns.previous_event)|join(' ') | safe -}}
-                                {%- set ns.previous_event = event -%}
-                            {%- endfor -%}
-                            {%- set ns.is_first_event_in_bar = false -%}
-                        {%- endfor -%}
-                        {%- if not ns.is_first_event_in_bar -%}</span></p>{%- endif -%}
-                    {%- endif -%}
+            {% for index, instrument in full_score_midis.selected_instruments_midis.items() %}
+            <div class="instrument-group">
+                {% if preamble.number_of_parts > 1 %}
+                    <button type="button" class="play-link" data-base-url="{{ instrument.midi }}" aria-label="Play {{ instruments[instrument.ins][0] }}">
+                        Play - {{ instruments[instrument.ins][0] }}
+                    </button>
+                {% else %}
+                    <button type="button" class="play-link" data-base-url="{{ instrument.midi }}" aria-label="Play score">
+                        Play Score
+                    </button>
                 {% endif %}
+                
+                {% if instrument.midi_parts|length > 0 %}
+                    <div class="part-links">
+                        {% for midi_part in instrument.midi_parts %}
+                            <button type="button" class="play-link part-link" data-base-url="{{ midi_part }}" aria-label="Play {{ part_names[instruments[instrument.ins][1] + loop.index-1] }}">
+                                {{ part_names[instruments[instrument.ins][1] + loop.index-1] }}
+                            </button>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
             {% endfor %}
-        {% endfor %}
-    {% endfor %}
-</div>
-{% endfor %}
+        </section>
+
+        <!-- Summary Section -->
+        <section aria-labelledby="summary-heading">
+            <h1 id="summary-heading">Summary</h1>
+            
+            {{ general_summary|safe }}
+            
+            {% for summary in parts_summary %}
+                <h3>{{ selected_part_names[loop.index0] }}</h3>
+                {{ summary|safe }}
+            {% endfor %}
+        </section>
+
+        <!-- Music Segments Section -->
+        <section aria-labelledby="segments-heading">
+            <h1 id="segments-heading">Music Segment Descriptions and Playback</h1>
+            
+            {% for segment in music_segments %}
+                <article id="segment-{{ segment.start_bar }}" class="music-segment">
+                    <h2>
+                        {% if segment.start_bar == 'Pickup' %}
+                            Pickup Bar
+                        {% elif segment.start_bar == segment.end_bar %}
+                            Bar {{ segment.start_bar }}
+                        {% else %}
+                            Bars {{ segment.start_bar }} to {{ segment.end_bar }}
+                        {% endif %}
+                    </h2>
+
+                    <!-- Segment controls -->
+                    <div class="playback-controls">
+                        <label for="segment-{{ segment.start_bar }}-tempo">Tempo:</label>
+                        <select id="segment-{{ segment.start_bar }}-tempo" class="ddl-tempo" name="tempo">
+                            <option value="50">50%</option>
+                            <option value="100" selected>100%</option>
+                            <option value="150">150%</option>
+                        </select>
+                        
+                        <label for="segment-{{ segment.start_bar }}-click">Click:</label>
+                        <select id="segment-{{ segment.start_bar }}-click" class="ddl-click" name="click">
+                            <option value="n">None</option>
+                            <option value="be">Bars / Beats</option>
+                        </select>
+                    </div>
+
+                    {% set segment_label = "bars " ~ segment.start_bar ~ " to " ~ segment.end_bar if segment.start_bar != 'Pickup' and segment.start_bar != segment.end_bar else "bar " ~ segment.start_bar if segment.start_bar != 'Pickup' else "Pickup Bar" %}
+                    
+                    <!-- Combined segment playback -->
+                    {% if play_all %}
+                        <button type="button" class="play-link" data-base-url="{{ segment.midi_all }}">
+                            Play All - {{ segment_label }}
+                        </button>
+                    {% endif %}
+                    
+                    {% if play_selected %}
+                        <button type="button" class="play-link" data-base-url="{{ segment.midi_sel }}">
+                            Play Selected - {{ segment_label }}
+                        </button>
+                    {% endif %}
+                    
+                    {% if play_unselected %}
+                        <button type="button" class="play-link" data-base-url="{{ segment.midi_un }}">
+                            Play Unselected - {{ segment_label }}
+                        </button>
+                    {% endif %}
+                    
+                    <!-- Individual instruments for segment -->
+                    {% if segment.selected_instruments_midis|length > 1 %}
+                     <h3>Individual Instruments</h3>
+                    {% else %}
+                      <h3>Instrument Parts</h3>
+                    {% endif %}
+
+                    {% for index, instrument in segment.selected_instruments_midis.items() %}
+                    <div class="instrument-group">
+                        {% if preamble.number_of_parts > 1 %}
+                            <button type="button" class="play-link" data-base-url="{{ instrument.midi }}">
+                                Play - {{ instruments[instrument.ins][0] }} - {{ segment_label }}
+                            </button>
+                        {% else %}
+                            <button type="button" class="play-link" data-base-url="{{ instrument.midi }}">
+                                Play Score - {{ segment_label }}
+                            </button>
+                        {% endif %}
+                        
+                        {% if instrument.midi_parts|length > 0 %}
+                            <div class="part-links">
+                                {% for midi_part in instrument.midi_parts %}
+                                    <button type="button" class="play-link part-link" data-base-url="{{ midi_part }}">
+                                        {{ part_names[instruments[instrument.ins][1] + loop.index-1] }}
+                                    </button>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+
+                    <!-- Musical descriptions -->
+                    {% for instrument_index, part_descriptions in segment.selected_instruments_descriptions.items() %}
+                        {% if segment.selected_instruments_descriptions|length > 1 %}
+                            <h3>{{ instruments[instrument_index][0] }}</h3>
+                        {% endif %}
+                        
+                        {% for part_description in part_descriptions %}
+                            {% set part_index = loop.index0 %}
+                            {% if part_descriptions|length > 1 %}
+                                <h4>{{ part_names[instruments[instrument_index][1] + loop.index-1] }}</h4>
+                            {% endif %}
+
+                            {% for bar, time_point_list in part_description.items()|sort %}
+                                <div class="bar-description">
+                                    <p class="meta-info"><strong>Bar: {{ bar }}</strong></p>
+                                    
+                                    {% if bar in time_and_keys %}
+                                        <div class="meta-info">
+                                            {% for time_key_info in time_and_keys[bar] %}
+                                                {{ time_key_info }}<br/>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    
+                                    {% set detailed_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
+                                    {% set learning_info = immediate_repetition_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
+                                    
+                                    {% if settings.repetition_mode == 'learning' and learning_info %}
+                                        <div class="repetition-info">{{ learning_info.text }}</div>
+                                    {% elif settings.repetition_mode == 'detailed' and detailed_info %}
+                                        <div class="repetition-info">
+                                            <strong>Repetition:</strong> {{ detailed_info }}
+                                        </div>
+                                    {% endif %}
+
+                                    <!-- Check for renderable events -->
+                                    {% set bar_namespace = namespace(has_renderable_event=false) %}
+                                    {% for time_point in time_point_list %}
+                                        {% for voice, events_in_voice in time_point.voices|dictsort %}
+                                            {% for event in events_in_voice %}
+                                                {% if event.__class__.__name__ in ['TSNote', 'TSChord'] %}
+                                                    {% set bar_namespace.has_renderable_event = true %}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endfor %}
+                                    {% endfor %}
+
+                                    {% if not bar_namespace.has_renderable_event %}
+                                        <p>(This part rests for the entire bar)</p>
+                                    {% elif not (settings.repetition_mode == 'learning' and learning_info and learning_info.type == 'exact') %}
+                                        {% if settings.beat_division == 'bar' or segment.start_bar == 'Pickup' %}
+                                            <!-- FIXED: Comma spacing - only space after comma -->
+                                            <p class="beat-group"><span class="beat-content">
+                                            {% set event_namespace = namespace(previous_event=None, is_first_event_in_bar=True) %}
+                                            {% for time_point in time_point_list %}
+                                                {% set filtered_events = namespace(events=[], has_note_or_chord=false) %}
+                                                
+                                                {% for voice, events_in_voice in time_point.voices|dictsort %}
+                                                    {% for event in events_in_voice %}
+                                                        {% if event.__class__.__name__ in ['TSNote', 'TSChord'] %}
+                                                            {% set filtered_events.has_note_or_chord = true %}
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                {% endfor %}
+                                                
+                                                {% for voice, events_in_voice in time_point.voices|dictsort %}
+                                                    {% for event in events_in_voice %}
+                                                        {% set event_type = event.__class__.__name__ %}
+                                                        {% if filtered_events.has_note_or_chord %}
+                                                            {% if event_type in ['TSNote', 'TSChord', 'TSDynamic'] %}
+                                                                {% set filtered_events.events = filtered_events.events + [event] %}
+                                                            {% endif %}
+                                                        {% else %}
+                                                            {% set filtered_events.events = filtered_events.events + [event] %}
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                {% endfor %}
+                                                
+                                                {% for event in filtered_events.events %}
+                                                    {% set rendered_event = event.render(settings, event_namespace.previous_event) %}
+                                                    {% if rendered_event %}
+                                                        {% if not event_namespace.is_first_event_in_bar %}, {% endif %}{{ rendered_event|join(' ')|safe }}
+                                                        {% set event_namespace.previous_event = event %}
+                                                        {% set event_namespace.is_first_event_in_bar = false %}
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% endfor %}
+                                            </span></p>
+                                        {% else %}
+                                            <!-- Beat-by-beat rendering -->
+                                            {% set beat_namespace = namespace(current_integer_beat=0, previous_event=None, is_first_event_in_bar=True) %}
+                                            {% for time_point in time_point_list %}
+                                                {% set integer_beat = (time_point.beat - 0.001)|round|int if time_point.beat is number and time_point.beat > 0 else beat_namespace.current_integer_beat %}
+                                                
+                                                {% if integer_beat > beat_namespace.current_integer_beat %}
+                                                    {% if not beat_namespace.is_first_event_in_bar %}</span></p>{% endif %}
+                                                    <p class="beat-group"><strong>Beat {{ integer_beat }}:</strong> <span class="beat-content">
+                                                    {% set beat_namespace.current_integer_beat = integer_beat %}
+                                                {% elif not beat_namespace.is_first_event_in_bar %}, {% endif %}
+                                                
+                                                {% set filtered_events = namespace(events=[], has_note_or_chord=false) %}
+                                                {% for voice, events_in_voice in time_point.voices|dictsort %}
+                                                    {% for event in events_in_voice %}
+                                                        {% if event.__class__.__name__ in ['TSNote', 'TSChord'] %}
+                                                            {% set filtered_events.has_note_or_chord = true %}
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                {% endfor %}
+                                                
+                                                {% for voice, events_in_voice in time_point.voices|dictsort %}
+                                                    {% for event in events_in_voice %}
+                                                        {% set event_type = event.__class__.__name__ %}
+                                                        {% if filtered_events.has_note_or_chord %}
+                                                            {% if event_type in ['TSNote', 'TSChord', 'TSDynamic'] %}
+                                                                {% set filtered_events.events = filtered_events.events + [event] %}
+                                                            {% endif %}
+                                                        {% else %}
+                                                            {% set filtered_events.events = filtered_events.events + [event] %}
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                {% endfor %}
+                                                
+                                                {% for event in filtered_events.events %}
+                                                    {% if not loop.first %} - together with {% endif %}
+                                                    {{ event.render(settings, beat_namespace.previous_event)|join(' ')|safe }}
+                                                    {% set beat_namespace.previous_event = event %}
+                                                {% endfor %}
+                                                {% set beat_namespace.is_first_event_in_bar = false %}
+                                            {% endfor %}
+                                            {% if not beat_namespace.is_first_event_in_bar %}</span></p>{% endif %}
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% endfor %}
+                    {% endfor %}
+                </article>
+            {% endfor %}
+        </section>
 
         <a href="#score-nav-ribbon" class="skip-link">Back to navigation</a>
     </main>
 
-
+    <!-- JavaScript -->
     <script>
-        document.addEventListener("DOMContentLoaded", (event) => {
-            // This function builds the final URL for a link based on its dropdowns
-            function updateLink(link) {
-                const parentScope = link.closest('#global-controls, div[id^="segment-"]');
-                if (!parentScope) return;
+        class TalkingScorePlayer {
+            constructor() {
+                this.init_event_listeners();
+                this.init_navigation();
+                this.initialize_all_links();
+            }
 
-                const baseUrl = link.dataset.baseUrl;
-                if (!baseUrl) return;
+            init_event_listeners() {
+                document.body.addEventListener('click', (event) => {
+                    if (event.target.matches('.play-link')) {
+                        event.preventDefault();
+                        this.handle_playback_click(event.target);
+                    }
+                });
 
-                const tempo = parentScope.querySelector('.ddlTempo').value;
-                const click = parentScope.querySelector('.ddlClick').value;
+                document.body.addEventListener('change', (event) => {
+                    if (event.target.matches('.ddl-tempo, .ddl-click')) {
+                        this.handle_control_change(event.target);
+                    }
+                });
 
-                // The python functions create the base URL with its specific params (sel, part, etc.)
-                // We just add the tempo and click params.
-                const finalUrl = `${baseUrl}&t=${tempo}&c=${click}`;
+                const stop_button = document.getElementById('stop-playback-btn');
+                if (stop_button) {
+                    stop_button.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        this.stop_playback();
+                    });
+                }
+            }
+
+            handle_playback_click(button) {
+                const url_to_play = button.dataset.finalUrl;
+                if (url_to_play) {
+                    this.play_midi(url_to_play);
+                } else {
+                    console.error("No final URL found for playback button:", button);
+                }
+            }
+
+            handle_control_change(changed_element) {
+                if (changed_element.closest('#global-controls')) {
+                    this.sync_global_controls(changed_element);
+                }
+                this.update_all_links();
+            }
+
+            sync_global_controls(changed_element) {
+                const is_tempo = changed_element.matches('.ddl-tempo');
+                const new_value = changed_element.value;
+                const selector = is_tempo ? '.ddl-tempo' : '.ddl-click';
                 
-                // Store the final, ready-to-play URL in a data attribute.
-                link.dataset.finalUrl = finalUrl;
+                document.querySelectorAll(selector).forEach(control => {
+                    control.value = new_value;
+                });
             }
 
-            // Add a single click listener to the body for all playback links
-            document.body.addEventListener('click', function(e) {
-                if (e.target.matches('.lnkPlay')) {
-                    e.preventDefault(); // This reliably stops the page from jumping
-                    const urlToPlay = e.target.dataset.finalUrl;
-                    if (urlToPlay) {
-                        MIDIjs.play(urlToPlay);
-                    } else {
-                        console.error("No final URL found for this link.", e.target);
-                    }
+            update_link(link) {
+                const parent_scope = link.closest('#global-controls, .music-segment');
+                if (!parent_scope) return;
+
+                const base_url = link.dataset.baseUrl;
+                if (!base_url) return;
+
+                const tempo_control = parent_scope.querySelector('.ddl-tempo');
+                const click_control = parent_scope.querySelector('.ddl-click');
+                
+                if (!tempo_control || !click_control) return;
+
+                const tempo = tempo_control.value;
+                const click = click_control.value;
+                const final_url = `${base_url}&t=${tempo}&c=${click}`;
+                link.dataset.finalUrl = final_url;
+            }
+
+            update_all_links() {
+                document.querySelectorAll('.play-link[data-base-url]').forEach(link => {
+                    this.update_link(link);
+                });
+            }
+
+            initialize_all_links() {
+                this.update_all_links();
+            }
+
+            play_midi(url) {
+                try {
+                    MIDIjs.play(url);
+                } catch (error) {
+                    console.error("Error playing MIDI:", error);
                 }
-            });
+            }
 
-            // Add a single change listener for all dropdowns
-            document.body.addEventListener('change', function(e) {
-                if (e.target.matches('.ddlTempo, .ddlClick')) {
-                    const changedElement = e.target;
-                    
-                    // If a global control was changed, sync all other dropdowns
-                    if (changedElement.closest('#global-controls')) {
-                        const isTempo = changedElement.matches('.ddlTempo');
-                        const value = changedElement.value;
-                        const selector = isTempo ? '.ddlTempo' : '.ddlClick';
-                        document.querySelectorAll(selector).forEach(ddl => { ddl.value = value; });
-                    }
-
-                    // Update all links on the page after any dropdown change to keep them in sync
-                    document.querySelectorAll('.lnkPlay').forEach(updateLink);
-                }
-            });
-
-            // Initialize all links when the page first loads
-            document.querySelectorAll('.lnkPlay').forEach(updateLink);
-        });
-    </script>
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const navRibbon = document.querySelector('.score-nav-ribbon');
-            const ribbonLinks = document.querySelectorAll('.score-nav-ribbon li a');
-            const segments = document.querySelectorAll('div[id^="segment-"]');
-            const stopBtn = document.getElementById('stop-playback-btn');
-            if (stopBtn) {
-                stopBtn.addEventListener('click', function(event) {
-                    event.preventDefault(); // Explicitly prevent the link's default action
+            stop_playback() {
+                try {
                     MIDIjs.stop();
-                });
+                } catch (error) {
+                    console.error("Error stopping MIDI:", error);
+                }
             }
 
-            // --- Smooth Scrolling for Nav Ribbon Links ---
-            if (navRibbon) {
-                navRibbon.addEventListener('click', function(event) {
-                    const targetLink = event.target.closest('a');
-                    if (!targetLink) return;
+            init_navigation() {
+                const nav_ribbon = document.querySelector('.score-nav-ribbon');
+                const ribbon_links = document.querySelectorAll('.score-nav-ribbon li a');
+                const segments = document.querySelectorAll('.music-segment');
 
-                    const href = targetLink.getAttribute('href');
-                    if (href === '#') {
-                        event.preventDefault();
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                        history.replaceState(null, null, ' ');
-                        return;
-                    }
+                if (nav_ribbon) {
+                    nav_ribbon.addEventListener('click', (event) => {
+                        const target_link = event.target.closest('a');
+                        if (!target_link) return;
 
-                    const targetElement = document.querySelector(href);
-                    if (targetElement) {
-                        event.preventDefault();
-                        targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        history.replaceState(null, null, href);
-                    }
-                });
-            }
+                        const href = target_link.getAttribute('href');
+                        if (href === '#score-main-content') {
+                            event.preventDefault();
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                            return;
+                        }
 
-            // --- Intersection Observer for Active Link Highlighting ---
-            if ('IntersectionObserver' in window && segments.length > 0 && ribbonLinks.length > 0) {
-                const observerOptions = {
-                    root: null, 
-                    rootMargin: '0px 0px -50% 0px', // Trigger when a segment is in the top half of the screen
-                    threshold: 0
-                };
-
-                const observer = new IntersectionObserver((entries, observer) => {
-                    entries.forEach(entry => {
-                        const segmentId = entry.target.getAttribute('id');
-                        const correspondingLink = document.querySelector(`.score-nav-ribbon li a[href="#${segmentId}"]`);
-                        
-                        if (entry.isIntersecting && correspondingLink) {
-                            ribbonLinks.forEach(link => link.classList.remove('active'));
-                            correspondingLink.classList.add('active');
+                        const target_element = document.querySelector(href);
+                        if (target_element) {
+                            event.preventDefault();
+                            target_element.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
                     });
-                }, observerOptions);
+                }
 
-                segments.forEach(segment => {
-                    observer.observe(segment);
-                });
+                if ('IntersectionObserver' in window && segments.length > 0 && ribbon_links.length > 0) {
+                    const observer = new IntersectionObserver((entries) => {
+                        entries.forEach(entry => {
+                            const segment_id = entry.target.getAttribute('id');
+                            const corresponding_link = document.querySelector(`.score-nav-ribbon li a[href="#${segment_id}"]`);
+                            
+                            if (entry.isIntersecting && corresponding_link) {
+                                ribbon_links.forEach(link => link.classList.remove('active'));
+                                corresponding_link.classList.add('active');
+                            }
+                        });
+                    }, {
+                        root: null,
+                        rootMargin: '0px 0px -50% 0px',
+                        threshold: 0
+                    });
+
+                    segments.forEach(segment => {
+                        observer.observe(segment);
+                    });
+                }
             }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new TalkingScorePlayer();
         });
     </script>
 </body>

@@ -175,6 +175,57 @@ class MidiHandler:
         except OSError as e:
             logger.error(f"Could not write cache flag file {flag_path}: {e}")
 
+    def _remove_all_repeats_from_score(self, score):
+        """
+        Comprehensively remove all repeat-related elements from a score.
+        
+        This method removes repeat barlines, repeat expressions, and any other
+        repeat-related markup that could cause expandRepeats() to fail.
+        
+        Args:
+            score: The music21 Score object to clean
+        """
+        try:
+            # Remove repeat barlines and expressions from all elements
+            for element in score.recurse():
+                # Remove repeat barlines
+                if hasattr(element, 'leftBarline') and element.leftBarline:
+                    if hasattr(element.leftBarline, 'type') and 'repeat' in str(element.leftBarline.type).lower():
+                        element.leftBarline = None
+                
+                if hasattr(element, 'rightBarline') and element.rightBarline:
+                    if hasattr(element.rightBarline, 'type') and 'repeat' in str(element.rightBarline.type).lower():
+                        element.rightBarline = None
+                
+                # Remove repeat expressions
+                if hasattr(element, 'expressions'):
+                    element.expressions = [expr for expr in element.expressions 
+                                         if not ('repeat' in str(type(expr)).lower() or 
+                                               'segno' in str(type(expr)).lower() or
+                                               'coda' in str(type(expr)).lower() or
+                                               'fine' in str(type(expr)).lower())]
+            
+            # Remove repeat-related classes from all parts and measures
+            for part in score.parts:
+                # Remove from part level
+                part.removeByClass(['Repeat', 'RepeatExpression', 'RepeatBracket', 'Segno', 'Coda', 'Fine'])
+                
+                # Remove from measure level
+                for measure in part.getElementsByClass('Measure'):
+                    measure.removeByClass(['Repeat', 'RepeatExpression', 'RepeatBracket', 'Segno', 'Coda', 'Fine'])
+                    
+                    # Remove from note/element level within measures
+                    for element in measure.flatten():
+                        if hasattr(element, 'expressions'):
+                            element.expressions = [expr for expr in element.expressions 
+                                                 if not any(repeat_term in str(type(expr)).lower() 
+                                                          for repeat_term in ['repeat', 'segno', 'coda', 'fine'])]
+            
+            logger.debug("Successfully removed all repeat elements from score")
+            
+        except Exception as e:
+            logger.warning(f"Error removing repeats from score: {e}")
+
     def _extract_score_segment(self, start, end):
         """
         Extract a segment of the score between specified measures.
@@ -194,9 +245,8 @@ class MidiHandler:
         for part in self.score.parts:
             measures_in_range = part.measures(start, end)
             if measures_in_range:
-                # Remove repeat markers that can cause playback issues
-                for measure in measures_in_range.getElementsByClass('Measure'):
-                    measure.removeByClass('Repeat')
+                # CRITICAL FIX: Remove all repeat-related elements comprehensively
+                self._remove_all_repeats_from_score(measures_in_range)
                 self.score_segment.insert(0, measures_in_range)
         
         return offset
@@ -228,6 +278,8 @@ class MidiHandler:
                 
                 if instrument_score.parts:
                     self._apply_tempo_and_click(instrument_score, start, tempo, click)
+                    # CRITICAL FIX: Remove repeats before writing
+                    self._remove_all_repeats_from_score(instrument_score)
                     instrument_score.write('midi', instrument_path)
 
             # Generate individual part files if instrument has multiple parts
@@ -244,6 +296,8 @@ class MidiHandler:
                         
                         if part_score.parts:
                             self._apply_tempo_and_click(part_score, start, tempo, click)
+                            # CRITICAL FIX: Remove repeats before writing
+                            self._remove_all_repeats_from_score(part_score)
                             part_score.write('midi', part_path)
 
     def _apply_tempo_and_click(self, score, start_measure, tempo, click):
@@ -348,6 +402,8 @@ class MidiHandler:
                 part_measures = self.score.parts[part_index].measures(
                     start, end, collect=('Clef', 'TimeSignature', 'Instrument', 'KeySignature')
                 )
+                # CRITICAL FIX: Remove repeat marks comprehensively
+                self._remove_all_repeats_from_score(part_measures)
                 combined_score.insert(0, part_measures)
         
         if not combined_score.parts:
@@ -356,6 +412,10 @@ class MidiHandler:
 
         self.insert_tempos(combined_score, offset, tempo/100)
         self.insert_click_track(combined_score, click)
+        
+        # CRITICAL FIX: Final comprehensive repeat removal before writing
+        self._remove_all_repeats_from_score(combined_score)
+        
         combined_score.write('midi', path)
 
     def _create_click_measure(self, original_measure, time_signature):
