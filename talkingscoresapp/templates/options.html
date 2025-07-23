@@ -308,7 +308,7 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // =================================================================
-        // --- 1. SETUP & CONFIGURATION ---
+        // 1. SETUP & CONFIGURATION
         // =================================================================
         const LOCAL_STORAGE_KEY = 'talkingScoresSettings';
         
@@ -364,7 +364,7 @@
         const octaveNameMap = { 4: 'mid', 5: 'high' };
 
         // =================================================================
-        // --- DISABLE ALL COLORING SETUP ---
+        // DISABLE ALL COLORING SETUP
         // =================================================================
         const disableAllCheckbox = document.getElementById('chk_disable_all_coloring');
 
@@ -409,7 +409,7 @@
         }
     
         // =================================================================
-        // --- 2. CORE FUNCTIONS ---
+        // 2. CORE FUNCTIONS
         // =================================================================
     
         function generatePreviewHTML(settings) {
@@ -596,7 +596,7 @@
         }
 
         // =================================================================
-        // --- DISABLE ALL COLORING FUNCTIONALITY ---
+        // DISABLE ALL COLORING FUNCTIONALITY
         // =================================================================
         function toggleAllColorOptions() {
             const isDisabled = disableAllCheckbox.checked;
@@ -704,7 +704,7 @@
         }
     
         // =================================================================
-        // --- 3. EVENT LISTENERS & INITIALIZATION ---
+        // 3. EVENT LISTENERS & INITIALIZATION
         // =================================================================
         document.querySelector('form.form-horizontal').addEventListener('submit', saveSettings);
     
@@ -771,7 +771,7 @@
         updateColorFormDisplay();
 
         // =================================================================
-        // --- INITIALIZE DISABLE ALL COLORING ---
+        // INITIALIZE DISABLE ALL COLORING
         // =================================================================
         const workingCheckbox = setupDisableAllColoring();
         

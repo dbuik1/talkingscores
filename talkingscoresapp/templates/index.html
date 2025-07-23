@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const dropZone = document.getElementById('drop-zone');
     const clearFileButton = document.getElementById('clear-file-button'); // Get the new button
 
-    // --- Function to update the display based on file selection ---
+    // Function to update the display based on file selection
     function updateFileDisplay() {
         if (fileInput.files.length > 0) {
             // If a file is selected:
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // --- Function to handle file selection (from click OR drop) ---
+    // Function to handle file selection (from click OR drop)
     function handleFileSelect(file) {
         if (file) {
             const dataTransfer = new DataTransfer();
@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- NEW: Logic for the 'Clear File' button ---
+    // Logic for the 'Clear File' button
     if (clearFileButton) {
         clearFileButton.addEventListener('click', function() {
             fileInput.value = ''; // This is the standard way to clear a file input

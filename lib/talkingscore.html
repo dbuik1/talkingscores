@@ -318,7 +318,6 @@
                                         <p>(This part rests for the entire bar)</p>
                                     {% elif not (settings.repetition_mode == 'learning' and learning_info and learning_info.type == 'exact') %}
                                         {% if settings.beat_division == 'bar' or segment.start_bar == 'Pickup' %}
-                                            <!-- FIXED: Comma spacing - only space after comma -->
                                             <p class="beat-group"><span class="beat-content">
                                             {% set event_namespace = namespace(previous_event=None, is_first_event_in_bar=True) %}
                                             {% for time_point in time_point_list %}

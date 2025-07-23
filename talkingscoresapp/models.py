@@ -120,7 +120,6 @@ class TSScore(object):
         return path
 
     def html(self):
-        # --- MODIFIED: REMOVED HTML CACHING ---
         # This method now generates the HTML dynamically on every call.
         
         data_path = self.get_data_file_path()
@@ -150,7 +149,6 @@ class TSScore(object):
     
     @classmethod
     def from_uploaded_file(cls, uploaded_file):
-        # --- NEW, SIMPLIFIED UPLOAD LOGIC ---
         score = cls()
 
         # 1. Determine ID and Filename
@@ -166,7 +164,6 @@ class TSScore(object):
         if not destination_path:
             raise Exception("Could not determine file destination path.")
 
-        # --- START: New Cache Clearing Logic ---
         # Check for and delete any stale .opts file from a previous run.
         # This ensures the user is always presented with the options page on a new upload.
         opts_path = destination_path + '.opts'
@@ -176,7 +173,6 @@ class TSScore(object):
                 score.logger.info(f"Removed stale options file: {opts_path}")
             except OSError as e:
                 score.logger.error(f"Could not remove stale options file {opts_path}: {e}")
-        # --- END: New Cache Clearing Logic ---
 
         # 3. Write the file DIRECTLY to the final destination
         uploaded_file.seek(0)
@@ -195,7 +191,6 @@ class TSScore(object):
 
     @classmethod
     def from_url(cls, url):
-        # --- NEW, SIMPLIFIED URL LOGIC ---
         score = cls(url=url)
         
         # 1. Fetch the file into memory

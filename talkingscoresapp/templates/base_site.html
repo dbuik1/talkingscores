@@ -87,13 +87,13 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- Active Navigation Link Logic (Runs on all pages) ---
+    // Active Navigation Link Logic (Runs on all pages)
     const activeNavLink = document.querySelector(`li a[href="${location.pathname}"]`);
     if (activeNavLink) {
         activeNavLink.closest('li').classList.add('tsactive');
     }
 
-    // --- Dark Mode Toggle Logic (Runs on all pages) ---
+    // Dark Mode Toggle Logic (Runs on all pages)
     const themeToggle = document.getElementById('theme-toggle');
     if (themeToggle) {
         const htmlElement = document.documentElement;

@@ -2265,7 +2265,7 @@ class HTMLTalkingScoreFormatter():
         beat_division_options = self.score.get_beat_division_options()
 
         # Debug output for beat division options
-        logger.debug("--- DEBUG INFO: Beat Division Options ---")
+        logger.debug("Beat Division Options:")
         logger.debug(beat_division_options)
 
         # Render the complete HTML template
