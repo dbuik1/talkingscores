@@ -1016,30 +1016,72 @@ html[data-theme="dark"] .preview-block-content {
     color: var(--link-color);
     font-weight: bold;
 }
-/* --- Options Page: Disable All Coloring --- */
+/* Fix for Disable All Coloring Checkbox */
+
+/* Ensure checkbox is properly clickable and styled */
 #chk_disable_all_coloring {
     transform: scale(1.2);
     margin-right: var(--spacing-md);
+    cursor: pointer; /* Ensure it shows as clickable */
+    /* Remove any conflicting styles that might prevent clicking */
+    pointer-events: auto;
+    position: relative;
+    z-index: 1;
 }
 
-.form-check-label strong {
-    color: var(--clear-btn-color);
-    font-weight: 700;
-}
-
+/* Improve the form check container */
 .form-group .form-check {
     padding: var(--spacing-md);
     background-color: rgba(220, 53, 69, 0.05);
     border: 2px solid rgba(220, 53, 69, 0.2);
     border-radius: var(--border-radius-lg);
     margin-bottom: var(--spacing-lg);
+    /* Ensure container doesn't interfere with checkbox */
+    position: relative;
 }
 
+/* Dark theme variant */
 html[data-theme="dark"] .form-group .form-check {
     background-color: rgba(255, 138, 138, 0.08);
     border-color: rgba(255, 138, 138, 0.3);
 }
 
+/* Styling for when color inputs are disabled */
+input[type="color"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(50%);
+}
+
+/* Make disabled color sections visually distinct */
+.color-section.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+    position: relative;
+}
+
+.color-section.disabled::after {
+    content: "Disabled by 'Disable All Coloring' option";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--background-color);
+    color: var(--muted-text-color);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius);
+    font-size: 0.9rem;
+    font-style: italic;
+    border: 1px solid var(--form-control-border);
+    z-index: 2;
+}
+
+/* Checkbox label styling */
+.form-check-label strong {
+    color: var(--clear-btn-color);
+    font-weight: 700;
+    cursor: pointer; /* Make label clickable too */
+}
 /* --- 10. DARK THEME OVERRIDES --- */
 html[data-theme="dark"] .form-horizontal label,
 html[data-theme="dark"] .form-horizontal .form-check-label,

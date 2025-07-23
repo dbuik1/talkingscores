@@ -14,6 +14,14 @@
         transition: color 0.2s, background-color 0.2s;
         margin-left: auto; /* Pushes the preview to the right */
     }
+    #chk_disable_all_coloring {
+        transform: scale(1.2);
+        margin-right: 1rem;
+        cursor: pointer;
+        pointer-events: auto;
+        position: relative;
+        z-index: 1;
+    }
     /* Style for disabled color pickers */
     input[type="color"]:disabled {
         cursor: not-allowed;
@@ -184,15 +192,22 @@
             <fieldset class="mt-4 p-3 border rounded">
                 <div class="form-group">
                     <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="chk_disable_all_coloring" name="chk_disable_all_coloring">
+                        <input type="checkbox" 
+                            class="form-check-input" 
+                            id="chk_disable_all_coloring" 
+                            name="chk_disable_all_coloring"
+                            value="1">
                         <label class="form-check-label" for="chk_disable_all_coloring">
                             <strong>Disable All Coloring</strong>
                             <br>
-                            <small class="text-muted">Override all color settings - no pitch, rhythm, or octave coloring will be applied</small>
+                            <small class="text-muted">
+                                Override all color settings - no pitch, rhythm, or octave coloring will be applied
+                            </small>
                         </label>
                     </div>
                 </div>
                 <div class="form-separator">Color Options</div>
+
                 <legend class="h2 bold">Note Colouring</legend>
                 <div class="form-group">
                     <label for="colour_style" class="h4">Colouring Style</label>
@@ -326,7 +341,6 @@
                 enharmonic_conversion: false
             },
             'notes_only': {
-                // ** THE FIX IS HERE **
                 bars_at_a_time: '2',
                 accidentalStyle: 'symbols',
                 repetitionMode: 'none',
@@ -348,6 +362,51 @@
             'american': { 'whole': 'Whole note', 'half': 'Half note', 'quarter': 'Quarter note', 'eighth': 'Eighth note' }
         };
         const octaveNameMap = { 4: 'mid', 5: 'high' };
+
+        // =================================================================
+        // --- DISABLE ALL COLORING SETUP ---
+        // =================================================================
+        const disableAllCheckbox = document.getElementById('chk_disable_all_coloring');
+
+        // Create notification banner
+        function createAndShowBanner(show) {
+            let banner = document.getElementById('color-disabled-banner');
+            
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'color-disabled-banner';
+                banner.style.cssText = `
+                    background-color: #f8d7da;
+                    border: 2px solid #f5c6cb;
+                    color: #721c24;
+                    padding: 15px 20px;
+                    border-radius: 8px;
+                    margin: 10px 0 20px 0;
+                    font-weight: 500;
+                    font-size: 14px;
+                    display: none;
+                `;
+                banner.innerHTML = `
+                    <strong>⚠️ All Color Options Disabled</strong><br>
+                    Color settings are overridden by "Disable All Coloring". Uncheck the option above to customize colors.
+                `;
+                
+                // Find the "Color Options" separator and insert after it
+                const formSeparator = document.querySelector('.form-separator');
+                if (formSeparator && formSeparator.textContent.includes('Color Options')) {
+                    formSeparator.parentNode.insertBefore(banner, formSeparator.nextSibling);
+                } else {
+                    // Fallback: insert before the "Note Colouring" legend
+                    const noteColouringLegend = document.querySelector('legend.h2.bold');
+                    if (noteColouringLegend) {
+                        noteColouringLegend.parentNode.insertBefore(banner, noteColouringLegend);
+                    }
+                }
+            }
+            
+            banner.style.display = show ? 'block' : 'none';
+            return banner;
+        }
     
         // =================================================================
         // --- 2. CORE FUNCTIONS ---
@@ -535,7 +594,114 @@
                 });
             });
         }
-    
+
+        // =================================================================
+        // --- DISABLE ALL COLORING FUNCTIONALITY ---
+        // =================================================================
+        function toggleAllColorOptions() {
+            const isDisabled = disableAllCheckbox.checked;
+            console.log(`Disable all coloring: ${isDisabled ? 'ENABLED' : 'DISABLED'}`);
+
+            // Show/hide banner
+            createAndShowBanner(isDisabled);
+
+            // Target the specific "Colouring Style" dropdown from your screenshot
+            const colorStyleSelect = document.getElementById('colour_style');
+            if (colorStyleSelect) {
+                colorStyleSelect.disabled = isDisabled;
+                colorStyleSelect.style.opacity = isDisabled ? '0.5' : '1';
+                colorStyleSelect.style.cursor = isDisabled ? 'not-allowed' : 'auto';
+                colorStyleSelect.style.pointerEvents = isDisabled ? 'none' : 'auto';
+            }
+
+            // Get ALL color-related inputs and selects
+            const allColorElements = document.querySelectorAll([
+                'input[type="color"]',
+                'select[name*="colour"]',
+                'select[id*="colour"]',
+                'input[name*="colour"]',
+                'input[id*="colour"]',
+                '#chk_colourPitch',
+                '#chk_show_advanced_colouring',
+                'input[name="colorProfile"]',
+                '#rhythm_colour_mode',
+                '#octave_colour_mode'
+            ].join(', '));
+
+            allColorElements.forEach(element => {
+                element.disabled = isDisabled;
+                element.style.opacity = isDisabled ? '0.5' : '1';
+                element.style.cursor = isDisabled ? 'not-allowed' : 'auto';
+                element.style.pointerEvents = isDisabled ? 'none' : 'auto';
+                
+                // Handle labels
+                const labels = document.querySelectorAll(`label[for="${element.id}"]`);
+                labels.forEach(label => {
+                    label.style.opacity = isDisabled ? '0.5' : '1';
+                    label.style.cursor = isDisabled ? 'not-allowed' : 'auto';
+                    label.style.pointerEvents = isDisabled ? 'none' : 'auto';
+                });
+            });
+
+            // Disable the entire color panel area
+            const coloringDetailsPanel = document.getElementById('coloring-details-panel');
+            if (coloringDetailsPanel) {
+                coloringDetailsPanel.style.opacity = isDisabled ? '0.5' : '1';
+                coloringDetailsPanel.style.pointerEvents = isDisabled ? 'none' : 'auto';
+            }
+
+            // Disable the entire fieldset containing color options
+            const colorFieldset = disableAllCheckbox.closest('fieldset');
+            if (colorFieldset) {
+                const allInputsInFieldset = colorFieldset.querySelectorAll('input:not(#chk_disable_all_coloring), select');
+                allInputsInFieldset.forEach(input => {
+                    input.disabled = isDisabled;
+                    input.style.opacity = isDisabled ? '0.5' : '1';
+                    input.style.pointerEvents = isDisabled ? 'none' : 'auto';
+                });
+                
+                // Make sure the checkbox itself still works
+                if (disableAllCheckbox) {
+                    disableAllCheckbox.disabled = false;
+                    disableAllCheckbox.style.opacity = '1';
+                    disableAllCheckbox.style.pointerEvents = 'auto';
+                }
+            }
+        }
+
+        function setupDisableAllColoring() {
+            if (!disableAllCheckbox) {
+                console.warn('Disable all coloring checkbox not found');
+                return;
+            }
+
+            // Clean event handling to fix toggle issue
+            const newCheckbox = disableAllCheckbox.cloneNode(true);
+            disableAllCheckbox.parentNode.replaceChild(newCheckbox, disableAllCheckbox);
+            
+            // Get fresh reference
+            const cleanCheckbox = document.getElementById('chk_disable_all_coloring');
+            
+            // Add the event listener
+            cleanCheckbox.addEventListener('change', function(e) {
+                console.log('Checkbox changed to:', e.target.checked);
+                setTimeout(() => {
+                    toggleAllColorOptions();
+                }, 10);
+            });
+
+            // Handle label clicks too
+            const label = document.querySelector('label[for="chk_disable_all_coloring"]');
+            if (label) {
+                label.addEventListener('click', function(e) {
+                    setTimeout(() => {
+                        toggleAllColorOptions();
+                    }, 50);
+                });
+            }
+
+            return cleanCheckbox;
+        }
     
         // =================================================================
         // --- 3. EVENT LISTENERS & INITIALIZATION ---
@@ -603,23 +769,18 @@
         elements.profileRadios.forEach(radio => { radio.addEventListener('change', () => { if (radio.value !== 'custom') { applyNoteColorProfile(radio.value); } updateColorFormDisplay(); }); });
         applyNoteColorProfile('default');
         updateColorFormDisplay();
+
+        // =================================================================
+        // --- INITIALIZE DISABLE ALL COLORING ---
+        // =================================================================
+        const workingCheckbox = setupDisableAllColoring();
+        
+        // Set initial state after everything else is initialized
+        setTimeout(() => {
+            toggleAllColorOptions();
+        }, 100);
+        
+        console.log('All functionality initialized, including disable all coloring');
     });
-    </script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const disableAllCheckbox = document.getElementById('chk_disable_all_coloring');
-            const colorInputs = document.querySelectorAll('input[type="color"], input[name*="colour"], input[name*="color"]');
-            
-            function toggleColorInputs() {
-                const isDisabled = disableAllCheckbox.checked;
-                colorInputs.forEach(input => {
-                    input.disabled = isDisabled;
-                    input.style.opacity = isDisabled ? '0.5' : '1';
-                });
-            }
-            
-            disableAllCheckbox.addEventListener('change', toggleColorInputs);
-            toggleColorInputs(); // Initial state
-        });
-        </script>
+</script>
 {% endblock %}
