@@ -10,28 +10,19 @@
     <link href="http://127.0.0.1:8000/static/css/talkingscores.css" rel="stylesheet">
 
     <script>
-      (function() {
-        const theme = localStorage.getItem('theme-preference') || 'light';
-        document.documentElement.setAttribute('data-theme', theme);
-      })();
+        (function() {
+            const theme = localStorage.getItem('theme-preference') || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
     </script>
     
     <style type="text/css">
-        /* You can keep these styles as a fallback, but the external CSS will take priority */
         body{font-family: Georgia; font-size: 26pt}
         
         h4 {
             margin-block-end:1rem;
         }
     </style>
-    <script>
-        (function() {
-          // Check for a saved theme in localStorage, or default to light
-          const theme = localStorage.getItem('theme-preference') || 'light';
-          // Apply the theme to the root <html> element
-          document.documentElement.setAttribute('data-theme', theme);
-        })();
-      </script>
 </head>
 <body class="score-page">
 
@@ -183,7 +174,6 @@
             {% set part_index = loop.index0 %}
             {% if part_descriptions|length > 1 %}<h4>{{part_names[instruments[instrument_index][1] + loop.index-1 ]}}</h4>{% endif %}
 
-            {# This is the corrected inner loop that prevents duplication #}
             {% for bar, time_point_list in part_description.items()|sort %}
                 <p class="meta-info"><strong>Bar: {{ bar }}</strong></p>
                 {% if bar in time_and_keys %}<p class="meta-info">{% for tk in time_and_keys[bar] %}{{tk}}<br/>{% endfor %}</p>{% endif %}
@@ -192,7 +182,6 @@
                 {% if settings.repetition_mode == 'learning' and learning_info %}<div class="repetition-info">{{ learning_info.text }}</div>
                 {% elif settings.repetition_mode == 'detailed' and detailed_info %}<div class="repetition-info"><strong>Repetition:</strong> {{ detailed_info }}</div>{% endif %}
 
-                {# The rest of the rendering logic remains the same #}
                 {% set N = namespace(has_renderable_event=false) %}
                 {% for time_point in time_point_list %}{% for voice, events_in_voice in time_point.voices|dictsort %}{% for event in events_in_voice %}{% if event.__class__.__name__ in ['TSNote', 'TSChord'] %}{% set N.has_renderable_event = true %}{% endif %}{% endfor %}{% endfor %}{% endfor %}
 
@@ -201,38 +190,42 @@
                 {% elif not (settings.repetition_mode == 'learning' and learning_info and learning_info.type == 'exact') %}
                     {%- if settings.beat_division == 'bar' or segment.start_bar == 'Pickup' -%}
                         <p class="beat-group"><span class="beat-content">
-                        {%- set ns = namespace(previous_event=None, is_first_event_in_bar=True) -%}
+                        {%- set ns = namespace(previous_event=None, rendered_content=[]) -%}
                         {%- for time_point in time_point_list -%}
                             {%- set filtered = namespace(events=[], has_note_or_chord=false) -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- if event.__class__.__name__ in ['TSNote', 'TSChord'] -%}{%- set filtered.has_note_or_chord = true -%}{%- endif -%}{%- endfor -%}{%- endfor -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- set event_type = event.__class__.__name__ -%}{%- if filtered.has_note_or_chord -%}{%- if event_type in ['TSNote', 'TSChord', 'TSDynamic'] -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- else -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
                             {%- for event in filtered.events -%}
                                 {%- set rendered_event = event.render(settings, ns.previous_event) -%}
                                 {%- if rendered_event -%}
-                                {%- if not ns.is_first_event_in_bar -%},&nbsp;{%- endif -%}
+                                    {%- if ns.rendered_content -%}, {%- endif -%}
                                     {{- rendered_event|join(' ') | safe -}}
+                                    {%- set ns.rendered_content = ns.rendered_content + [rendered_event|join(' ')] -%}
                                     {%- set ns.previous_event = event -%}
-                                    {%- set ns.is_first_event_in_bar = false -%}
                                 {%- endif -%}
                             {%- endfor -%}
                         {%- endfor -%}
                         </span></p>
                     {%- else -%}
-                        {%- set ns = namespace(current_integer_beat=0, previous_event=None, is_first_event_in_bar=True) -%}
+                        {%- set ns = namespace(current_integer_beat=0, previous_event=None, rendered_content=[]) -%}
                         {%- for time_point in time_point_list -%}
                             {%- set integer_beat = (time_point.beat - 0.001)|round|int if time_point.beat is number and time_point.beat > 0 else ns.current_integer_beat -%}
                             {%- if integer_beat > ns.current_integer_beat -%}
-                                {%- if not ns.is_first_event_in_bar -%}</span></p>{%- endif -%}
+                                {%- if ns.rendered_content -%}</span></p>{%- endif -%}
                                 <p class="beat-group"><strong>Beat {{ integer_beat }}:</strong> <span class="beat-content">
                                 {%- set ns.current_integer_beat = integer_beat -%}
-                            {%- elif not ns.is_first_event_in_bar -%}, {% endif -%}
+                                {%- set ns.rendered_content = [] -%}
+                            {%- elif ns.rendered_content -%}, {% endif -%}
                             {%- set filtered = namespace(events=[], has_note_or_chord=false) -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- if event.__class__.__name__ in ['TSNote', 'TSChord'] -%}{%- set filtered.has_note_or_chord = true -%}{%- endif -%}{%- endfor -%}{%- endfor -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- set event_type = event.__class__.__name__ -%}{%- if filtered.has_note_or_chord -%}{%- if event_type in ['TSNote', 'TSChord', 'TSDynamic'] -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- else -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
                             {%- for event in filtered.events -%}
-                                {%- if not loop.first %} - together with {% endif -%}
-                                {{- event.render(settings, ns.previous_event)|join(' ') | safe -}}
-                                {%- set ns.previous_event = event -%}
+                                {%- set rendered_event = event.render(settings, ns.previous_event) -%}
+                                {%- if rendered_event -%}
+                                    {%- if not loop.first %} - together with {% endif -%}
+                                    {{- rendered_event|join(' ') | safe -}}
+                                    {%- set ns.rendered_content = ns.rendered_content + [rendered_event|join(' ')] -%}
+                                    {%- set ns.previous_event = event -%}
+                                {%- endif -%}
                             {%- endfor -%}
-                            {%- set ns.is_first_event_in_bar = false -%}
                         {%- endfor -%}
-                        {%- if not ns.is_first_event_in_bar -%}</span></p>{%- endif -%}
+                        {%- if ns.rendered_content -%}</span></p>{%- endif -%}
                     {%- endif -%}
                 {% endif %}
             {% endfor %}
@@ -244,10 +237,8 @@
         <a href="#score-nav-ribbon" class="skip-link">Back to navigation</a>
     </main>
 
-
     <script>
         document.addEventListener("DOMContentLoaded", (event) => {
-            // This function builds the final URL for a link based on its dropdowns
             function updateLink(link) {
                 const parentScope = link.closest('#global-controls, div[id^="segment-"]');
                 if (!parentScope) return;
@@ -258,18 +249,13 @@
                 const tempo = parentScope.querySelector('.ddlTempo').value;
                 const click = parentScope.querySelector('.ddlClick').value;
 
-                // The python functions create the base URL with its specific params (sel, part, etc.)
-                // We just add the tempo and click params.
                 const finalUrl = `${baseUrl}&t=${tempo}&c=${click}`;
-                
-                // Store the final, ready-to-play URL in a data attribute.
                 link.dataset.finalUrl = finalUrl;
             }
 
-            // Add a single click listener to the body for all playback links
             document.body.addEventListener('click', function(e) {
                 if (e.target.matches('.lnkPlay')) {
-                    e.preventDefault(); // This reliably stops the page from jumping
+                    e.preventDefault();
                     const urlToPlay = e.target.dataset.finalUrl;
                     if (urlToPlay) {
                         MIDIjs.play(urlToPlay);
@@ -279,12 +265,10 @@
                 }
             });
 
-            // Add a single change listener for all dropdowns
             document.body.addEventListener('change', function(e) {
                 if (e.target.matches('.ddlTempo, .ddlClick')) {
                     const changedElement = e.target;
                     
-                    // If a global control was changed, sync all other dropdowns
                     if (changedElement.closest('#global-controls')) {
                         const isTempo = changedElement.matches('.ddlTempo');
                         const value = changedElement.value;
@@ -292,12 +276,10 @@
                         document.querySelectorAll(selector).forEach(ddl => { ddl.value = value; });
                     }
 
-                    // Update all links on the page after any dropdown change to keep them in sync
                     document.querySelectorAll('.lnkPlay').forEach(updateLink);
                 }
             });
 
-            // Initialize all links when the page first loads
             document.querySelectorAll('.lnkPlay').forEach(updateLink);
         });
     </script>
@@ -309,12 +291,11 @@
             const stopBtn = document.getElementById('stop-playback-btn');
             if (stopBtn) {
                 stopBtn.addEventListener('click', function(event) {
-                    event.preventDefault(); // Explicitly prevent the link's default action
+                    event.preventDefault();
                     MIDIjs.stop();
                 });
             }
 
-            // --- Smooth Scrolling for Nav Ribbon Links ---
             if (navRibbon) {
                 navRibbon.addEventListener('click', function(event) {
                     const targetLink = event.target.closest('a');
@@ -337,11 +318,10 @@
                 });
             }
 
-            // --- Intersection Observer for Active Link Highlighting ---
             if ('IntersectionObserver' in window && segments.length > 0 && ribbonLinks.length > 0) {
                 const observerOptions = {
                     root: null, 
-                    rootMargin: '0px 0px -50% 0px', // Trigger when a segment is in the top half of the screen
+                    rootMargin: '0px 0px -50% 0px',
                     threshold: 0
                 };
 
