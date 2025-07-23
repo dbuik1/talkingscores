@@ -245,7 +245,6 @@ class MidiHandler:
         for part in self.score.parts:
             measures_in_range = part.measures(start, end)
             if measures_in_range:
-                # CRITICAL FIX: Remove all repeat-related elements comprehensively
                 self._remove_all_repeats_from_score(measures_in_range)
                 self.score_segment.insert(0, measures_in_range)
         
@@ -278,7 +277,6 @@ class MidiHandler:
                 
                 if instrument_score.parts:
                     self._apply_tempo_and_click(instrument_score, start, tempo, click)
-                    # CRITICAL FIX: Remove repeats before writing
                     self._remove_all_repeats_from_score(instrument_score)
                     instrument_score.write('midi', instrument_path)
 
@@ -296,7 +294,6 @@ class MidiHandler:
                         
                         if part_score.parts:
                             self._apply_tempo_and_click(part_score, start, tempo, click)
-                            # CRITICAL FIX: Remove repeats before writing
                             self._remove_all_repeats_from_score(part_score)
                             part_score.write('midi', part_path)
 
@@ -402,7 +399,6 @@ class MidiHandler:
                 part_measures = self.score.parts[part_index].measures(
                     start, end, collect=('Clef', 'TimeSignature', 'Instrument', 'KeySignature')
                 )
-                # CRITICAL FIX: Remove repeat marks comprehensively
                 self._remove_all_repeats_from_score(part_measures)
                 combined_score.insert(0, part_measures)
         
@@ -413,7 +409,6 @@ class MidiHandler:
         self.insert_tempos(combined_score, offset, tempo/100)
         self.insert_click_track(combined_score, click)
         
-        # CRITICAL FIX: Final comprehensive repeat removal before writing
         self._remove_all_repeats_from_score(combined_score)
         
         combined_score.write('midi', path)

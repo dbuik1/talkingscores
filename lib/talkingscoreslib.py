@@ -2213,7 +2213,6 @@ class HTMLTalkingScoreFormatter():
         self.score.get_instruments()
         self.score.compare_parts_with_selected_instruments()
 
-        # **FIXED: Updated method call to use snake_case**
         self.music_analyser = MusicAnalyser()
         self.music_analyser.set_score(self.score)
         
