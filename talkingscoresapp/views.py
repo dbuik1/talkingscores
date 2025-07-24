@@ -1,7 +1,7 @@
 from django import forms
 from django.http import HttpResponse, FileResponse
 from django.template import loader
-from django.shortcuts import redirect, render # Import render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.contrib import messages
 from django.utils.text import slugify
@@ -26,24 +26,32 @@ logger = logging.getLogger("TSScore")
 
 
 class MusicXMLSubmissionForm(forms.Form):
-    filename = forms.FileField(label='MusicXML file', widget=forms.ClearableFileInput(attrs={'class': 'form-control'}),
+    filename = forms.FileField(label='MusicXML file', widget=forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.xml,.musicxml,.mxl'}),
                                required=False)
     url = forms.URLField(label='URL to MusicXML file', widget=forms.URLInput(attrs={'class': 'form-control'}),
                          required=False)
 
+    def clean_filename(self):
+        uploaded_file = self.cleaned_data.get('filename')
+        if uploaded_file:
+            file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+            allowed_extensions = ['.xml', '.musicxml', '.mxl']
+            if file_extension not in allowed_extensions:
+                raise forms.ValidationError(
+                    f"Invalid file type. Please upload a MusicXML file (.xml, .musicxml, or .mxl)."
+                )
+        return uploaded_file
+
     def clean(self):
-        # This method validates the form as a whole.
         cleaned_data = super().clean()
         filename = cleaned_data.get("filename")
         url = cleaned_data.get("url")
 
-        # Raise an error if both fields are empty.
         if not filename and not url:
             raise forms.ValidationError(
                 "Please upload a MusicXML file or provide a URL.", code='required'
             )
 
-        # Raise an error if both fields are filled.
         if filename and url:
             raise forms.ValidationError(
                 "Please provide either a file or a URL, not both.", code='conflict'
@@ -53,12 +61,10 @@ class MusicXMLSubmissionForm(forms.Form):
 
 
 class MusicXMLUploadForm(forms.Form):
-    filename = forms.FileField(label='MusicXML file', widget=forms.ClearableFileInput(attrs={'class': 'form-control'}))
+    filename = forms.FileField(label='MusicXML file', widget=forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.xml,.musicxml,.mxl'}))
 
 
 class TalkingScoreGenerationOptionsForm(forms.Form):
-    # Note: The 'instruments' field is intentionally omitted here
-    # because we handle it directly from the request for robustness.
     chk_playAll = forms.BooleanField(required=False)
     chk_playSelected = forms.BooleanField(required=False)
     chk_playUnselected = forms.BooleanField(required=False)
@@ -81,11 +87,9 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     octave_position = forms.CharField(widget=forms.Select, required=False)
     octave_announcement = forms.CharField(widget=forms.Select, required=False)
 
-    # ADDED: New field for dynamics toggle
     chk_include_dynamics = forms.BooleanField(required=False)
     accidental_style = forms.CharField(widget=forms.Select, required=False)
     key_signature_accidentals = forms.CharField(widget=forms.Select, required=False)
-
 
     colour_position = forms.CharField(widget=forms.Select, required=False)
     chk_colourPitch = forms.BooleanField(required=False)
@@ -98,9 +102,9 @@ class NotifyEmailForm(forms.Form):
 
 
 def send_error_email(error_message):
-    if 'EMAIL_PASSWORD' in os.environ:  # don't try to send an email from a development environment
+    if 'EMAIL_PASSWORD' in os.environ:
         msg = MIMEMultipart()
-        password = os.environ['EMAIL_PASSWORD']  # in pythonanywhere this can be set in wsgi.py
+        password = os.environ['EMAIL_PASSWORD']
         msg['From'] = "talkingscores@gmail.com"
         msg['To'] = "talkingscores@gmail.com"
         msg['Subject'] = "Talking Scores Error"
@@ -122,28 +126,21 @@ def process(request, id, filename):
 def score(request, id, filename):
     score_obj = TSScore(id=id, filename=filename)
 
-    # Simplified state check: if options aren't submitted, redirect to options page.
     if score_obj.state() == TSScoreState.AWAITING_OPTIONS:
         return redirect('options', id, filename)
     elif score_obj.state() == TSScoreState.FETCHING:
-        # This state should ideally not be hit directly by a user URL.
-        # It means the file doesn't exist. Redirect to index.
         messages.error(request, "The requested score could not be found. It may have expired.")
         return redirect('index')
     else:
-        # If the state is PROCESSED, generate the HTML dynamically.
         try:
             html = score_obj.html()
             return HttpResponse(html)
         except Exception:
             logger.exception("Unable to process score: http://%s%s " % (request.get_host(), reverse('score', args=[id, filename])))
-            # The redirect to 'error' will handle showing the error page.
             return redirect('error', id, filename)
 
 
 def midi(request, id, filename):
-    # 'filename' is now the source XML filename (e.g., Liebestraum.musicxml)
-    # The specific MIDI details are in the request's query parameters (request.GET)
     mh = MidiHandler(request, id, filename)
     
     midi_file_path = mh.get_or_make_midi_file()
@@ -159,9 +156,6 @@ def midi(request, id, filename):
 
 
 def error(request, id, filename):
-    # The error email should be triggered when the exception occurs, not on page load.
-    # Moving the send_error_email call to the 'except' block in the 'score' view is recommended.
-    # For now, I've left the POST handling for the notification form.
     if request.method == 'POST':
         form = NotifyEmailForm(request.POST)
         if form.is_valid():
@@ -178,7 +172,7 @@ def error(request, id, filename):
     context = {'id': id, 'filename': filename, 'form': form}
     return HttpResponse(template.render(context, request))
 
-# ... (change_log, contact_us, privacy_policy views remain the same) ...
+
 def change_log(request):
     template = loader.get_template('change-log.html')
     context = {}
@@ -197,9 +191,7 @@ def privacy_policy(request):
     return HttpResponse(template.render(context, request))
 
 
-# View for the a particular score - REFACTORED AND CORRECTED
 def options(request, id, filename):
-    # DEFINE THE ACCESSIBLE PALETTE HERE
     ACCESSIBLE_PALETTE = [
         '#E6194B',  # Red
         '#3CB44B',  # Green
@@ -232,7 +224,6 @@ def options(request, id, filename):
             form.add_error(None, "Please select at least one instrument to describe.")
             if score_info.get('rhythm_range'):
                 rhythms_with_colors = []
-                # FIX 1 (POST): USE THE ACCESSIBLE PALETTE
                 for i, rhythm_name in enumerate(score_info['rhythm_range']):
                     default_color = ACCESSIBLE_PALETTE[i % len(ACCESSIBLE_PALETTE)]
                     rhythms_with_colors.append({
@@ -283,8 +274,6 @@ def options(request, id, filename):
             "key_signature_accidentals": request.POST.get("key_signature_accidentals", "applied"),
             "advanced_rhythm_colours": {slugify(key.replace('color_rhythm_', '')): value for key, value in request.POST.items() if key.startswith('color_rhythm_')},
             "advanced_octave_colours": {key.replace('color_octave_', ''): value for key, value in request.POST.items() if key.startswith('color_octave_')},
-            
-            # FIX 2: USE THE CORRECTLY CALCULATED `figure_note_colours` VARIABLE
             "figureNoteColours": figure_note_colours
         }
 
@@ -293,10 +282,9 @@ def options(request, id, filename):
 
         return redirect('process', id, filename)
 
-    else:  # This block runs for GET requests.
+    else:
         if score_info.get('rhythm_range'):
             rhythms_with_colors = []
-            # FIX 1 (GET): USE THE ACCESSIBLE PALETTE
             for i, rhythm_name in enumerate(score_info['rhythm_range']):
                 default_color = ACCESSIBLE_PALETTE[i % len(ACCESSIBLE_PALETTE)]
                 rhythms_with_colors.append({
@@ -311,49 +299,37 @@ def options(request, id, filename):
         return render(request, 'options.html', context)
 
 
-# View for the main page
 def index(request):
     if request.method == 'POST':
-        # Instantiate the form with POST and FILES data.
         form = MusicXMLSubmissionForm(request.POST, request.FILES)
         
-        # The form's clean() method handles all validation.
         if form.is_valid():
             try:
                 score = None
-                # We can now safely access cleaned_data.
                 uploaded_file = form.cleaned_data.get('filename')
                 url = form.cleaned_data.get('url')
 
                 if uploaded_file:
-                    # --- THIS IS THE FIX ---
-                    # Rewind the file stream to the beginning before processing.
                     uploaded_file.seek(0)
-                    # ----------------------
                     score = TSScore.from_uploaded_file(uploaded_file)
                 elif url:
                     score = TSScore.from_url(url)
                 
-                # On success, redirect to the score page.
                 if score:
                     return redirect('score', id=score.id, filename=score.filename)
 
             except Exception as ex:
-                # Catch any errors during file processing and display them.
-                error_message = "The MusicXML file could not be processed. Please ensure it is a valid file and try again."
+                error_message = "The MusicXML file could not be processed. Please ensure it is a valid MusicXML file and try again."
                 logger.error(f"File Processing Error: {ex}", exc_info=True)
                 messages.error(request, error_message)
-                # Always redirect back to the index page
                 return redirect('index')
         else:
-            # If the form itself is invalid, add the errors as messages
             for field, error_list in form.errors.items():
                 for error in error_list:
                     messages.error(request, error)
-            # Always redirect back to the index page
             return redirect('index')
 
-    else: # GET request
+    else:
         form = MusicXMLSubmissionForm()
 
     example_scores = [f for f in os.listdir(os.path.join(BASE_DIR, 'talkingscoresapp', 'static', 'data')) if f.endswith('.html')]
