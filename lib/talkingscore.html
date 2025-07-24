@@ -52,7 +52,11 @@
 
             <p>{{ basic_information['title']|default('Untitled work') }} by {{ basic_information['composer']|default('Unknown composer') }}.</p>
 
-            <p>Time signature of {{ preamble['time_signature'] }}, key signature of {{ preamble['key_signature'] }}, tempo of {{ preamble['tempo']|default('no tempo specified') }}</p>
+            <p class="signature-info">
+                <span class="time-signature">Time signature: {{ preamble['time_signature'] }}</span>, 
+                <span class="key-signature">Key signature: {{ preamble['key_signature'] }}</span>, 
+                <span class="tempo-info">Tempo: {{ preamble['tempo']|default('no tempo specified') }}</span>
+            </p>
             <p>Music, both hands, a bar at a time, beat by beat</p>
 
             <div id="global-controls">
@@ -72,32 +76,41 @@
                     </select>
                 </p>
                 {% if play_all %}
-                    <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_all }}">Play All Instruments </a>
-                    <br/>
+                    <button type="button" class="lnkPlay btn-play" data-base-url="{{ full_score_midis.midi_all }}">
+                        <span class="play-icon">▶</span> Play All Instruments
+                    </button>
                 {% endif %}
                 {% if play_selected %}
-                    <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_sel }}">Play Selected Instruments </a>
-                    <br/>
+                    <button type="button" class="lnkPlay btn-play" data-base-url="{{ full_score_midis.midi_sel }}">
+                        <span class="play-icon">▶</span> Play Selected Instruments
+                    </button>
                 {% endif %}
                 {% if play_unselected %}
-                    <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_un }}">Play Unselected Instruments</a>
-                    <br/>
+                    <button type="button" class="lnkPlay btn-play" data-base-url="{{ full_score_midis.midi_un }}">
+                        <span class="play-icon">▶</span> Play Unselected Instruments
+                    </button>
                 {% endif %}
 
                 <h3>Instrument MIDIs</h3>
                 {% for index, ins in full_score_midis.selected_instruments_midis.items() %}
                     {% if preamble.number_of_parts > 1 %}
-                        <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play - {{instruments[ins.ins][0]}} </a><br/>
+                        <button type="button" class="lnkPlay btn-play" data-base-url="{{ ins.midi }}">
+                            <span class="play-icon">▶</span> {{instruments[ins.ins][0]}}
+                        </button>
                     {% else %}
-                        <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play Score</a><br/>
+                        <button type="button" class="lnkPlay btn-play" data-base-url="{{ ins.midi }}">
+                            <span class="play-icon">▶</span> Play Score
+                        </button>
                     {% endif %}
                     
                     {% if ins.midi_parts|length > 0 %}
-                    <li style="margin-left:15px; list-style-type:none;">
+                    <div class="instrument-parts">
                         {% for midipart in ins.midi_parts %}
-                            <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1 ]}}  </a><br/>
+                            <button type="button" class="lnkPlay btn-play btn-play-small" data-base-url="{{ midipart }}">
+                                <span class="play-icon">▶</span> {{part_names[instruments[ins.ins][1] + loop.index-1 ]}}
+                            </button>
                         {% endfor %}
-                    </li>
+                    </div>
                     {% endif %}
                 {% endfor %}
             </div>
@@ -114,13 +127,13 @@
         <h1>Music segment descriptions and playback</h1>
 {% for segment in music_segments %}
 <div id="segment-{{ segment.start_bar }}">
-    <h2>
+    <h2 class="bar-heading">
         {% if segment.start_bar == 'Pickup' %}
-            Pickup Bar
+            <span class="bar-label">Pickup Bar</span>
         {% elif segment.start_bar == segment.end_bar %}
-            Bar {{ segment.start_bar }}
+            <span class="bar-label">Bar {{ segment.start_bar }}</span>
         {% else %}
-            Bars {{ segment.start_bar }} to {{ segment.end_bar }}
+            <span class="bar-label">Bars {{ segment.start_bar }} to {{ segment.end_bar }}</span>
         {% endif %}
     </h2>
 
@@ -141,29 +154,41 @@
 
     {% set segment_label = "bars " ~ segment.start_bar ~ " to " ~ segment.end_bar if segment.start_bar != 'Pickup' and segment.start_bar != segment.end_bar else "bar " ~ segment.start_bar if segment.start_bar != 'Pickup' else "Pickup Bar" %}
     {% if play_all %}
-        <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_all }}">Play All - {{ segment_label }}</a><br/>
+        <button type="button" class="lnkPlay btn-play" data-base-url="{{ segment.midi_all }}">
+            <span class="play-icon">▶</span> Play All - {{ segment_label }}
+        </button>
     {% endif %}
     {% if play_selected %}
-        <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_sel }}">Play Selected - {{ segment_label }}</a><br/>
+        <button type="button" class="lnkPlay btn-play" data-base-url="{{ segment.midi_sel }}">
+            <span class="play-icon">▶</span> Play Selected - {{ segment_label }}
+        </button>
     {% endif %}
     {% if play_unselected %}
-        <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_un }}">Play Unselected - {{ segment_label }}</a><br/>
+        <button type="button" class="lnkPlay btn-play" data-base-url="{{ segment.midi_un }}">
+            <span class="play-icon">▶</span> Play Unselected - {{ segment_label }}
+        </button>
     {% endif %}
     
     <h3>Instrument MIDIs</h3>
     {% for index, ins in segment.selected_instruments_midis.items() %}
         {% if preamble.number_of_parts > 1 %}
-             <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play - {{instruments[ins.ins][0]}} - {{ segment_label }}</a><br/>
+             <button type="button" class="lnkPlay btn-play" data-base-url="{{ ins.midi }}">
+                <span class="play-icon">▶</span> {{instruments[ins.ins][0]}} - {{ segment_label }}
+             </button>
         {% else %}
-             <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play Score - {{ segment_label }}</a><br/>
+             <button type="button" class="lnkPlay btn-play" data-base-url="{{ ins.midi }}">
+                <span class="play-icon">▶</span> Play Score - {{ segment_label }}
+             </button>
         {% endif %}
         
         {% if ins.midi_parts|length > 0 %}
-        <li style="margin-left:15px; list-style-type:none;">
+        <div class="instrument-parts">
             {% for midipart in ins.midi_parts %}
-                <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1 ]}}</a><br/>
+                <button type="button" class="lnkPlay btn-play btn-play-small" data-base-url="{{ midipart }}">
+                    <span class="play-icon">▶</span> {{part_names[instruments[ins.ins][1] + loop.index-1 ]}}
+                </button>
             {% endfor %}
-        </li>
+        </div>
         {% endif %}
     {% endfor %}
     <br/>
@@ -175,8 +200,16 @@
             {% if part_descriptions|length > 1 %}<h4>{{part_names[instruments[instrument_index][1] + loop.index-1 ]}}</h4>{% endif %}
 
             {% for bar, time_point_list in part_description.items()|sort %}
-                <p class="meta-info"><strong>Bar: {{ bar }}</strong></p>
-                {% if bar in time_and_keys %}<p class="meta-info">{% for tk in time_and_keys[bar] %}{{tk}}<br/>{% endfor %}</p>{% endif %}
+                <p class="meta-info bar-info">
+                    <strong class="bar-number">Bar: {{ bar }}</strong>
+                </p>
+                {% if bar in time_and_keys %}
+                <div class="signature-changes">
+                    {% for tk in time_and_keys[bar] %}
+                        <p class="signature-change">{{ tk }}</p>
+                    {% endfor %}
+                </div>
+                {% endif %}
                 {% set detailed_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
                 {% set learning_info = immediate_repetition_contexts[instruments[instrument_index][1] + part_index].get(bar) %}
                 {% if settings.repetition_mode == 'learning' and learning_info %}<div class="repetition-info">{{ learning_info.text }}</div>
