@@ -196,7 +196,7 @@
                             {%- for event in filtered.events -%}
                                 {%- set rendered_event = event.render(settings, ns.previous_event) -%}
                                 {%- if rendered_event -%}
-                                    {%- if ns.rendered_content -%}, {%- endif -%}
+                                    {%- if ns.rendered_content -%},&nbsp;{%- endif -%}
                                     {{- rendered_event|join(' ') | safe -}}
                                     {%- set ns.rendered_content = ns.rendered_content + [rendered_event|join(' ')] -%}
                                     {%- set ns.previous_event = event -%}
