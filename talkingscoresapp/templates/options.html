@@ -5,332 +5,663 @@
 {% block noindex %}<meta name="robots" content="noindex" />{% endblock %}
 
 {% block content %}
-<style>
-    .color-preview {
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-family: monospace;
-        border: 1px solid transparent;
-        transition: color 0.2s, background-color 0.2s;
-        margin-left: auto; /* Pushes the preview to the right */
-    }
-    /* Style for disabled color pickers */
-    input[type="color"]:disabled {
-        cursor: not-allowed;
-        opacity: 0.6;
-    }
-    .checkbox label {
-        margin-right: 1rem; /* Adds some space between the label and the preview */
-    }
-</style>
-
-    <div class="col-md-9 mx-auto text-start">
-
-        <div id="sticky-preview-container">
-            <div class="preview-block">
-                <h5>Current Settings Preview</h5>
-                <p class="active-profile-display">Active Profile: <strong id="active-profile-name">Default</strong></p>
-                <div id="live-preview-content" class="preview-block-content"></div>
-            </div>
-        </div>
-
-    {% if form.non_field_errors or form.errors %}
-        <div class="alert alert-danger" role="alert">
-            <span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
-            {{ form.non_field_errors }}
-            {{ form.errors }}
-        </div>
-    {% endif %}
-
-    <div class="text-center mb-4">
-        <h1>{{ score_info.title }}</h1>
-        <p class="lead text-muted">by {{ score_info.composer }}</p>
-    </div>
-
-    <form class="form-horizontal" method="post">
-        {% csrf_token %}
-
-        <fieldset class="mb-4">
-            <legend class="h2 bold text-center">Choose Your Experience</legend>
-            <p class="text-center text-muted mb-4">Select a preset to start. You can fine-tune settings in the "Advanced Options" section.</p>
-            <div class="preset-card-container">
-                <div class="preset-card active" id="preset-card-default" data-preset="default" tabindex="0">
-                    <h4 class="preset-card-title">Default</h4>
-                    <p class="preset-card-desc">A balanced description with rhythm, rests, and repetition analysis. Great for general use.</p>
-                    
-                </div>
-                <div class="preset-card" id="preset-card-notes_only" data-preset="notes_only" tabindex="0">
-                    <h4 class="preset-card-title">Notes Only</h4>
-                    <p class="preset-card-desc">A minimal description focusing only on pitches. Hides rests, ties, and dynamics.</p>
-                    
-                </div>
-                <div class="preset-card disabled" id="preset-card-custom" data-preset="custom">
-                    <h4 class="preset-card-title">Custom</h4>
-                    <p class="preset-card-desc">Your settings have been loaded or modified from a preset.</p>
-                    
-                </div>
-            </div>
-        </fieldset>
-        
-        <details class="advanced-options-container" open>
-            <summary class="advanced-options-summary">Advanced Options</summary>
-            
-            <fieldset class="mb-4">
-                <legend class="h4 bold">Playback &amp; Instruments</legend>
-                <div class="form-group">
-                    <div class="checkbox"><input type="checkbox" name="chk_playAll" id="chk_playAll" value="checked" checked="checked" aria-label="Play all parts together"/><label for="chk_playAll">Play all parts together</label></div>
-                    <div class="checkbox"><input type="checkbox" name="chk_playSelected" id="chk_playSelected" value="checked" checked="checked" aria-label="Play all selected parts together"/><label for="chk_playSelected">Play all selected parts together</label></div>
-                    <div class="checkbox"><input type="checkbox" name="chk_playUnselected" id="chk_playUnselected" value="checked" checked="checked" aria-label="Play all unselected parts together"/><label for="chk_playUnselected">Play all unselected parts together</label></div>
-                </div>
-                <br>
-                <div class="form-group">
-                    <label class="h5">Instruments to Describe:</label>
-                    {% for instrument in score_info.instruments %}
-                        <div class="checkbox"><input type="checkbox" name="instruments" id="instrument_{{ forloop.counter }}" value="{{ forloop.counter }}" checked="checked" aria-label="{{ instrument }}"><label for="instrument_{{ forloop.counter }}">{{ instrument }}</label></div>
-                    {% endfor %}
-                </div>
-            </fieldset>
-
-            <fieldset class="mb-4">
-                <legend class="h4 bold">Description Content</legend>
-                 <div class="form-group">
-                    <div class="checkbox"><input type="checkbox" name="chk_include_dynamics" id="chk_include_dynamics" value="checked" checked="checked" /><label for="chk_include_dynamics">Include dynamics (e.g., forte, piano)</label></div>
-                    <div class="checkbox"><input type="checkbox" name="chk_include_ties" id="chk_include_ties" value="checked" checked="checked" /><label for="chk_include_ties">Include ties</label></div>
-                    <div class="checkbox"><input type="checkbox" name="chk_include_rests" id="chk_include_rests" value="checked" checked="checked" /><label for="chk_include_rests">Include rests</label></div>
-                    <div class="checkbox"><input type="checkbox" name="chk_include_arpeggios" id="chk_include_arpeggios" value="checked" checked="checked" /><label for="chk_include_arpeggios">Include arpeggio marks</label></div>
-                    <div class="checkbox"><input type="checkbox" name="chk_describe_chords" id="chk_describe_chords" value="checked" checked="checked" /><label for="chk_describe_chords">Announce chords (e.g., '4-note chord')</label></div>
-                </div>
-                <div class="form-group mt-3">
-                    <label for="repetition_mode">Repetition Description <button type="button" class="help-btn" aria-label="More info on repetition description" data-controls="repetition-help-text">?</button></label>
-                    <select name="repetition_mode" id="repetition_mode" class="form-control">
-                        <option value="none">None</option>
-                        <option value="learning" selected>Learning Mode</option>
-                        <option value="detailed">Detailed Analysis</option>
-                    </select>
-                    <div id="repetition-help-text" class="form-text text-muted mt-2 help-text-panel">
-                        <ul class="list-unstyled mb-0 small">
-                            <li><strong>Learning Mode:</strong> Only describes repetition of the immediately preceding bar.</li>
-                            <li><strong>Detailed Analysis:</strong> Provides a summary of all repetition throughout the piece.</li>
-                        </ul>
+<div class="container">
+    <div class="talking-scores">
+        <div class="options-layout">
+            <!-- Sticky Preview Sidebar -->
+            <div class="preview-sidebar">
+                <div class="preview-container">
+                    <div class="preview-header">
+                        <h3>Settings Preview</h3>
+                        <button type="button" class="keyboard-shortcuts-toggle" id="keyboard-shortcuts-toggle" aria-pressed="true">
+                            <span class="toggle-icon">⌨️</span>
+                            <span class="toggle-text">Shortcuts: ON</span>
+                        </button>
                     </div>
-                </div>
-            </fieldset>
-            
-            <fieldset class="mb-4">
-                <legend class="h4 bold">Description Style &amp; Detailing</legend>
-                <div class="form-group"><label for="bars_at_a_time">Bars at a time</label><select name="bars_at_a_time" id="bars_at_a_time" class="form-control"><option>1</option><option selected>2</option><option>4</option><option>8</option></select></div>
-                <div class="form-group mt-3"><label for="beat_division">Group Beats By</label><select name="beat_division" id="beat_division" class="form-control">{% for option in score_info.beat_division_options %}<option value="{{ option.value }}" {% if loop.index == 2 %}selected{% endif %}>{{ option.display }}</option>{% endfor %}</select></div>
-                <div class="form-group mt-3"><label for="pitch_description">Pitch Description</label><select name="pitch_description" id="pitch_description" class="form-control"><option value="noteName" selected>Note Names</option><option value="colourNotes">Coloured Notes</option><option value="phonetic">Phonetic Alphabet</option><option value="none">None</option></select></div>
-                <div class="form-group mt-3"><label for="rhythm_description">Rhythm Description</label><select name="rhythm_description" id="rhythm_description" class="form-control"><option value="british" selected>British (crotchet)</option><option value="american">American (quarter note)</option><option value="none">None</option></select></div>
-                <div class="form-group mt-3"><label for="octave_description">Octave Description</label><select name="octave_description" id="octave_description" class="form-control"><option value="name" selected>Name (mid, high)</option><option value="number">Number (4, 5)</option><option value="none">None</option></select></div>
-                <div class="form-group mt-3"><label for="octave_announcement">Octave Announcement <button type="button" class="help-btn" aria-label="More info on octave announcement" data-controls="octave-help-text">?</button></label><select name="octave_announcement" id="octave_announcement" class="form-control"><option value="onChange" selected>On change</option><option value="brailleRules">Braille rules</option><option value="everyNote">Every note</option><option value="firstNote">First note of section</option></select>
-                    <div id="octave-help-text" class="form-text text-muted mt-2 help-text-panel"><p class="small">Determines how often the octave (e.g. "high", "low") is mentioned.</p></div>
-                </div>
-                <div class="form-group mt-3"><label for="key_signature_accidentals">Key Signature Accidentals <button type="button" class="help-btn" aria-label="More info on key signature accidentals" data-controls="key-sig-help-text">?</button></label><select name="key_signature_accidentals" id="key_signature_accidentals" class="form-control"><option value="applied" selected>Applied to every note</option><option value="onChange">On change</option><option value="standard">Standard</option></select>
-                    <div id="key-sig-help-text" class="form-text text-muted mt-2 help-text-panel"><p class="mb-1 small"><strong>Example:</strong> Key of E-flat. Notes are E♭, E♭, E♮, E♭.</p><ul class="list-unstyled mb-0 small"><li><strong>Applied:</strong> "E flat, E flat, E natural, E flat"</li><li><strong>On change:</strong> "E flat, E, E natural, E flat"</li><li><strong>Standard:</strong> "E, E, E natural, E"</li></ul></div>
-                </div>
-            </fieldset>
-
-            <fieldset class="mb-4">
-                 <legend class="h4 bold">Advanced Detailing</legend>
-                 <div class="form-group">
-                    <label for="dot_position">Position of dot in dotted rhythms</label>
-                    <select name="dot_position" id="dot_position" class="form-control">
-                        <option value="before" selected>Before rhythm (e.g., dotted crotchet)</option>
-                        <option value="after">After rhythm (e.g., crotchet dotted)</option>
-                    </select>
-                 </div>
-                 <div class="form-group mt-3">
-                    <label for="rhythm_announcement">Rhythm Announcement</label>
-                    <select name="rhythm_announcement" id="rhythm_announcement" class="form-control">
-                        <option value="onChange" selected>On change</option>
-                        <option value="everyNote">Every note</option>
-                    </select>
-                 </div>
-                 <div class="form-group mt-3">
-                    <label for="octave_position">Octave Position</label>
-                    <select name="octave_position" id="octave_position" class="form-control">
-                        <option value="before" selected>Before pitch</option>
-                        <option value="after">After pitch</option>
-                    </select>
-                 </div>
-                 <div class="form-group mt-3">
-                    <label for="accidental_style">Accidental Style</label>
-                    <select name="accidental_style" id="accidental_style" class="form-control">
-                        <option value="words" selected>Words (e.g., sharp, flat)</option>
-                        <option value="symbols">Symbols (e.g., ♯, ♭)</option>
-                    </select>
-                 </div>
-            </fieldset>
-
-            <fieldset class="mt-4 p-3 border rounded">
-                <legend class="h2 bold">Note Colouring</legend>
-                <div class="form-group">
-                    <label for="colour_style" class="h4">Colouring Style</label>
-                    <select name="colour_style" id="colour_style" class="form-control">
-                        <option value="none" selected>Off</option>
-                        <option value="text">Colour the text</option>
-                        <option value="background">Colour the background</option>
-                    </select>
-                </div>
-                <div id="coloring-details-panel" style="display: none;">
-                    <hr>
-                    <h4 class="bold">Elements to Colour</h4>
-                    <div class="form-group mt-3 p-3 border rounded">
-                        <div class="d-flex align-items-center"><input type="checkbox" name="chk_colourPitch" id="chk_colourPitch" value="checked" checked><label for="chk_colourPitch" class="h5 mb-0 ml-2">Pitch</label><span id="preview-pitch" class="color-preview ml-auto">C</span></div>
-                        <div id="pitch-colour-panel" class="mt-2">
-                            <p class="small text-muted">Colour notes based on their pitch name (e.g., C, D, E).</p>
-                            <div class="palette-container">
-                                <fieldset class="palette-radios"><legend class="h5 bold">Palette</legend><div class="form-check"><input class="form-check-input" type="radio" name="colorProfile" id="profileDefault" value="default" checked><label class="form-check-label" for="profileDefault"><a href="https://drakemusicscotland.org/project/figurenotes/">Figurenotes</a> (Default)</label></div><div class="form-check"><input class="form-check-input" type="radio" name="colorProfile" id="profileClassic" value="classic"><label class="form-check-label" for="profileClassic">Classic (Newton)</label></div><div class="form-check"><input class="form-check-input" type="radio" name="colorProfile" id="profileCustom" value="custom"><label class="form-check-label" for="profileCustom">Custom</label></div></fieldset>
-                                <div id="custom-color-pickers" class="palette-pickers"><h5 class="bold">Custom Colours</h5><div class="d-flex justify-content-between align-items-center my-1"><label for="color_C">Note C:</label><input type="color" id="color_C" name="color_C" value="#FF0000"></div><div class="d-flex justify-content-between align-items-center my-1"><label for="color_D">Note D:</label><input type="color" id="color_D" name="color_D" value="#A52A2A"></div><div class="d-flex justify-content-between align-items-center my-1"><label for="color_E">Note E:</label><input type="color" id="color_E" name="color_E" value="#808080"></div><div class="d-flex justify-content-between align-items-center my-1"><label for="color_F">Note F:</label><input type="color" id="color_F" name="color_F" value="#0000FF"></div><div class="d-flex justify-content-between align-items-center my-1"><label for="color_G">Note G:</label><input type="color" id="color_G" name="color_G" value="#000000"></div><div class="d-flex justify-content-between align-items-center my-1"><label for="color_A">Note A:</label><input type="color" id="color_A" name="color_A" value="#FFFF00"></div><div class="d-flex justify-content-between align-items-center my-1"><label for="color_B">Note B:</label><input type="color" id="color_B" name="color_B" value="#008000"></div></div>
+                    
+                    <div class="preview-cards">
+                        <div class="preview-card current-preview">
+                            <h4>Your Settings</h4>
+                            <div class="preview-content" id="current-preview-content">
+                                <div class="preview-text">Loading preview...</div>
                             </div>
                         </div>
-                    </div>
-                    <div class="form-group mt-3"><input type="checkbox" id="chk_show_advanced_colouring"><label for="chk_show_advanced_colouring">Customize Rhythm &amp; Octave Colours</label></div>
-                    <div id="advanced-colouring-panel" class="mt-2" style="display: none;">
-                        <div class="form-group mt-2 p-3 border rounded">
-                            <div class="d-flex align-items-center">
-                                <label for="rhythm_colour_mode" class="h5 mb-0">Rhythm</label>
-                                <span id="preview-rhythm" class="color-preview ml-auto">Crotchet</span>
+                        
+                        <div class="preview-card preset-preview" id="default-preset-preview">
+                            <h4>Default Preset <kbd class="shortcut-key">1</kbd></h4>
+                            <div class="preview-content">
+                                <div class="preview-text" id="default-preset-text">e.g., Arpeggio crotchet mid C sharp, quaver rest, quaver E (tie start)</div>
                             </div>
-                            <select name="rhythm_colour_mode" id="rhythm_colour_mode" class="form-control mt-2">
-                                <option value="none" selected>Off</option>
-                                <option value="inherit">Inherit colour from Pitch</option>
-                                <option value="custom">Use custom colours below</option>
-                            </select>
-                            <div id="rhythm-colour-panel" class="p-3 mt-2 border rounded" style="display: none;">
-                                <h5 class="bold">Custom Rhythm Colours</h5>
-                                <p class="small text-muted">Only rhythms found in this piece are shown below.</p>
-                                {% if score_info.rhythm_range %}
-                                    {% for rhythm in score_info.rhythm_range %}
-                                    <div class="d-flex justify-content-between align-items-center my-1">
-                                        <label for="color_rhythm_{{ rhythm.id_name }}">{{ rhythm.name|title }}:</label>
-                                        <input type="color" id="color_rhythm_{{ rhythm.id_name }}" name="color_rhythm_{{ rhythm.id_name }}" value="{{ rhythm.default_color }}">
+                            <button type="button" class="apply-preset-btn" data-preset="default">Apply This Preset</button>
+                        </div>
+                        
+                        <div class="preview-card preset-preview" id="notes-only-preset-preview">
+                            <h4>Notes Only Preset <kbd class="shortcut-key">2</kbd></h4>
+                            <div class="preview-content">
+                                <div class="preview-text" id="notes-only-preset-text">e.g., mid C♯, E</div>
+                            </div>
+                            <button type="button" class="apply-preset-btn" data-preset="notes_only">Apply This Preset</button>
+                        </div>
+                    </div>
+                    
+                    <div class="preview-match-indicator" id="preview-match-indicator" style="display: none;">
+                        <div class="match-icon">✓</div>
+                        <div class="match-text">Your settings match <span id="matched-preset-name">Default</span> preset</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Form Content -->
+            <div class="options-main">
+                {% if form.non_field_errors or form.errors %}
+                    <div class="alert alert-danger" role="alert">
+                        <span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
+                        {{ form.non_field_errors }}
+                        {{ form.errors }}
+                    </div>
+                {% endif %}
+
+                <div class="score-header">
+                    <h1>{{ score_info.title }}</h1>
+                    <p class="composer-byline">by {{ score_info.composer }}</p>
+                </div>
+
+                <form class="options-form" method="post" novalidate>
+                    {% csrf_token %}
+
+                    <section class="options-section preset-selection-section">
+                        <div class="section-header">
+                            <h2 id="preset-section-title">Choose Your Experience</h2>
+                            <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="preset-section-content" data-section="preset">
+                                <span class="collapse-icon">−</span>
+                            </button>
+                        </div>
+                        <div class="section-content" id="preset-section-content">
+                            <p class="section-description">Select a preset to start with, then customize in the sections below. Use keyboard shortcuts <kbd>1</kbd> and <kbd>2</kbd> to quickly switch presets.</p>
+                            
+                            <div class="preset-card-container">
+                                <div class="preset-card active" id="preset-card-default" data-preset="default" tabindex="0" role="button" aria-pressed="true">
+                                    <h3 class="preset-card-title">Default Preset <kbd class="shortcut-key">1</kbd></h3>
+                                    <p class="preset-card-desc">Balanced description with rhythm, rests, and repetition analysis. Great for general use.</p>
+                                </div>
+                                <div class="preset-card" id="preset-card-notes_only" data-preset="notes_only" tabindex="0" role="button" aria-pressed="false">
+                                    <h3 class="preset-card-title">Notes Only Preset <kbd class="shortcut-key">2</kbd></h3>
+                                    <p class="preset-card-desc">Minimal description focusing only on pitches. Hides rests, ties, and dynamics.</p>
+                                </div>
+                                <div class="preset-card disabled" id="preset-card-custom" data-preset="custom" role="button" aria-pressed="false">
+                                    <h3 class="preset-card-title">Custom Settings</h3>
+                                    <p class="preset-card-desc">Your settings have been modified from a preset.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <section class="options-section playback-section">
+                        <div class="section-header">
+                            <h2 id="playback-section-title">Playback &amp; Instruments</h2>
+                            <div class="section-actions">
+                                <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="playback-section-content" data-section="playback">
+                                    <span class="collapse-icon">−</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="section-content" id="playback-section-content">
+                            <p class="section-description">Choose which instruments to describe and audio playback options.</p>
+                            
+                            <div class="form-row">
+                                <fieldset class="form-group">
+                                    <legend class="form-legend">Audio Playback Options</legend>
+                                    <div class="checkbox-group">
+                                        <div class="checkbox-item">
+                                            <input type="checkbox" name="chk_playAll" id="chk_playAll" value="checked" checked>
+                                            <label for="chk_playAll">Play all parts together</label>
+                                        </div>
+                                        <div class="checkbox-item">
+                                            <input type="checkbox" name="chk_playSelected" id="chk_playSelected" value="checked" checked>
+                                            <label for="chk_playSelected">Play selected parts together</label>
+                                        </div>
+                                        <div class="checkbox-item">
+                                            <input type="checkbox" name="chk_playUnselected" id="chk_playUnselected" value="checked" checked>
+                                            <label for="chk_playUnselected">Play unselected parts together</label>
+                                        </div>
                                     </div>
-                                    {% endfor %}
-                                {% else %}
-                                    <p class="small">No unique rhythms found in this score to customize.</p>
-                                {% endif %}
+                                </fieldset>
+
+                                <fieldset class="form-group instruments-selection">
+                                    <legend class="form-legend">Instruments to Describe</legend>
+                                    <div class="validation-message" id="instruments-validation" style="display: none;">
+                                        <span class="validation-icon">⚠️</span>
+                                        <span class="validation-text">At least one instrument must be selected</span>
+                                    </div>
+                                    <div class="checkbox-group">
+                                        {% for instrument in score_info.instruments %}
+                                            <div class="checkbox-item">
+                                                <input type="checkbox" name="instruments" id="instrument_{{ forloop.counter }}" value="{{ forloop.counter }}" checked>
+                                                <label for="instrument_{{ forloop.counter }}">{{ instrument }}</label>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </fieldset>
                             </div>
                         </div>
-                        <div class="form-group mt-3 p-3 border rounded">
-                            <div class="d-flex align-items-center">
-                                <label for="octave_colour_mode" class="h5 mb-0">Octave</label>
-                                <span id="preview-octave" class="color-preview ml-auto">High</span>
-                            </div>
-                            <select name="octave_colour_mode" id="octave_colour_mode" class="form-control mt-2">
-                                <option value="none" selected>Off</option>
-                                <option value="inherit">Inherit colour from Pitch</option>
-                                <option value="custom">Use custom colours below</option>
-                            </select>
-                            <div id="octave-colour-panel" class="p-3 mt-2 border rounded" style="display: none;">
-                                <h5 class="bold">Custom Octave Colours</h5>
-                                <p class="small text-muted">Only octaves found in this piece are shown below.</p>
-                                {% if score_info.octave_range.max >= 5 %}
-                                <div class="d-flex justify-content-between align-items-center my-2">
-                                    <label for="color_octave_high">High (e.g., 5, 6, 7):</label>
-                                    <input type="color" id="color_octave_high" name="color_octave_high" value="#FF4500">
-                                </div>
-                                {% endif %}
-                                {% if score_info.octave_range.min <= 4 and score_info.octave_range.max >= 4 %}
-                                <div class="d-flex justify-content-between align-items-center my-2">
-                                    <label for="color_octave_mid">Mid (e.g., 4):</label>
-                                    <input type="color" id="color_octave_mid" name="color_octave_mid" value="#B8860B">
-                                </div>
-                                {% endif %}
-                                {% if score_info.octave_range.min <= 3 %}
-                                <div class="d-flex justify-content-between align-items-center my-2">
-                                    <label for="color_octave_low">Low (e.g., 1, 2, 3):</label>
-                                    <input type="color" id="color_octave_low" name="color_octave_low" value="#4682B4">
-                                </div>
-                                {% endif %}
+                    </section>
+
+                    <section class="options-section content-section">
+                        <div class="section-header">
+                            <h2 id="content-section-title">Description Content</h2>
+                            <div class="section-actions">
+                                <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="content-section-content" data-section="content">
+                                    <span class="collapse-icon">−</span>
+                                </button>
                             </div>
                         </div>
-                    </div>
-                    </div>
-                </div>
-            </fieldset>
+                        <div class="section-content" id="content-section-content">
+                            <p class="section-description">Select which musical elements to include in your talking score.</p>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <h3 class="form-subheading">Musical Elements</h3>
+                                    <div class="checkbox-group">
+                                        <div class="checkbox-item">
+                                            <input type="checkbox" name="chk_include_dynamics" id="chk_include_dynamics" value="checked" checked>
+                                            <label for="chk_include_dynamics">Dynamics <span class="help-text">(forte, piano)</span></label>
+                                        </div>
+                                        <div class="checkbox-item">
+                                            <input type="checkbox" name="chk_include_ties" id="chk_include_ties" value="checked" checked>
+                                            <label for="chk_include_ties">Ties</label>
+                                        </div>
+                                        <div class="checkbox-item">
+                                            <input type="checkbox" name="chk_include_rests" id="chk_include_rests" value="checked" checked>
+                                            <label for="chk_include_rests">Rests</label>
+                                        </div>
+                                        <div class="checkbox-item">
+                                            <input type="checkbox" name="chk_include_arpeggios" id="chk_include_arpeggios" value="checked" checked>
+                                            <label for="chk_include_arpeggios">Arpeggio marks</label>
+                                        </div>
+                                        <div class="checkbox-item">
+                                            <input type="checkbox" name="chk_describe_chords" id="chk_describe_chords" value="checked" checked>
+                                            <label for="chk_describe_chords">Chord announcements <span class="help-text">(e.g., '4-note chord')</span></label>
+                                        </div>
+                                    </div>
+                                </div>
 
-        </details>
+                                <div class="form-group">
+                                    <label for="repetition_mode" class="form-label">
+                                        Repetition Description 
+                                        <button type="button" class="help-btn" aria-label="More info on repetition description" aria-expanded="true" data-controls="repetition-help-text">?</button>
+                                    </label>
+                                    <select name="repetition_mode" id="repetition_mode" class="form-control" aria-describedby="repetition-help-text">
+                                        <option value="none">None</option>
+                                        <option value="learning" selected>Learning Mode</option>
+                                        <option value="detailed">Detailed Analysis</option>
+                                    </select>
+                                    <div id="repetition-help-text" class="help-text-panel" style="display: block;">
+                                        <ul class="help-list">
+                                            <li><strong>Learning Mode:</strong> Only describes repetition of the immediately preceding bar.</li>
+                                            <li><strong>Detailed Analysis:</strong> Provides a summary of all repetition throughout the piece.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <section class="options-section style-section">
+                        <div class="section-header">
+                            <h2 id="style-section-title">Description Style</h2>
+                            <div class="section-actions">
+                                <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="style-section-content" data-section="style">
+                                    <span class="collapse-icon">−</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="section-content" id="style-section-content">
+                            <p class="section-description">Customize how musical information is presented and organized.</p>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bars_at_a_time" class="form-label">Bars per Section</label>
+                                    <select name="bars_at_a_time" id="bars_at_a_time" class="form-control">
+                                        <option>1</option>
+                                        <option selected>2</option>
+                                        <option>4</option>
+                                        <option>8</option>
+                                    </select>
+                                </div>
 
-        <div class="form-group text-center mt-4">
-            <button type="submit" class="btn btn-primary btn-lg">Generate Talking Score</button>
+                                <div class="form-group">
+                                    <label for="beat_division" class="form-label">Beat Grouping</label>
+                                    <select name="beat_division" id="beat_division" class="form-control">
+                                        {% for option in score_info.beat_division_options %}
+                                            <option value="{{ option.value }}" {% if loop.index == 2 %}selected{% endif %}>{{ option.display }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="pitch_description" class="form-label">Pitch Names</label>
+                                    <select name="pitch_description" id="pitch_description" class="form-control">
+                                        <option value="noteName" selected>Note Names</option>
+                                        <option value="colourNotes">Colored Notes</option>
+                                        <option value="phonetic">Phonetic Alphabet</option>
+                                        <option value="none">None</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="rhythm_description" class="form-label">Rhythm Names</label>
+                                    <select name="rhythm_description" id="rhythm_description" class="form-control">
+                                        <option value="british" selected>British <span class="help-text">(crotchet)</span></option>
+                                        <option value="american">American <span class="help-text">(quarter note)</span></option>
+                                        <option value="none">None</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="octave_description" class="form-label">Octave Names</label>
+                                    <select name="octave_description" id="octave_description" class="form-control">
+                                        <option value="name" selected>Descriptive <span class="help-text">(mid, high)</span></option>
+                                        <option value="number">Numeric <span class="help-text">(4, 5)</span></option>
+                                        <option value="none">None</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="octave_announcement" class="form-label">
+                                        Octave Frequency 
+                                        <button type="button" class="help-btn" aria-label="More info on octave announcement" aria-expanded="true" data-controls="octave-help-text">?</button>
+                                    </label>
+                                    <select name="octave_announcement" id="octave_announcement" class="form-control" aria-describedby="octave-help-text">
+                                        <option value="onChange" selected>On change</option>
+                                        <option value="brailleRules">Braille rules</option>
+                                        <option value="everyNote">Every note</option>
+                                        <option value="firstNote">First note of section</option>
+                                    </select>
+                                    <div id="octave-help-text" class="help-text-panel" style="display: block;">
+                                        <p>Determines how often the octave (e.g. "high", "low") is mentioned.</p>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="key_signature_accidentals" class="form-label">
+                                        Accidental Handling 
+                                        <button type="button" class="help-btn" aria-label="More info on key signature accidentals" aria-expanded="true" data-controls="key-sig-help-text">?</button>
+                                    </label>
+                                    <select name="key_signature_accidentals" id="key_signature_accidentals" class="form-control" aria-describedby="key-sig-help-text">
+                                        <option value="applied" selected>Applied to every note</option>
+                                        <option value="onChange">On change</option>
+                                        <option value="standard">Standard</option>
+                                    </select>
+                                    <div id="key-sig-help-text" class="help-text-panel" style="display: block;">
+                                        <p><strong>Example:</strong> Key of E-flat. Notes are E♭, E♭, E♮, E♭.</p>
+                                        <ul class="help-list">
+                                            <li><strong>Applied:</strong> "E flat, E flat, E natural, E flat"</li>
+                                            <li><strong>On change:</strong> "E flat, E, E natural, E flat"</li>
+                                            <li><strong>Standard:</strong> "E, E, E natural, E"</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="options-section advanced-section">
+                        <div class="section-header">
+                            <h2 id="advanced-section-title">Advanced Settings</h2>
+                            <div class="section-actions">
+                                <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="advanced-section-content" data-section="advanced">
+                                    <span class="collapse-icon">−</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="section-content" id="advanced-section-content">
+                            <p class="section-description">Fine-tune specific aspects of the description format.</p>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="dot_position" class="form-label">Dot Position</label>
+                                    <select name="dot_position" id="dot_position" class="form-control">
+                                        <option value="before" selected>Before rhythm <span class="help-text">(dotted crotchet)</span></option>
+                                        <option value="after">After rhythm <span class="help-text">(crotchet dotted)</span></option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="rhythm_announcement" class="form-label">Rhythm Frequency</label>
+                                    <select name="rhythm_announcement" id="rhythm_announcement" class="form-control">
+                                        <option value="onChange" selected>On change</option>
+                                        <option value="everyNote">Every note</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="octave_position" class="form-label">Octave Position</label>
+                                    <select name="octave_position" id="octave_position" class="form-control">
+                                        <option value="before" selected>Before pitch</option>
+                                        <option value="after">After pitch</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="accidental_style" class="form-label">Accidental Format</label>
+                                    <select name="accidental_style" id="accidental_style" class="form-control">
+                                        <option value="words" selected>Words <span class="help-text">(sharp, flat)</span></option>
+                                        <option value="symbols">Symbols <span class="help-text">(♯, ♭)</span></option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="options-section color-section">
+                        <div class="section-header">
+                            <h2 id="color-section-title">Note Coloring</h2>
+                            <div class="section-actions">
+                                <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="color-section-content" data-section="color">
+                                    <span class="collapse-icon">−</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="section-content" id="color-section-content">
+                            <p class="section-description">Add visual color coding to different musical elements.</p>
+                            
+                            <div class="form-group">
+                                <label for="colour_style" class="form-label">Coloring Style</label>
+                                <select name="colour_style" id="colour_style" class="form-control">
+                                    <option value="none" selected>Off</option>
+                                    <option value="text">Color the text</option>
+                                    <option value="background">Color the background</option>
+                                </select>
+                            </div>
+
+                            <div id="coloring-details-panel" class="coloring-details" style="display: none;">
+                                <div class="color-element-section" id="pitch-color-section">
+                                    <div class="color-element-header">
+                                        <input type="checkbox" name="chk_colourPitch" id="chk_colourPitch" value="checked" checked>
+                                        <label for="chk_colourPitch" class="form-label">Pitch Colors</label>
+                                        <span id="preview-pitch" class="color-preview">C</span>
+                                    </div>
+                                    <p class="color-element-desc">Color notes based on their pitch name (e.g., C, D, E).</p>
+                                    
+                                    <div class="color-palette-section">
+                                        <fieldset class="palette-radios">
+                                            <legend class="form-legend">Color Palette</legend>
+                                            <div class="radio-group">
+                                                <div class="radio-item">
+                                                    <input class="radio-input" type="radio" name="colorProfile" id="profileDefault" value="default" checked>
+                                                    <label class="radio-label" for="profileDefault">
+                                                        <a href="https://drakemusicscotland.org/project/figurenotes/" target="_blank">Figurenotes</a> (Default)
+                                                    </label>
+                                                </div>
+                                                <div class="radio-item">
+                                                    <input class="radio-input" type="radio" name="colorProfile" id="profileClassic" value="classic">
+                                                    <label class="radio-label" for="profileClassic">Historical (Newton's Colors)</label>
+                                                </div>
+                                                <div class="radio-item">
+                                                    <input class="radio-input" type="radio" name="colorProfile" id="profileCustom" value="custom">
+                                                    <label class="radio-label" for="profileCustom">Custom</label>
+                                                </div>
+                                            </div>
+                                        </fieldset>
+
+                                        <div id="custom-color-pickers" class="color-pickers">
+                                            <h4 class="color-pickers-title">Custom Colors</h4>
+                                            <div class="color-picker-grid">
+                                                {% for note in 'CDEFGAB' %}
+                                                    <div class="color-picker-item">
+                                                        <div class="color-picker-controls">
+                                                            <label for="color_{{ note }}" class="color-picker-label">{{ note }}</label>
+                                                            <input type="color" id="color_{{ note }}" name="color_{{ note }}" value="{% if note == 'C' %}#FF0000{% elif note == 'D' %}#A52A2A{% elif note == 'E' %}#808080{% elif note == 'F' %}#0000FF{% elif note == 'G' %}#000000{% elif note == 'A' %}#FFFF00{% else %}#008000{% endif %}" class="color-picker-input">
+                                                            <input type="text" id="hex_{{ note }}" class="hex-input" value="{% if note == 'C' %}#FF0000{% elif note == 'D' %}#A52A2A{% elif note == 'E' %}#808080{% elif note == 'F' %}#0000FF{% elif note == 'G' %}#000000{% elif note == 'A' %}#FFFF00{% else %}#008000{% endif %}" pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$" title="Enter a valid hex color (e.g., #FF0000)">
+                                                        </div>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <section class="additional-color-section" id="additional-color-section">
+                                    <div class="section-header">
+                                        <h3 class="section-title" id="additional-color-title">Additional Element Coloring</h3>
+                                        <button type="button" class="section-collapse-btn" aria-expanded="false" aria-controls="additional-color-content" data-section="additional-color">
+                                            <span class="collapse-icon">+</span>
+                                        </button>
+                                    </div>
+                                    <div class="section-content" id="additional-color-content" style="display: none;">
+                                        <div class="form-row">
+                                            <div class="form-group rhythm-coloring" id="rhythm-color-section">
+                                                <div class="color-element-header">
+                                                    <label for="rhythm_colour_mode" class="form-label">Rhythm Colors</label>
+                                                    <span id="preview-rhythm" class="color-preview">Crotchet</span>
+                                                </div>
+                                                <select name="rhythm_colour_mode" id="rhythm_colour_mode" class="form-control">
+                                                    <option value="none" selected>Off</option>
+                                                    <option value="inherit">Inherit from Pitch</option>
+                                                    <option value="custom">Custom Colors</option>
+                                                </select>
+                                                
+                                                <div id="rhythm-colour-panel" class="color-pickers" style="display: none;">
+                                                    <h4 class="color-pickers-title">Custom Rhythm Colors</h4>
+                                                    <p class="color-pickers-desc">Only rhythms found in this piece are shown below.</p>
+                                                    {% if score_info.rhythm_range %}
+                                                        <div class="color-picker-grid">
+                                                            {% for rhythm in score_info.rhythm_range %}
+                                                                <div class="color-picker-item">
+                                                                    <div class="color-picker-controls">
+                                                                        <label for="color_rhythm_{{ rhythm.id_name }}" class="color-picker-label">{{ rhythm.name|title }}</label>
+                                                                        <input type="color" id="color_rhythm_{{ rhythm.id_name }}" name="color_rhythm_{{ rhythm.id_name }}" value="{{ rhythm.default_color }}" class="color-picker-input">
+                                                                        <input type="text" id="hex_rhythm_{{ rhythm.id_name }}" class="hex-input" value="{{ rhythm.default_color }}" pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$">
+                                                                    </div>
+                                                                </div>
+                                                            {% endfor %}
+                                                        </div>
+                                                    {% else %}
+                                                        <p class="no-items-message">No unique rhythms found in this score to customize.</p>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+
+                                            <div class="form-group octave-coloring" id="octave-color-section">
+                                                <div class="color-element-header">
+                                                    <label for="octave_colour_mode" class="form-label">Octave Colors</label>
+                                                    <span id="preview-octave" class="color-preview">High</span>
+                                                </div>
+                                                <select name="octave_colour_mode" id="octave_colour_mode" class="form-control">
+                                                    <option value="none" selected>Off</option>
+                                                    <option value="inherit">Inherit from Pitch</option>
+                                                    <option value="custom">Custom Colors</option>
+                                                </select>
+                                                
+                                                <div id="octave-colour-panel" class="color-pickers" style="display: none;">
+                                                    <h4 class="color-pickers-title">Custom Octave Colors</h4>
+                                                    <p class="color-pickers-desc">Only octaves found in this piece are shown below.</p>
+                                                    <div class="color-picker-grid">
+                                                        {% if score_info.octave_range.max >= 5 %}
+                                                            <div class="color-picker-item">
+                                                                <div class="color-picker-controls">
+                                                                    <label for="color_octave_high" class="color-picker-label">High <span class="help-text">(5, 6, 7)</span></label>
+                                                                    <input type="color" id="color_octave_high" name="color_octave_high" value="#FF4500" class="color-picker-input">
+                                                                    <input type="text" id="hex_octave_high" class="hex-input" value="#FF4500" pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$">
+                                                                </div>
+                                                            </div>
+                                                        {% endif %}
+                                                        {% if score_info.octave_range.min <= 4 and score_info.octave_range.max >= 4 %}
+                                                            <div class="color-picker-item">
+                                                                <div class="color-picker-controls">
+                                                                    <label for="color_octave_mid" class="color-picker-label">Mid <span class="help-text">(4)</span></label>
+                                                                    <input type="color" id="color_octave_mid" name="color_octave_mid" value="#B8860B" class="color-picker-input">
+                                                                    <input type="text" id="hex_octave_mid" class="hex-input" value="#B8860B" pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$">
+                                                                </div>
+                                                            </div>
+                                                        {% endif %}
+                                                        {% if score_info.octave_range.min <= 3 %}
+                                                            <div class="color-picker-item">
+                                                                <div class="color-picker-controls">
+                                                                    <label for="color_octave_low" class="color-picker-label">Low <span class="help-text">(1, 2, 3)</span></label>
+                                                                    <input type="color" id="color_octave_low" name="color_octave_low" value="#4682B4" class="color-picker-input">
+                                                                    <input type="text" id="hex_octave_low" class="hex-input" value="#4682B4" pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$">
+                                                                </div>
+                                                            </div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-lg generate-btn">
+                            <span class="btn-icon">🚀</span>
+                            Generate Talking Score
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
-    </form>
+    </div>
 </div>
+
+<div id="preview-error-fallback" style="display: none;">
+    <div class="preview-error">
+        <span class="error-icon">⚠️</span>
+        <span class="error-text">Preview temporarily unavailable</span>
+    </div>
+</div>
+
 {% endblock content %}
 
 {% block javascript %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // =================================================================
-        // --- 1. SETUP & CONFIGURATION ---
-        // =================================================================
-        const LOCAL_STORAGE_KEY = 'talkingScoresSettings';
-        
-        const presetCards = {
-            default: document.getElementById('preset-card-default'),
-            notes_only: document.getElementById('preset-card-notes_only'),
-            custom: document.getElementById('preset-card-custom')
-        };
-        const livePreviewContent = document.getElementById('live-preview-content');
-        const activeProfileNameSpan = document.getElementById('active-profile-name');
-        const allAdvancedControls = document.querySelectorAll('.advanced-options-container select, .advanced-options-container input[type="checkbox"]');
+document.addEventListener('DOMContentLoaded', function() {
+    const LOCAL_STORAGE_KEY = 'talkingScoresSettings';
+    let keyboardShortcutsEnabled = true;
+    let previewUpdateTimeout = null;
     
-        const controlIds = {
-            bars_at_a_time: 'bars_at_a_time', beatDivision: 'beat_division', rhythmDescription: 'rhythm_description',
-            repetitionMode: 'repetition_mode', includeDynamics: 'chk_include_dynamics', octaveAnnouncement: 'octave_announcement',
-            accidentalStyle: 'accidental_style', includeTies: 'chk_include_ties', includeRests: 'chk_include_rests',
-            includeArpeggios: 'chk_include_arpeggios', pitch_description: 'pitch_description', octave_description: 'octave_description',
-            describe_chords: 'chk_describe_chords',
-            dot_position: 'dot_position', rhythm_announcement: 'rhythm_announcement', octave_position: 'octave_position',
-            key_signature_accidentals: 'key_signature_accidentals'
-        };
+    function safeExecute(fn, fallback = null) {
+        try {
+            return fn();
+        } catch (error) {
+            console.error('Safe execution failed:', error);
+            return fallback;
+        }
+    }
     
-        const presets = {
-            'default': {
-                bars_at_a_time: '2',
-                rhythmDescription: 'british', pitch_description: 'noteName', octave_description: 'name',
-                octave_position: 'before', repetitionMode: 'learning', includeDynamics: true, includeTies: true, 
-                includeRests: true, includeArpeggios: true, describe_chords: true, accidentalStyle: 'words'
-            },
-            'notes_only': {
-                // ** THE FIX IS HERE **
-                bars_at_a_time: '2',
-                accidentalStyle: 'symbols',
-                repetitionMode: 'none',
-                rhythmDescription: 'none', pitch_description: 'noteName', octave_description: 'name',
-                octave_position: 'before', includeDynamics: false, includeTies: false, 
-                includeRests: false, includeArpeggios: false, describe_chords: false
+    function safeGetLocalStorage(key) {
+        try {
+            const data = localStorage.getItem(key);
+            if (data) {
+                const parsed = JSON.parse(data);
+                if (typeof parsed === 'object' && parsed !== null) {
+                    return parsed;
+                }
             }
-        };
+        } catch (error) {
+            console.warn('Corrupted localStorage data, clearing:', error);
+            localStorage.removeItem(key);
+        }
+        return null;
+    }
     
-        const sampleEvents = [
-            { type: 'dynamic', value: 'crescendo' },
-            { type: 'note', pitchName: 'C sharp', octaveNum: 4, rhythmType: 'quarter', dots: 0, arpeggio: true },
-            { type: 'rest', rhythmType: 'eighth' },
-            { type: 'note', pitchName: 'E', octaveNum: 4, rhythmType: 'eighth', dots: 0, tie: 'start' }
-        ];
-        const rhythmMap = {
-            'british': { 'whole': 'Semibreve', 'half': 'Minim', 'quarter': 'Crotchet', 'eighth': 'Quaver' },
-            'american': { 'whole': 'Whole note', 'half': 'Half note', 'quarter': 'Quarter note', 'eighth': 'Eighth note' }
-        };
-        const octaveNameMap = { 4: 'mid', 5: 'high' };
+    function safeSetLocalStorage(key, data) {
+        try {
+            localStorage.setItem(key, JSON.stringify(data));
+        } catch (error) {
+            console.warn('Could not save to localStorage:', error);
+        }
+    }
     
-        // =================================================================
-        // --- 2. CORE FUNCTIONS ---
-        // =================================================================
+    const presetCards = {
+        default: document.getElementById('preset-card-default'),
+        notes_only: document.getElementById('preset-card-notes_only'),
+        custom: document.getElementById('preset-card-custom')
+    };
     
-        function generatePreviewHTML(settings) {
+    const currentPreviewContent = document.getElementById('current-preview-content');
+    const previewMatchIndicator = document.getElementById('preview-match-indicator');
+    const matchedPresetName = document.getElementById('matched-preset-name');
+    const allAdvancedControls = document.querySelectorAll('.options-form select, .options-form input[type="checkbox"]');
+    
+    const controlIds = {
+        bars_at_a_time: 'bars_at_a_time',
+        beatDivision: 'beat_division',
+        rhythmDescription: 'rhythm_description',
+        repetitionMode: 'repetition_mode',
+        includeDynamics: 'chk_include_dynamics',
+        octaveAnnouncement: 'octave_announcement',
+        accidentalStyle: 'accidental_style',
+        includeTies: 'chk_include_ties',
+        includeRests: 'chk_include_rests',
+        includeArpeggios: 'chk_include_arpeggios',
+        pitch_description: 'pitch_description',
+        octave_description: 'octave_description',
+        describe_chords: 'chk_describe_chords',
+        dot_position: 'dot_position',
+        rhythm_announcement: 'rhythm_announcement',
+        octave_position: 'octave_position',
+        key_signature_accidentals: 'key_signature_accidentals'
+    };
+    
+    const presets = {
+        'default': {
+            bars_at_a_time: '2',
+            rhythmDescription: 'british',
+            pitch_description: 'noteName',
+            octave_description: 'name',
+            octave_position: 'before',
+            repetitionMode: 'learning',
+            includeDynamics: true,
+            includeTies: true,
+            includeRests: true,
+            includeArpeggios: true,
+            describe_chords: true,
+            accidentalStyle: 'words'
+        },
+        'notes_only': {
+            bars_at_a_time: '2',
+            accidentalStyle: 'symbols',
+            repetitionMode: 'none',
+            rhythmDescription: 'none',
+            pitch_description: 'noteName',
+            octave_description: 'name',
+            octave_position: 'before',
+            includeDynamics: false,
+            includeTies: false,
+            includeRests: false,
+            includeArpeggios: false,
+            describe_chords: false
+        }
+    };
+    
+    const sampleEvents = [
+        { type: 'dynamic', value: 'crescendo' },
+        { type: 'note', pitchName: 'C sharp', octaveNum: 4, rhythmType: 'quarter', dots: 0, arpeggio: true },
+        { type: 'rest', rhythmType: 'eighth' },
+        { type: 'note', pitchName: 'E', octaveNum: 4, rhythmType: 'eighth', dots: 0, tie: 'start' }
+    ];
+    
+    const rhythmMap = {
+        'british': { 'whole': 'Semibreve', 'half': 'Minim', 'quarter': 'Crotchet', 'eighth': 'Quaver' },
+        'american': { 'whole': 'Whole note', 'half': 'Half note', 'quarter': 'Quarter note', 'eighth': 'Eighth note' }
+    };
+    
+    const octaveNameMap = { 4: 'mid', 5: 'high' };
+
+    function generatePreviewHTML(settings) {
+        return safeExecute(() => {
             let output = 'e.g., ';
             const eventStrings = [];
-    
+
             sampleEvents.forEach(event => {
                 if (event.type === 'rest' && !settings.includeRests) return;
                 if (event.type === 'dynamic' && !settings.includeDynamics) return;
-    
+
                 let prefix = '', rhythmPart = '', pitchPart = '', octavePart = '', suffix = '';
-    
+
                 if (event.arpeggio && settings.includeArpeggios) prefix = 'Arpeggio ';
                 
                 if (settings.rhythmDescription !== 'none') {
@@ -341,7 +672,12 @@
                 
                 if (settings.pitch_description !== 'none' || (event.type === 'rest' && settings.includeRests)) {
                     if (event.type === 'note') {
-                        pitchPart = event.pitchName;
+                        let pitchName = event.pitchName;
+                        if (settings.accidentalStyle === 'symbols') {
+                            pitchName = pitchName.replace(' sharp', '♯').replace(' flat', '♭');
+                        }
+                        pitchPart = pitchName;
+                        
                         if (settings.octave_description === 'name') {
                             octavePart = octaveNameMap[event.octaveNum] || '';
                         } else if (settings.octave_description === 'number') {
@@ -351,56 +687,77 @@
                         pitchPart = 'rest';
                     }
                 }
-    
+
                 if (event.type === 'dynamic') pitchPart = `[${event.value}]`;
                 if (event.tie && settings.includeTies) suffix = `(tie ${event.tie})`;
                 
                 let finalParts;
                 if (settings.octave_position === 'before') {
                     finalParts = [prefix, rhythmPart, octavePart, pitchPart, suffix];
-                } else { // 'after'
+                } else {
                     finalParts = [prefix, rhythmPart, pitchPart, octavePart, suffix];
                 }
                 
                 const fullEventString = finalParts.filter(Boolean).join(' ').trim();
                 if (fullEventString) eventStrings.push(fullEventString);
             });
-    
+
             output += eventStrings.join(', ');
             return `<em>${output}</em>`;
+        }, '<em>Preview unavailable</em>');
+    }
+    
+    function updatePreview() {
+        if (previewUpdateTimeout) {
+            clearTimeout(previewUpdateTimeout);
         }
         
-        function updateLivePreview() {
-            const activeProfile = matchCurrentSettingsToPreset();
-            
-            if (activeProfileNameSpan) {
-                if (activeProfile === 'custom') {
-                    activeProfileNameSpan.textContent = 'Custom';
-                } else {
-                    activeProfileNameSpan.textContent = presetCards[activeProfile].querySelector('.preset-card-title').textContent;
+        previewUpdateTimeout = setTimeout(() => {
+            safeExecute(() => {
+                const activeProfile = matchCurrentSettingsToPreset();
+                const currentSettings = {};
+                
+                for (const key in controlIds) {
+                    const control = document.getElementById(controlIds[key]);
+                    if (control) {
+                        currentSettings[key] = (control.type === 'checkbox') ? control.checked : control.value;
+                    }
                 }
-            }
+                
+                if (currentPreviewContent) {
+                    const previewText = currentPreviewContent.querySelector('.preview-text');
+                    if (previewText) {
+                        previewText.innerHTML = generatePreviewHTML(currentSettings);
+                    }
+                }
+                
+                updateMatchIndicator(activeProfile);
+                updateActiveCard(activeProfile);
+                updateColorPreviews();
+            });
+        }, 300);
+    }
     
-            const currentSettings = {};
-            for (const key in controlIds) {
-                const control = document.getElementById(controlIds[key]);
-                if (control) {
-                    currentSettings[key] = (control.type === 'checkbox') ? control.checked : control.value;
-                }
-            }
-            if (livePreviewContent) {
-                livePreviewContent.innerHTML = generatePreviewHTML(currentSettings);
+    function updateMatchIndicator(activeProfile) {
+        if (previewMatchIndicator && matchedPresetName) {
+            if (activeProfile !== 'custom') {
+                previewMatchIndicator.style.display = 'block';
+                matchedPresetName.textContent = activeProfile === 'default' ? 'Default' : 'Notes Only';
+            } else {
+                previewMatchIndicator.style.display = 'none';
             }
         }
+    }
     
-        function applyPreset(presetName) {
+    function applyPreset(presetName) {
+        safeExecute(() => {
             const settings = presets[presetName];
             if (!settings) return;
             
             for (const key in controlIds) {
                 const control = document.getElementById(controlIds[key]);
                 if (control) {
-                    const defaultValue = control.type === 'checkbox' ? false : (control.options.length > 0 ? control.options[0].value : '');
+                    const defaultValue = control.type === 'checkbox' ? false : (control.options?.length > 0 ? control.options[0].value : '');
                     const valueToSet = settings[key] !== undefined ? settings[key] : defaultValue;
                     
                     if (control.type === 'checkbox') {
@@ -411,11 +768,14 @@
                 }
             }
             
-            document.getElementById(controlIds.octave_description).dispatchEvent(new Event('change'));
-            document.getElementById(controlIds.rhythmDescription).dispatchEvent(new Event('change'));
-        }
+            updateFormVisibility();
+            updateColorFormDisplay();
+            updatePreview();
+        });
+    }
     
-        function saveSettings() {
+    function saveSettings() {
+        safeExecute(() => {
             const settingsToSave = {};
             for (const key in controlIds) {
                 const control = document.getElementById(controlIds[key]);
@@ -423,26 +783,32 @@
                     settingsToSave[key] = (control.type === 'checkbox') ? control.checked : control.value;
                 }
             }
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(settingsToSave));
-        }
+            safeSetLocalStorage(LOCAL_STORAGE_KEY, settingsToSave);
+        });
+    }
     
-        function loadSettings() {
-            const savedSettings = localStorage.getItem(LOCAL_STORAGE_KEY);
+    function loadSettings() {
+        return safeExecute(() => {
+            const savedSettings = safeGetLocalStorage(LOCAL_STORAGE_KEY);
             if (savedSettings) {
-                const settings = JSON.parse(savedSettings);
-                for (const key in settings) {
+                for (const key in savedSettings) {
                     const control = document.getElementById(controlIds[key]);
-                    if (control && settings[key] !== undefined) {
-                         if (control.type === 'checkbox') { control.checked = settings[key]; } 
-                         else { control.value = settings[key]; }
+                    if (control && savedSettings[key] !== undefined) {
+                        if (control.type === 'checkbox') { 
+                            control.checked = savedSettings[key]; 
+                        } else { 
+                            control.value = savedSettings[key]; 
+                        }
                     }
                 }
                 return true;
             }
             return false;
-        }
-        
-        function matchCurrentSettingsToPreset() {
+        }, false);
+    }
+    
+    function matchCurrentSettingsToPreset() {
+        return safeExecute(() => {
             for (const presetName in presets) {
                 const presetSettings = presets[presetName];
                 let isMatch = true;
@@ -455,122 +821,504 @@
                         break; 
                     }
                 }
-                if (isMatch) {
-                    return presetName;
-                }
+                if (isMatch) return presetName;
             }
             return 'custom';
-        }
+        }, 'custom');
+    }
     
-        function updateActiveCard(activePreset) {
-            for (const presetName in presetCards) {
-                if (presetCards[presetName]) {
-                    presetCards[presetName].classList.toggle('active', presetName === activePreset);
+    function updateActiveCard(activePreset) {
+        for (const presetName in presetCards) {
+            const card = presetCards[presetName];
+            if (card) {
+                const isActive = presetName === activePreset;
+                card.classList.toggle('active', isActive);
+                card.setAttribute('aria-pressed', isActive.toString());
+            }
+        }
+    }
+    
+    function updateFormVisibility() {
+        safeExecute(() => {
+            const rhythmValue = document.getElementById(controlIds.rhythmDescription)?.value;
+            const octaveValue = document.getElementById(controlIds.octave_description)?.value;
+            const pitchValue = document.getElementById(controlIds.pitch_description)?.value;
+
+            [controlIds.dot_position, controlIds.rhythm_announcement].forEach(id => {
+                const control = document.getElementById(id);
+                if (control) {
+                    const formGroup = control.closest('.form-group');
+                    if (formGroup) {
+                        formGroup.style.display = (rhythmValue === 'none') ? 'none' : 'block';
+                    }
+                }
+            });
+
+            const octaveShouldHide = octaveValue === 'none';
+            const posControl = document.getElementById(controlIds.octave_position);
+            const annControl = document.querySelector('[name="octave_announcement"]');
+            
+            [posControl, annControl].forEach(control => {
+                if (control) {
+                    const formGroup = control.closest('.form-group');
+                    if (formGroup) {
+                        formGroup.style.display = octaveShouldHide ? 'none' : 'block';
+                    }
+                }
+            });
+
+            const pitchColorSection = document.getElementById('pitch-color-section');
+            const rhythmColorSection = document.getElementById('rhythm-color-section');
+            const octaveColorSection = document.getElementById('octave-color-section');
+            const additionalColorSection = document.getElementById('additional-color-section');
+            const additionalColorTitle = document.getElementById('additional-color-title');
+
+            if (pitchColorSection) {
+                pitchColorSection.style.display = (pitchValue === 'none') ? 'none' : 'block';
+            }
+            
+            const rhythmEnabled = rhythmValue !== 'none';
+            const octaveEnabled = octaveValue !== 'none';
+            
+            if (rhythmColorSection) {
+                rhythmColorSection.style.display = rhythmEnabled ? 'block' : 'none';
+            }
+            if (octaveColorSection) {
+                octaveColorSection.style.display = octaveEnabled ? 'block' : 'none';
+            }
+            
+            if (additionalColorSection) {
+                const showSection = rhythmEnabled || octaveEnabled;
+                additionalColorSection.style.display = showSection ? 'block' : 'none';
+                
+                if (additionalColorTitle) {
+                    if (rhythmEnabled && octaveEnabled) {
+                        additionalColorTitle.textContent = 'Rhythm & Octave Coloring';
+                    } else if (rhythmEnabled) {
+                        additionalColorTitle.textContent = 'Rhythm Coloring';
+                    } else if (octaveEnabled) {
+                        additionalColorTitle.textContent = 'Octave Coloring';
+                    }
+                }
+            }
+        });
+    }
+    
+    function setupHelpButtons() {
+        document.querySelectorAll('.help-btn').forEach(btn => {
+            const panelId = btn.dataset.controls;
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+
+            function syncButtonState() {
+                const isVisible = panel.style.display === 'block';
+                btn.setAttribute('aria-expanded', isVisible.toString());
+                btn.classList.toggle('active', isVisible);
+            }
+
+            syncButtonState();
+
+            btn.addEventListener('click', toggleHelpPanel);
+            btn.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleHelpPanel.call(btn);
+                }
+            });
+
+            function toggleHelpPanel() {
+                const isVisible = panel.style.display === 'block';
+                const newState = !isVisible;
+                
+                panel.style.display = newState ? 'block' : 'none';
+                syncButtonState();
+                
+                if (newState) {
+                    panel.focus();
+                }
+            }
+        });
+    }
+
+    function setupSectionCollapse() {
+        document.querySelectorAll('.section-collapse-btn').forEach(btn => {
+            const sectionContent = document.getElementById(btn.getAttribute('aria-controls'));
+            if (!sectionContent) return;
+
+            btn.addEventListener('click', () => {
+                const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+                const newState = !isExpanded;
+                
+                btn.setAttribute('aria-expanded', newState.toString());
+                sectionContent.style.display = newState ? 'block' : 'none';
+                
+                const icon = btn.querySelector('.collapse-icon');
+                if (icon) {
+                    icon.textContent = newState ? '−' : '+';
+                }
+            });
+        });
+    }
+
+    function setupValidation() {
+        const instrumentCheckboxes = document.querySelectorAll('input[name="instruments"]');
+        const validationMessage = document.getElementById('instruments-validation');
+        
+        function validateInstruments() {
+            const checkedInstruments = document.querySelectorAll('input[name="instruments"]:checked');
+            const isValid = checkedInstruments.length > 0;
+            
+            if (validationMessage) {
+                validationMessage.style.display = isValid ? 'none' : 'block';
+            }
+            
+            return isValid;
+        }
+        
+        instrumentCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', validateInstruments);
+        });
+        
+        document.querySelector('.options-form')?.addEventListener('submit', (e) => {
+            if (!validateInstruments()) {
+                e.preventDefault();
+                document.querySelector('.instruments-selection').scrollIntoView({ behavior: 'smooth' });
+            } else {
+                saveSettings();
+            }
+        });
+    }
+
+    const colorElements = {
+        colourStyleSelect: document.getElementById('colour_style'),
+        coloringDetailsPanel: document.getElementById('coloring-details-panel'),
+        chkColourPitch: document.getElementById('chk_colourPitch'),
+        profileRadios: document.querySelectorAll('input[name="colorProfile"]'),
+        customProfileRadio: document.getElementById('profileCustom'),
+        rhythmColourModeSelect: document.getElementById('rhythm_colour_mode'),
+        rhythmColourPanel: document.getElementById('rhythm-colour-panel'),
+        octaveColourModeSelect: document.getElementById('octave_colour_mode'),
+        octaveColourPanel: document.getElementById('octave-colour-panel'),
+        previewPitch: document.getElementById('preview-pitch'),
+        previewRhythm: document.getElementById('preview-rhythm'),
+        previewOctave: document.getElementById('preview-octave')
+    };
+
+    const colorProfiles = {
+        default: { C: "#FF0000", D: "#A52A2A", E: "#808080", F: "#0000FF", G: "#000000", A: "#FFFF00", B: "#008000" },
+        classic: { C: "#FF0000", D: "#FFA500", E: "#FFFF00", F: "#008000", G: "#0000FF", A: "#4B0082", B: "#EE82EE" }
+    };
+
+    function getContrastColor(hex) {
+        if (!hex || hex.length < 4) return '#000000';
+        const hexValue = hex.startsWith('#') ? hex.slice(1) : hex;
+        try {
+            const r = parseInt(hexValue.substring(0, 2), 16);
+            const g = parseInt(hexValue.substring(2, 4), 16);
+            const b = parseInt(hexValue.substring(4, 6), 16);
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            return luminance > 0.5 ? '#000000' : '#FFFFFF';
+        } catch (e) {
+            return '#FFFFFF';
+        }
+    }
+
+    function applyNoteColorProfile(profileName) {
+        const profile = colorProfiles[profileName];
+        if (!profile) return;
+        
+        Object.keys(profile).forEach(note => {
+            const colorPicker = document.getElementById(`color_${note}`);
+            const hexInput = document.getElementById(`hex_${note}`);
+            if (colorPicker && hexInput) {
+                colorPicker.value = profile[note];
+                hexInput.value = profile[note];
+            }
+        });
+    }
+
+    function setupHexInputs() {
+        document.querySelectorAll('.hex-input').forEach(hexInput => {
+            const colorPickerId = hexInput.id.replace('hex_', 'color_');
+            const colorPicker = document.getElementById(colorPickerId);
+            
+            if (!colorPicker) return;
+
+            hexInput.addEventListener('input', () => {
+                const hexValue = hexInput.value;
+                if (/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(hexValue)) {
+                    colorPicker.value = hexValue;
+                    hexInput.setCustomValidity('');
+                    updateColorPreviews();
+                } else {
+                    hexInput.setCustomValidity('Please enter a valid hex color (e.g., #FF0000)');
+                }
+            });
+
+            colorPicker.addEventListener('input', () => {
+                hexInput.value = colorPicker.value.toUpperCase();
+                updateColorPreviews();
+            });
+
+            colorPicker.addEventListener('focus', () => {
+                colorPicker.style.boxShadow = '0 0 0 3px rgba(13, 110, 253, 0.25)';
+            });
+
+            colorPicker.addEventListener('blur', () => {
+                colorPicker.style.boxShadow = '';
+            });
+        });
+    }
+
+    function updateColorFormDisplay() {
+        safeExecute(() => {
+            const isColoringOn = colorElements.colourStyleSelect?.value !== 'none';
+            if (colorElements.coloringDetailsPanel) {
+                colorElements.coloringDetailsPanel.style.display = isColoringOn ? 'block' : 'none';
+            }
+
+            const isCustomProfile = colorElements.customProfileRadio?.checked;
+            document.querySelectorAll('#custom-color-pickers input[type="color"], #custom-color-pickers .hex-input').forEach(input => {
+                input.disabled = !isCustomProfile;
+            });
+
+            if (colorElements.rhythmColourPanel) {
+                colorElements.rhythmColourPanel.style.display = 
+                    colorElements.rhythmColourModeSelect?.value === 'custom' ? 'block' : 'none';
+            }
+
+            if (colorElements.octaveColourPanel) {
+                colorElements.octaveColourPanel.style.display = 
+                    colorElements.octaveColourModeSelect?.value === 'custom' ? 'block' : 'none';
+            }
+
+            updateColorPreviews();
+        });
+    }
+
+    function updateColorPreviews() {
+        safeExecute(() => {
+            const style = colorElements.colourStyleSelect?.value;
+            const pitchColor = document.getElementById('color_C')?.value;
+
+            const applyStyle = (el, color, isEnabled) => {
+                if (!el) return;
+                el.style.backgroundColor = '';
+                el.style.color = '';
+                el.style.borderColor = 'transparent';
+                if (style === 'none' || !isEnabled || !color) return;
+                if (style === 'background') {
+                    el.style.backgroundColor = color;
+                    el.style.color = getContrastColor(color);
+                    el.style.borderColor = '#888';
+                } else {
+                    el.style.color = color;
+                }
+            };
+
+            applyStyle(colorElements.previewPitch, pitchColor, colorElements.chkColourPitch?.checked);
+
+            const rhythmMode = colorElements.rhythmColourModeSelect?.value;
+            let rhythmColor = rhythmMode === 'inherit' ? pitchColor : null;
+            if (rhythmMode === 'custom') {
+                const firstRhythmPicker = document.querySelector('#rhythm-colour-panel input[type="color"]');
+                if (firstRhythmPicker) rhythmColor = firstRhythmPicker.value;
+            }
+            applyStyle(colorElements.previewRhythm, rhythmColor, rhythmMode !== 'none');
+
+            const octaveMode = colorElements.octaveColourModeSelect?.value;
+            let octaveColor = octaveMode === 'inherit' ? pitchColor : null;
+            if (octaveMode === 'custom') {
+                const firstOctavePicker = document.querySelector('#octave-colour-panel input[type="color"]');
+                if (firstOctavePicker) octaveColor = firstOctavePicker.value;
+            }
+            applyStyle(colorElements.previewOctave, octaveColor, octaveMode !== 'none');
+        });
+    }
+
+    function setupKeyboardShortcuts() {
+        const toggle = document.getElementById('keyboard-shortcuts-toggle');
+        
+        toggle?.addEventListener('click', () => {
+            keyboardShortcutsEnabled = !keyboardShortcutsEnabled;
+            toggle.setAttribute('aria-pressed', keyboardShortcutsEnabled.toString());
+            
+            const toggleText = toggle.querySelector('.toggle-text');
+            if (toggleText) {
+                toggleText.textContent = `Shortcuts: ${keyboardShortcutsEnabled ? 'ON' : 'OFF'}`;
+            }
+            
+            toggle.style.opacity = keyboardShortcutsEnabled ? '1' : '0.6';
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (!keyboardShortcutsEnabled) return;
+            
+            if (e.target.matches('input, textarea, select')) return;
+            
+            switch(e.key) {
+                case '1':
+                    e.preventDefault();
+                    applyPreset('default');
+                    break;
+                case '2':
+                    e.preventDefault();
+                    applyPreset('notes_only');
+                    break;
+                case 'Escape':
+                    document.querySelectorAll('.help-text-panel[style*="block"]').forEach(panel => {
+                        panel.style.display = 'none';
+                        const btn = document.querySelector(`[data-controls="${panel.id}"]`);
+                        if (btn) {
+                            btn.classList.remove('active');
+                            btn.setAttribute('aria-expanded', 'false');
+                        }
+                    });
+                    break;
+            }
+        });
+    }
+
+    function initializePresetPreviews() {
+        safeExecute(() => {
+            const defaultPresetText = document.getElementById('default-preset-text');
+            const notesOnlyPresetText = document.getElementById('notes-only-preset-text');
+            
+            if (defaultPresetText) {
+                defaultPresetText.innerHTML = generatePreviewHTML(presets.default);
+            }
+            if (notesOnlyPresetText) {
+                notesOnlyPresetText.innerHTML = generatePreviewHTML(presets.notes_only);
+            }
+        });
+    }
+
+    function setupPresetButtons() {
+        document.querySelectorAll('.apply-preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const preset = btn.dataset.preset;
+                if (preset) {
+                    applyPreset(preset);
+                }
+            });
+        });
+    }
+
+    function setupMobileOptimization() {
+        const previewSidebar = document.querySelector('.preview-sidebar');
+        const optionsMain = document.querySelector('.options-main');
+        
+        function handleResize() {
+            const isMobile = window.innerWidth < 768;
+            
+            if (previewSidebar && optionsMain) {
+                if (isMobile) {
+                    previewSidebar.style.position = 'relative';
+                    previewSidebar.style.width = '100%';
+                    previewSidebar.style.top = 'auto';
+                    previewSidebar.style.right = 'auto';
+                    optionsMain.style.marginRight = '0';
+                } else {
+                    previewSidebar.style.position = 'fixed';
+                    previewSidebar.style.width = '320px';
+                    previewSidebar.style.top = '80px';
+                    previewSidebar.style.right = '20px';
+                    optionsMain.style.marginRight = '340px';
                 }
             }
         }
-    
-        function updateFormVisibility() {
-            const rhythmValue = document.getElementById(controlIds.rhythmDescription).value;
-            const octaveValue = document.getElementById(controlIds.octave_description).value;
-    
-            [controlIds.dot_position, controlIds.rhythm_announcement].forEach(id => {
-                const control = document.getElementById(id);
-                if(control) control.closest('.form-group').style.display = (rhythmValue === 'none') ? 'none' : 'block';
-            });
-    
-            const octaveShouldHide = octaveValue === 'none';
-            const posControl = document.getElementById(controlIds.octave_position);
-            if (posControl) {
-                posControl.closest('.form-group').style.display = octaveShouldHide ? 'none' : 'block';
-            }
-            const annControl = document.querySelector('[name="octave_announcement"]');
-            if (annControl) {
-                annControl.closest('.form-group').style.display = octaveShouldHide ? 'none' : 'block';
-            }
-        }
         
-        function setupHelpButtons() {
-            document.querySelectorAll('.help-btn').forEach(btn => {
-                const panelId = btn.dataset.controls;
-                const panel = document.getElementById(panelId);
-                if (!panel) return;
+        window.addEventListener('resize', handleResize);
+        handleResize();
+    }
+
+    function setupHighContrastSupport() {
+        const mediaQuery = window.matchMedia('(prefers-contrast: high)');
         
-                btn.addEventListener('click', () => {
-                    const isVisible = panel.style.display === 'block';
-                    panel.style.display = isVisible ? 'none' : 'block';
-                    btn.classList.toggle('active', !isVisible);
+        function handleHighContrast(e) {
+            document.documentElement.classList.toggle('high-contrast', e.matches);
+            
+            if (e.matches) {
+                document.querySelectorAll('.color-preview').forEach(preview => {
+                    preview.style.border = '2px solid currentColor';
+                    preview.style.fontWeight = 'bold';
                 });
-            });
+            }
         }
-    
-    
-        // =================================================================
-        // --- 3. EVENT LISTENERS & INITIALIZATION ---
-        // =================================================================
-        document.querySelector('form.form-horizontal').addEventListener('submit', saveSettings);
-    
+        
+        mediaQuery.addListener(handleHighContrast);
+        handleHighContrast(mediaQuery);
+    }
+
+    function setupEventListeners() {
+        document.querySelector('.options-form')?.addEventListener('submit', saveSettings);
+
         for (const presetName in presets) {
             const card = presetCards[presetName];
             if (card && card.id !== 'preset-card-custom') {
                 card.addEventListener('click', () => applyPreset(presetName));
                 card.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); applyPreset(presetName); }
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        applyPreset(presetName);
+                    }
                 });
             }
         }
-    
+
         allAdvancedControls.forEach(control => {
             control.addEventListener('change', () => {
-                const matchedPreset = matchCurrentSettingsToPreset();
-                updateActiveCard(matchedPreset);
                 updateFormVisibility();
-                updateLivePreview();
+                updatePreview();
             });
         });
-        
-        setupHelpButtons();
-    
-        if (!loadSettings()) {
-            applyPreset('default');
-        } else {
-            const matchedPreset = matchCurrentSettingsToPreset();
-            updateActiveCard(matchedPreset);
-        }
-        updateFormVisibility();
-        updateLivePreview(); 
-    
-        const elements = {
-            colourStyleSelect: document.getElementById('colour_style'),
-            coloringDetailsPanel: document.getElementById('coloring-details-panel'),
-            chkColourPitch: document.getElementById('chk_colourPitch'),
-            pitchColourPanel: document.getElementById('pitch-colour-panel'),
-            profileRadios: document.querySelectorAll('input[name="colorProfile"]'),
-            customProfileRadio: document.getElementById('profileCustom'),
-            customColorPickers: document.querySelectorAll('#custom-color-pickers input[type="color"]'),
-            chkShowAdvanced: document.getElementById('chk_show_advanced_colouring'),
-            advancedPanel: document.getElementById('advanced-colouring-panel'),
-            rhythmColourModeSelect: document.getElementById('rhythm_colour_mode'),
-            rhythmColourPanel: document.getElementById('rhythm-colour-panel'),
-            octaveColourModeSelect: document.getElementById('octave_colour_mode'),
-            octaveColourPanel: document.getElementById('octave-colour-panel'),
-            previewPitch: document.getElementById('preview-pitch'),
-            previewRhythm: document.getElementById('preview-rhythm'),
-            previewOctave: document.getElementById('preview-octave')
-        };
-        const colorProfiles = {
-            default: { C: "#FF0000", D: "#A52A2A", E: "#808080", F: "#0000FF", G: "#000000", A: "#FFFF00", B: "#008000" },
-            classic: { C: "#FF0000", D: "#FFA500", E: "#FFFF00", F: "#008000", G: "#0000FF", A: "#4B0082", B: "#EE82EE" }
-        };
-        function getContrastColor(hex) { if (!hex || hex.length < 4) return '#000000'; const hexValue = hex.startsWith('#') ? hex.slice(1) : hex; try { const r = parseInt(hexValue.substring(0, 2), 16); const g = parseInt(hexValue.substring(2, 4), 16); const b = parseInt(hexValue.substring(4, 6), 16); const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255; return luminance > 0.5 ? '#000000' : '#FFFFFF'; } catch (e) { return '#FFFFFF'; } }
-        function applyNoteColorProfile(profileName) { const profile = colorProfiles[profileName]; if (!profile) return; elements.customColorPickers.forEach(picker => { const note = picker.id.split('_')[1]; if (profile[note]) picker.value = profile[note]; }); }
-        function updateColorFormDisplay() { const isColoringOn = elements.colourStyleSelect.value !== 'none'; elements.coloringDetailsPanel.style.display = isColoringOn ? 'block' : 'none'; const isPitchOn = elements.chkColourPitch.checked; elements.pitchColourPanel.style.display = isPitchOn && isColoringOn ? 'block' : 'none'; const isCustomProfile = elements.customProfileRadio.checked; elements.customColorPickers.forEach(picker => { picker.disabled = !isCustomProfile; }); const showAdvanced = elements.chkShowAdvanced.checked; elements.advancedPanel.style.display = showAdvanced && isColoringOn ? 'block' : 'none'; elements.rhythmColourPanel.style.display = elements.rhythmColourModeSelect.value === 'custom' ? 'block' : 'none'; elements.octaveColourPanel.style.display = elements.octaveColourModeSelect.value === 'custom' ? 'block' : 'none'; updateAllPreviews(); }
-        function updateAllPreviews() { const style = elements.colourStyleSelect.value; const pitchColor = document.getElementById('color_C').value; const applyStyle = (el, color, isEnabled) => { if (!el) return; el.style.backgroundColor = ''; el.style.color = ''; el.style.borderColor = 'transparent'; if (style === 'none' || !isEnabled || !color) return; if (style === 'background') { el.style.backgroundColor = color; el.style.color = getContrastColor(color); el.style.borderColor = '#888'; } else { el.style.color = color; } }; applyStyle(elements.previewPitch, pitchColor, elements.chkColourPitch.checked); const rhythmMode = elements.rhythmColourModeSelect.value; let rhythmColor = rhythmMode === 'inherit' ? pitchColor : null; if (rhythmMode === 'custom') { const firstRhythmPicker = document.querySelector('#rhythm-colour-panel input[type="color"]'); if (firstRhythmPicker) rhythmColor = firstRhythmPicker.value; } applyStyle(elements.previewRhythm, rhythmColor, rhythmMode !== 'none'); const octaveMode = elements.octaveColourModeSelect.value; let octaveColor = octaveMode === 'inherit' ? pitchColor : null; if (octaveMode === 'custom') { const firstOctavePicker = document.querySelector('#octave-colour-panel input[type="color"]'); if (firstOctavePicker) octaveColor = firstOctavePicker.value; } applyStyle(elements.previewOctave, octaveColor, octaveMode !== 'none'); }
-        [ elements.colourStyleSelect, elements.chkColourPitch, elements.chkShowAdvanced, elements.rhythmColourModeSelect, elements.octaveColourModeSelect ].forEach(el => { if(el) el.addEventListener('change', updateColorFormDisplay); });
-        document.querySelectorAll('input[type="color"]').forEach(picker => { picker.addEventListener('input', updateAllPreviews); });
-        elements.profileRadios.forEach(radio => { radio.addEventListener('change', () => { if (radio.value !== 'custom') { applyNoteColorProfile(radio.value); } updateColorFormDisplay(); }); });
-        applyNoteColorProfile('default');
-        updateColorFormDisplay();
-    });
-    </script>
+
+        [
+            colorElements.colourStyleSelect,
+            colorElements.chkColourPitch,
+            colorElements.rhythmColourModeSelect,
+            colorElements.octaveColourModeSelect
+        ].forEach(el => {
+            if (el) el.addEventListener('change', updateColorFormDisplay);
+        });
+
+        colorElements.profileRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.value !== 'custom') {
+                    applyNoteColorProfile(radio.value);
+                }
+                updateColorFormDisplay();
+            });
+        });
+    }
+
+    function initialize() {
+        safeExecute(() => {
+            setupHelpButtons();
+            setupSectionCollapse();
+            setupValidation();
+            setupHexInputs();
+            setupKeyboardShortcuts();
+            setupPresetButtons();
+            setupMobileOptimization();
+            setupHighContrastSupport();
+            setupEventListeners();
+            
+            initializePresetPreviews();
+            
+            if (!loadSettings()) {
+                applyPreset('default');
+            } else {
+                updateFormVisibility();
+                updateColorFormDisplay();
+            }
+            
+            applyNoteColorProfile('default');
+            updatePreview();
+        });
+    }
+
+    initialize();
+});
+</script>
 {% endblock %}

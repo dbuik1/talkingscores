@@ -1,56 +1,76 @@
 {% extends "base_site.html" %}
 {% load static %}
 
-{% block title %}Privacy Policy - Talking Scores (Beta){% endblock %}
-{% block meta-description %}Privacy policy for Talking Scores - an open source project to convert MusicXML files to a spoken representation.{% endblock %}
+{% block title %}Error producing Talking Score - Talking Scores (Beta){% endblock %}
+{% block noindex %}<meta name="robots" content="noindex" />{% endblock %}
 
 {% block content %}
-    <h1>Talking Scores Beta</h1>
+<div class="error-page">
+    <header class="page-header">
+        <h1>Talking Scores Beta</h1>
+        <h2>Oops!</h2>
+    </header>
 
     <div class="col-md-11 mx-auto text-start">
+        <section class="error-message-section">
+            <div class="alert alert-warning tsp" role="alert">
+                <span class="alert-icon" aria-hidden="true">⚠️</span>
+                <div class="alert-content">
+                    <p class="sr-only">Warning:</p>
+                    <p>I'm sorry to say that we had trouble processing this score. The development team has been notified and will look into how to fix this. Please do Contact Us by email or with the form below, if you would like to be notified when this is fixed. Or come back occasionally and check the Change Log Page - often an error will be fixed in the next update.</p>
+                </div>
+            </div>
+        </section>
 
-        <h2>Privacy Policy</h2>
+        <section class="notification-section">
+            <h3>Get Notified When Fixed</h3>
+            <p class="tsp">If you'd like to be notified when this score is working, simply put your email address in the box below. We promise to only use your email address to notify you about this score.</p>
 
-        <p class="tsp">This is an <a href="https://github.com/bentimms/talkingscores" target="_blank">open source project</a> - currently undertaken by a very small team; working in our spare time.  The code running on this site will be fairly close to the code on Github - but there may be some differences due to testing / configuration etc. </p>
+            {% if form.is_bound %}
+                {% if form.is_valid %}
+                    <div class="alert alert-success tsp" role="alert">
+                        <span class="alert-icon" aria-hidden="true">✓</span>
+                        <div class="alert-content">
+                            <strong>Thank you!</strong>
+                            We have made a note of your email address and will let you know when we've investigated why this score isn't working.
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="alert alert-danger tsp" role="alert">
+                        <span class="alert-icon" aria-hidden="true">✗</span>
+                        <div class="alert-content">
+                            {% if form.errors.notify_email.0 == 'This field is required.' %}
+                                <strong>Missing email address</strong>
+                            {% else %}
+                                <strong>Invalid email address</strong>
+                            {% endif %}
+                            <br>Please do enter a valid email address if you'd like to be notified about this score.
+                        </div>
+                    </div>
+                {% endif %}
+            {% endif %}
 
-        <p class="tsp"><b>Communication</b><br/>
-            We welcome comments / suggestions / bug reports etc - it is encouraging to hear from users - thank you.  If you choose to contact us, we will try to reply in a timely manner.  We will most likely contact you again, some time later, when we have addressed the particular issue. <br/>
-            We will not pass your contact details on to anyone else or use them for any other purpose.  <br/>
-            However, we may: 
-            <ul>
-                <li class="tsp">Discuss your enquiry (not you, just your enquiry) with other individuals / organisations. </li>
-                <li class="tsp">Publish your enquiry (again, not you, just your enquiry), or aspects of it - for example as part of a Frequently Asked Questions page.</li>
-                <li class="tsp">Suggest other individuals / organisations / software that might be able to assist with your enquiry.  </li>
-            </ul>
-        </p>
-        
-        <p class="tsp"><b>Uploaded files</b><br/>
-            Any files you upload / send us will only be used to produce Talking Scores.  <br/>
-            Your musicxml file (and the talking scores output) will never be shared with any third party.  <br/>
-            However, your musicxml file (or the talking scores output) may be accessed by us - in order to resolve issues or during development / testing / maintenance.   
-        </p>
-
-        <p class="tsp"><b>Google Analytics</b><br/>
-            This website uses Google Analytics to give us an idea of how many users the website has / how long they use it for / what pages they view etc. <br/>
-            The HTML output of a Talking Score does not include Google Analytics code - thus the scores are not tracked.  This website uses robots.txt and noindex to inform search engines that completed scores should not be indexed.  
-        </p>
-
-        <p class="tsp"><b>Google Search Console</b><br/>
-            This website uses Google Search Console to give us an idea of how it appears in searches on Google.</p>
-            
-        <p class="tsp"><b>Cookies</b><br/>
-            This website uses the following cookies:
-            <ul>
-                <li class="tsp">'_ga', '_gid', '_gat_gtag_' - used by Google Analytics.</li>
-                <li class="tsp">'csrftoken' - helps to prevent Cross Site Request Forgery.</li>
-            </ul>
-        </p>
-
-        <p class="tsp"><b>Security</b><br/>
-            We will endeavour to keep this website and its related communications secure.  We do this by considering the tools and processes we use, along with the libraries we build upon and code we write.  <br/> <br/>
-            But despite our best efforts, we cannot guarantee that the files you upload nor your communications with us will not be accessed by others.
-        </p>
-        
+            <form class="notification-form" action="{% url 'error' id filename %}" method="post" novalidate>
+                {% csrf_token %}
+                <div class="form-group tsp">
+                    <label for="id_notify_email" class="form-label">Email address</label>
+                    <input type="email" 
+                           class="form-control" 
+                           name="notify_email" 
+                           id="id_notify_email"
+                           placeholder="Email address"
+                           required
+                           aria-describedby="email-help">
+                    <div id="email-help" class="form-text">We'll only use this to notify you about this specific score.</div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <span class="btn-icon" aria-hidden="true">📧</span>
+                        Notify me
+                    </button>
+                </div>
+            </form>
+        </section>
     </div>
-
+</div>
 {% endblock content %}
