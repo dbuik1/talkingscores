@@ -1455,6 +1455,201 @@ html[data-theme="dark"] .radio-item .radio-label {
 }
 
 /* === 10. SCORE PAGE === */
+
+/* Signature Information Styling */
+.signature-info {
+    background: var(--form-control-bg);
+    border: 1px solid var(--form-control-border);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    margin: 1.5rem 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.time-signature, .key-signature, .tempo-info {
+    background: var(--accent-highlight-bg);
+    color: var(--accent-highlight-color);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.time-signature {
+    background: #28a745;
+}
+
+.key-signature {
+    background: #dc3545;
+}
+
+.tempo-info {
+    background: #6f42c1;
+}
+
+html[data-theme="dark"] .time-signature {
+    background: #20c997;
+}
+
+html[data-theme="dark"] .key-signature {
+    background: #fd7e14;
+}
+
+html[data-theme="dark"] .tempo-info {
+    background: #e83e8c;
+}
+
+/* Bar Headings */
+.bar-heading {
+    background: linear-gradient(135deg, var(--accent-highlight-bg), var(--btn-primary-hover-bg));
+    color: var(--accent-highlight-color);
+    padding: 1rem 1.5rem;
+    border-radius: 0.75rem;
+    margin: 2rem 0 1.5rem 0;
+    border-left: 5px solid var(--btn-primary-bg);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.bar-heading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+    pointer-events: none;
+}
+
+.bar-label {
+    font-weight: 700;
+    font-size: 1.4rem;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+html[data-theme="dark"] .bar-heading {
+    background: linear-gradient(135deg, #1a1e24, #343a40);
+    border-left-color: var(--accent-highlight-bg);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Play Buttons */
+.btn-play {
+    background: linear-gradient(135deg, var(--btn-primary-bg), var(--btn-primary-hover-bg));
+    color: var(--btn-primary-color);
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin: 0.5rem 0.5rem 0.5rem 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-play:hover {
+    background: linear-gradient(135deg, var(--btn-primary-hover-bg), var(--accent-highlight-bg));
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
+
+.btn-play:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.btn-play:focus-visible {
+    outline: 3px solid var(--focus-outline-color);
+    outline-offset: 2px;
+}
+
+.btn-play-small {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    margin: 0.25rem 0.5rem 0.25rem 0;
+}
+
+.play-icon {
+    font-size: 0.9em;
+    margin-right: 0.25rem;
+}
+
+.instrument-parts {
+    margin-left: 1rem;
+    margin-top: 0.5rem;
+    padding-left: 1rem;
+    border-left: 2px solid var(--form-control-border);
+}
+
+html[data-theme="dark"] .btn-play {
+    background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+html[data-theme="dark"] .btn-play:hover {
+    background: linear-gradient(135deg, #0b5ed7, #0a58ca);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.4);
+}
+
+/* Bar Information in Music Descriptions */
+.bar-info {
+    background: var(--accent-highlight-bg);
+    color: var(--accent-highlight-color);
+    border-left: 5px solid var(--btn-primary-bg);
+    font-weight: 600;
+}
+
+.bar-number {
+    font-size: 1.1em;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.signature-changes {
+    margin: 0.75rem 0;
+}
+
+.signature-change {
+    background: var(--form-control-bg);
+    border: 1px solid var(--form-control-border);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+    font-weight: 600;
+    color: var(--link-color);
+    border-left: 4px solid var(--accent-highlight-bg);
+}
+
+html[data-theme="dark"] .signature-change {
+    background: var(--background-color);
+    color: var(--accent-highlight-color);
+}
+
+/* Responsive adjustments for signature info */
+@media (max-width: 768px) {
+    .signature-info {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .time-signature, .key-signature, .tempo-info {
+        width: 100%;
+        text-align: center;
+    }
+}
+
 .meta-info,
 .repetition-info {
     padding: 12px 16px;
