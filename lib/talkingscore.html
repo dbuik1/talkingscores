@@ -27,7 +27,7 @@
         .bar-heading {
             background: #5a2d91;
             color: white;
-            padding: 1rem 1.5rem;
+            padding: 0.4rem 1.2rem;
             border-radius: 0.75rem;
             margin: 2rem 0 1.5rem 0;
             font-weight: bold;
@@ -45,11 +45,11 @@
         /* Musical badges */
         .music-info-badge {
             display: inline-block;
-            padding: 0.5rem 1rem;
-            margin: 0.25rem;
-            border-radius: 1rem;
+            padding: 0.2rem 0.7rem;
+            margin: 0.10rem 0.10rem 0.10rem 0;
+            border-radius: 0.7rem;
             font-weight: bold;
-            font-size: 0.9em;
+            font-size: 0.75em;
             border: 2px solid currentColor;
             color: white;
         }
@@ -84,11 +84,11 @@
             /* Basic button styling */
             display: inline-block;
             text-decoration: none !important;
-            padding: 0.6rem 1.2rem;
+            padding: 0.3rem 0.8rem;
             margin: 0.3rem 0.5rem 0.3rem 0;
-            border-radius: 0.5rem;
+            border-radius: 0.35rem;
             font-weight: 600;
-            font-size: 0.95em;
+            font-size: 0.8em;
             transition: all 0.3s ease;
             cursor: pointer;
             box-shadow: 0 2px 6px rgba(0,0,0,0.15);
@@ -118,8 +118,9 @@
         /* Remove ALL color overrides for part buttons */
         .part-midi-list .lnkPlay {
             /* Just make them slightly smaller, but keep same colors */
-            font-size: 0.85em !important;
-            padding: 0.4rem 0.8rem !important;
+            font-size: 0.75em !important;
+            padding: 0.18rem 0.6rem !important;
+            margin: 0.08rem 0.2rem 0.08rem 0;
             /* Colors inherited from base .lnkPlay class above */
         }
 
@@ -175,7 +176,8 @@
         .main-play-buttons {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.5rem;
+            gap: 2.5rem;
+            margin-bottom: 0.2rem;
         }
 
         .instrument-buttons-container {
@@ -227,15 +229,17 @@
             background: var(--form-control-bg);
             border: 1px solid var(--form-control-border);
             border-radius: 0.5rem;
-            padding: 1rem;
-            margin: 1rem 0;
+            padding: 0.3rem 0.7rem;
+            margin: 0.3rem 0;
         }
 
         .bar-number {
             font-weight: bold;
             color: var(--text-color);
             font-size: 1.2em;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.2rem;
+            padding-top: 0.08rem;
+            padding-bottom: 0.08rem;
         }
 
         /* Responsive */
@@ -303,23 +307,8 @@
                         <option value="be">Bars / Beats</option>
                     </select>
                 </div>
-                
-                <div class="play-buttons-container">
-                    <div class="main-play-buttons">
-                        {% if play_all %}
-                            <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_all }}">Play All Instruments</a>
-                        {% endif %}
-                        {% if play_selected %}
-                            <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_sel }}">Play Selected Instruments</a>
-                        {% endif %}
-                        {% if play_unselected %}
-                            <a href="#" class="lnkPlay" data-base-url="{{ full_score_midis.midi_un }}">Play Unselected Instruments</a>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="instrument-midi-section">
-                    <h3>Individual Instrument Playback</h3>
+            
+                    
                     <div class="instrument-buttons-container">
                         {% for index, ins in full_score_midis.selected_instruments_midis.items() %}
                             <div class="single-instrument-row">
@@ -509,20 +498,21 @@
             function updateLink(link) {
                 const parentScope = link.closest('#global-controls, div[id^="segment-"]');
                 if (!parentScope) return;
-
+    
                 const baseUrl = link.dataset.baseUrl;
                 if (!baseUrl) return;
-
+    
                 const tempo = parentScope.querySelector('.ddlTempo').value;
                 const click = parentScope.querySelector('.ddlClick').value;
-
+    
                 const finalUrl = `${baseUrl}&t=${tempo}&c=${click}`;
                 link.dataset.finalUrl = finalUrl;
             }
-
+    
             document.body.addEventListener('click', function(e) {
                 if (e.target.matches('.lnkPlay')) {
                     e.preventDefault();
+                    MIDIjs.stop(); // <-- Ensure previous MIDI is stopped before playing new one
                     const urlToPlay = e.target.dataset.finalUrl;
                     if (urlToPlay) {
                         MIDIjs.play(urlToPlay);
@@ -531,7 +521,7 @@
                     }
                 }
             });
-
+    
             document.body.addEventListener('change', function(e) {
                 if (e.target.matches('.ddlTempo, .ddlClick')) {
                     const changedElement = e.target;
@@ -542,11 +532,11 @@
                         const selector = isTempo ? '.ddlTempo' : '.ddlClick';
                         document.querySelectorAll(selector).forEach(ddl => { ddl.value = value; });
                     }
-
+    
                     document.querySelectorAll('.lnkPlay').forEach(updateLink);
                 }
             });
-
+    
             document.querySelectorAll('.lnkPlay').forEach(updateLink);
         });
     </script>

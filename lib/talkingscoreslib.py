@@ -115,6 +115,19 @@ def render_colourful_output(text, pitch_letter, element_type, settings):
             to_render = f"<span style='color:{color_to_use};'>{text}</span>"
 
     return to_render
+def get_accidental_steps(num_accidentals):
+        """
+        Return a list of pitch names (with accidental symbol) affected by the key signature.
+        E.g. -2 (2 flats) => ['B♭', 'E♭']
+        """
+        sharp_order = ['F', 'C', 'G', 'D', 'A', 'E', 'B']
+        flat_order = ['B', 'E', 'A', 'D', 'G', 'C', 'F']
+        if num_accidentals > 0:
+            return [s + '♯' for s in sharp_order[:num_accidentals]]
+        elif num_accidentals < 0:
+            return [f + '♭' for f in flat_order[:abs(num_accidentals)]]
+        else:
+            return []
 
 
 class TSEvent(object, metaclass=ABCMeta):
@@ -440,14 +453,38 @@ class Music21TalkingScore(TalkingScoreBase):
             
         return self.describe_key_signature(ks)
 
+
     def describe_key_signature(self, ks):
-        """Convert key signature to readable description."""
-        if ks.sharps > 0:
-            return f"{ks.sharps} sharps"
-        elif ks.sharps < 0:
-            return f"{abs(ks.sharps)} flats"
+        """
+        Convert key signature to readable description, e.g. "B flat major (2 flats: B♭, E♭)"
+        """
+        # If ks is a KeySignature object, convert it to a Key object for more info
+        if isinstance(ks, key.KeySignature):
+            m21key = ks.asKey()
         else:
-            return "No sharps or flats"
+            m21key = ks
+
+        # Get tonic and mode
+        tonic = m21key.tonic.name  # e.g., 'B-'
+        mode = m21key.mode  # 'major' or 'minor'
+        # Format the tonic nicely (music21 uses '-' for flat, '#' for sharp)
+        tonic_nice = tonic.replace('-', '♭').replace('#', '♯').replace('b', '♭')
+
+        num_accidentals = ks.sharps
+        accidental_word = ""
+        accidental_symbols = get_accidental_steps(num_accidentals)
+        if num_accidentals > 0:
+            accidental_word = "sharps"
+        elif num_accidentals < 0:
+            accidental_word = "flats"
+        else:
+            accidental_word = ""
+
+        if num_accidentals == 0:
+            return f"{tonic_nice.capitalize()} {mode} (no sharps or flats)"
+        else:
+            accs = ', '.join(accidental_symbols)
+            return f"{tonic_nice.capitalize()} {mode} ({abs(num_accidentals)} {accidental_word}: {accs})"
 
     def get_initial_text_expression(self):
         """Get the first text expression from the score."""
