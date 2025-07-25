@@ -1,109 +1,54 @@
 {% extends "base_site.html" %}
 {% load static %}
 
-{% block title %}Talking Scores (Beta) - making musicXML files more accessible{% endblock %}
-{% block meta-description %}Open source project to convert MusicXML files to a spoken description with audio segments - to make sheet music more accessible to print impaired musicians {% endblock %}
+{% block title %}Talking Scores – making MusicXML files more accessible{% endblock %}
+{% block meta-description %}Open source project to convert MusicXML files to a spoken description with audio segments – to make sheet music more accessible to print impaired musicians{% endblock %}
 
 {% block content %}
 <div class="container">
     <div class="talking-scores">
-        
-        <h1>Talking Scores - making sheet music more accessible for blind and print impaired musicians</h1>
 
+        <!-- 1. Headline and Welcome -->
+        <h1>Talking Scores – making sheet music more accessible for blind and print impaired musicians</h1>
         <div class="col-md-11 mx-auto text-start">
-            <p class="tsp welcome-intro">Transform your MusicXML files into detailed, spoken descriptions with synchronized audio playback. Designed for blind, visually impaired, and print impaired musicians, as well as anyone learning to read music or preferring auditory learning methods.</p>
-            
-            <div class="how-it-works-section">
-                <h2>How It Works</h2>
-                <div class="steps-container">
-                    <div class="step-item">
-                        <div class="step-number">1</div>
-                        <h3>Upload</h3>
-                        <p>Upload your MusicXML file (.xml, .musicxml, .mxl) or provide a URL</p>
-                    </div>
-                    <div class="step-arrow">→</div>
-                    <div class="step-item">
-                        <div class="step-number">2</div>
-                        <h3>Customize</h3>
-                        <p>Choose your preferred description style, rhythm notation, and audio options</p>
-                    </div>
-                    <div class="step-arrow">→</div>
-                    <div class="step-item">
-                        <div class="step-number">3</div>
-                        <h3>Read & Listen</h3>
-                        <p>Navigate your talking score with synchronized MIDI playback</p>
-                    </div>
-                </div>
-                <p class="processing-time">⏱️ Processing typically takes 30-60 seconds depending on score complexity</p>
-            </div>
-
-            <div class="features-section">
-                <h2>🎼 Key Features</h2>
-                <div class="feature-grid">
-                    <div class="feature-item">
-                        <h3>📝 Detailed Descriptions</h3>
-                        <p>Comprehensive text descriptions of pitches, rhythms, dynamics, articulations, and structural elements with customizable detail levels.</p>
-                    </div>
-                    <div class="feature-item">
-                        <h3>🎵 Audio Playback</h3>
-                        <p>Synchronized MIDI playback for complete scores, individual instruments, or specific sections at 50%, 100%, or 150% speed with optional click tracks.</p>
-                    </div>
-                    <div class="feature-item">
-                        <h3>⚙️ Customizable Output</h3>
-                        <p>Adjust rhythm notation (British/American), octave announcements, color coding, accent handling, and description verbosity to match your learning style.</p>
-                    </div>
-                    <div class="feature-item">
-                        <h3>📊 Intelligent Analysis</h3>
-                        <p>Automatic detection of repeated sections, pattern analysis, structural summaries, and learning-focused repetition descriptions to aid memorization.</p>
-                    </div>
-                    <div class="feature-item">
-                        <h3>🧭 Easy Navigation</h3>
-                        <p>Well-structured text with clear headings and the ability to jump between bars, beats, and instruments effortlessly.</p>
-                    </div>
-                    <div class="feature-item">
-                        <h3>🎹 Multi-Instrument Support</h3>
-                        <p>Handle complex orchestral scores with separate descriptions and playback for each instrument, including piano left/right hand separation.</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="example-output">
-                <h2>📋 Example Output</h2>
-                <p class="example-description">Here's what a typical talking score description looks like:</p>
-                <div class="example-container">
-                    <div class="example-content" role="region" aria-label="Sample talking score output">
-                        <p class="tsp">
-                            <strong>Bar 1:</strong><br>
-                            Time signature - 1 of 1 is 4 4.<br>
-                            Key signature - 1 of 1 is 2 sharps.<br><br>
-                            
-                            <strong>Beat 1:</strong> crotchet high D<br>
-                            <strong>Beat 2:</strong> quaver rest, mid A<br>
-                            <strong>Beat 3:</strong> crotchet high D<br>
-                            <strong>Beat 4:</strong> quaver rest, mid A<br><br>
-                            
-                            <strong>Bar 2:</strong><br>
-                            <strong>Beat 1:</strong> quaver high D, mid A<br>
-                            <strong>Beat 2:</strong> quaver high D, F<br>
-                            <strong>Beat 3:</strong> crotchet high A<br>
-                            <strong>Beat 4:</strong> crotchet rest<br>
-                        </p>
-                    </div>
-                    <div class="example-audio-note">
-                        <p><em>💡 In the actual talking score, each section includes clickable MIDI playback links at multiple speeds. You can use your screen reader to navigate and hear the descriptions spoken aloud.</em></p>
-                    </div>
-                </div>
-            </div>
-        
-            <p class="tsp project-info">This is an <a href="https://github.com/bentimms/talkingscores" target="_blank">open source project</a> developed by a small team in our spare time. While fully functional, we're continuously improving. Check our <a href="/change-log">Change Log</a> for recent updates or <a href="/contact-us">contact us</a> with questions, problems, or feature requests.</p>      
+            <p class="tsp welcome-intro">
+                Transform your MusicXML files into detailed, spoken descriptions with synchronised audio playback. 
+                Designed for blind, visually impaired, and print impaired musicians, as well as anyone learning to read music or preferring auditory learning methods.
+            </p>
         </div>
-                
-        <hr class="section-divider">
 
+        <!-- 2. How It Works -->
+        <div class="how-it-works-section">
+            <h2>How It Works</h2>
+            <div class="steps-container">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <h3>Upload</h3>
+                    <p>Upload your MusicXML file (.xml, .musicxml, .mxl) or provide a URL</p>
+                </div>
+                <div class="step-arrow">→</div>
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <h3>Customise</h3>
+                    <p>Choose your preferred description style, rhythm notation, and audio options</p>
+                </div>
+                <div class="step-arrow">→</div>
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <h3>Read & Listen</h3>
+                    <p>Navigate your talking score with synchronised MIDI playback</p>
+                </div>
+            </div>
+            <p class="processing-time">⏱️ Processing typically takes 30–60 seconds depending on score complexity</p>
+        </div>
+
+        <!-- 3. File Upload/URL Entry -->
         <div id="drop-zone">
             <h2><strong>🎼 Upload Your Music Score</strong></h2>
             <div class="upload-instructions-container">
-                <p class="upload-instructions"><strong>Drag and drop your MusicXML file, click to browse your computer, or provide a direct URL.</strong></p>
+                <p class="upload-instructions">
+                    <strong>Drag and drop your MusicXML file, click to browse your computer, or provide a direct URL.</strong>
+                </p>
                 <div class="supported-formats-prominent">
                     <strong>Supported formats:</strong> 
                     <span class="format-badges">
@@ -148,18 +93,97 @@
                         </button>
                     </div>
                     <div class="processing-info">
-                        <p><small>After clicking, you'll customize your preferences, then we'll process your score (usually 30-60 seconds)</small></p>
+                        <p><small>After clicking, you'll customise your preferences, then we'll process your score (usually 30–60 seconds)</small></p>
                     </div>
                 </div>
             </form>
         </div>
 
-        <div class="sample-files-section">
-            <h2>🎵 Try Sample Files</h2>
-            <p>New to talking scores? Try these example files to see how the system works:</p>
-            <div class="sample-links">
-                <p><em>Sample files coming soon - check our <a href="/change-log">Change Log</a> for updates!</em></p>
+        <!-- 4. Features Section -->
+        <div class="features-section">
+            <h2>🎼 Key Features</h2>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h3>📝 Detailed Descriptions</h3>
+                    <p>Comprehensive text descriptions of pitches, rhythms, dynamics, articulations, and structural elements with customisable detail levels.</p>
+                </div>
+                <div class="feature-item">
+                    <h3>🎵 Audio Playback</h3>
+                    <p>Synchronised MIDI playback for complete scores, individual instruments, or specific sections at 50%, 100%, or 150% speed with optional click tracks.</p>
+                </div>
+                <div class="feature-item">
+                    <h3>⚙️ Customisable Output</h3>
+                    <p>Adjust rhythm notation (British/American), octave announcements, colour coding, accent handling, and description verbosity to match your learning style.</p>
+                </div>
+                <div class="feature-item">
+                    <h3>📊 Intelligent Analysis</h3>
+                    <p>Automatic detection of repeated sections, pattern analysis, structural summaries, and learning-focused repetition descriptions to aid memorisation.</p>
+                </div>
+                <div class="feature-item">
+                    <h3>🧭 Easy Navigation</h3>
+                    <p>Well-structured text with clear headings and the ability to jump between bars, beats, and instruments effortlessly.</p>
+                </div>
+                <div class="feature-item">
+                    <h3>🎹 Multi-Instrument Support</h3>
+                    <p>Handle complex orchestral scores with separate descriptions and playback for each instrument, including piano left/right hand separation.</p>
+                </div>
             </div>
+        </div>
+
+        <!-- 5. Example Output -->
+        <div class="example-output">
+            <h2>📋 Example Output</h2>
+            <p class="example-description">Here's what a typical talking score description looks like:</p>
+            <div class="example-container">
+                <div class="example-content" role="region" aria-label="Sample talking score output">
+                    <p class="tsp">
+                        <strong>Bar 1:</strong><br>
+                        Time signature – 1 of 1 is 4 4.<br>
+                        Key signature – 1 of 1 is 2 sharps.<br><br>
+                        
+                        <strong>Beat 1:</strong> crotchet high D<br>
+                        <strong>Beat 2:</strong> quaver rest, mid A<br>
+                        <strong>Beat 3:</strong> crotchet high D<br>
+                        <strong>Beat 4:</strong> quaver rest, mid A<br><br>
+                        
+                        <strong>Bar 2:</strong><br>
+                        <strong>Beat 1:</strong> quaver high D, mid A<br>
+                        <strong>Beat 2:</strong> quaver high D, F<br>
+                        <strong>Beat 3:</strong> crotchet high A<br>
+                        <strong>Beat 4:</strong> crotchet rest<br>
+                    </p>
+                </div>
+                <div class="example-audio-note">
+                    <p><em>💡 In the actual talking score, each section includes clickable MIDI playback links at multiple speeds. You can use your screen reader to navigate and hear the descriptions spoken aloud.</em></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. Project Info -->
+        <div class="col-md-11 mx-auto text-start">
+            <p class="tsp project-info">
+                This is an <a href="https://github.com/bentimms/talkingscores" target="_blank">open source project</a> developed by a small team in our spare time. While fully functional, we're continuously improving.
+                Check our <a href="/change-log">Change Log</a> for recent updates or <a href="/contact-us">contact us</a> with questions, problems, or feature requests.
+            </p>
+        </div>
+
+        <hr class="section-divider">
+
+        <!-- 7. Example Scores (at the bottom) -->
+        <div class="sample-files-section">
+            <h2>Example scores</h2>
+            <p>
+                These example scores have been produced by this website and should give a good idea of what a Talking Score is.
+                They might not have been produced by the latest version of the code.
+            </p>
+            <ul class="sample-links-list" style="font-size:1.1rem;">
+                <li>
+                    <a href="/static/data/Faure-Sicilienne-cello-010323.html">Faure-Sicilienne-cello-010323.html</a>
+                </li>
+                <li>
+                    <a href="/static/data/macdowell-to-a-wild-rose-010323.html">macdowell-to-a-wild-rose-010323.html</a>
+                </li>
+            </ul>
         </div>
     </div>
 </div>
