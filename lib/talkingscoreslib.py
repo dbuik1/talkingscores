@@ -19,6 +19,7 @@ import logging.config
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
 from types import SimpleNamespace
+import copy
 
 from jinja2 import Template, Environment, FileSystemLoader
 from music21 import *
@@ -710,20 +711,90 @@ class Music21TalkingScore(TalkingScoreBase):
             dict: Nested dictionary of events organized by bar and time point
         """
         intermediate_events = {}
-        measures = self.score.parts[part_index].measures(start_bar, end_bar)
+        
+        # Special handling for pickup bars (measure 0)
+        if start_bar == 0:
+            logger.info(f'Processing pickup bar for part {part_index}')
+            part = self.score.parts[part_index]
+            all_measures = part.getElementsByClass('Measure')
+            
+            if all_measures:
+                first_measure = all_measures[0]
+                logger.info(f'First measure number: {first_measure.number}, duration: {first_measure.duration.quarterLength}')
+                
+                # Check if this is actually a pickup measure by comparing duration
+                if hasattr(first_measure, 'timeSignature') and first_measure.timeSignature:
+                    time_sig = first_measure.timeSignature
+                else:
+                    time_sig = self.timeSigs.get(first_measure.number) if hasattr(self, 'timeSigs') else None
+                
+                if time_sig:
+                    expected_duration = time_sig.barDuration.quarterLength
+                    actual_duration = first_measure.duration.quarterLength
+                    logger.info(f'Expected duration: {expected_duration}, Actual: {actual_duration}')
+                    
+                    if actual_duration < expected_duration:
+                        # This is a pickup measure, process it as measure 0
+                        logger.info('Confirmed pickup measure, processing...')
+                        measures = stream.Stream()
+                        # Create a copy of the measure but renumber it to 0 for our processing
+                        pickup_measure = copy.deepcopy(first_measure)
+                        pickup_measure.number = 0
+                        measures.append(pickup_measure)
+                    else:
+                        # Not a pickup, try to find actual measure 0
+                        measures = part.measures(0, 0)
+                else:
+                    # No time signature info, assume first measure might be pickup
+                    logger.info('No time signature, assuming first measure is pickup')
+                    measures = stream.Stream()
+                    pickup_measure = copy.deepcopy(first_measure)
+                    pickup_measure.number = 0
+                    measures.append(pickup_measure)
+            else:
+                logger.warning('No measures found in part')
+                measures = stream.Stream()
+        else:
+            measures = self.score.parts[part_index].measures(start_bar, end_bar)
         
         # Ensure time signature is available
-        if (measures.measure(start_bar) is not None and 
+        if start_bar == 0:
+            # For pickup bars, use the time signature from the first regular measure
+            all_measures = self.score.parts[part_index].getElementsByClass('Measure')
+            if all_measures and len(all_measures) > 1:
+                second_measure = all_measures[1]
+                if hasattr(self, 'timeSigs') and second_measure.number in self.timeSigs:
+                    # Make sure our pickup measure has the time signature
+                    pickup_measures = measures.getElementsByClass('Measure')
+                    if pickup_measures:
+                        pickup_measure = pickup_measures[0]
+                        if not pickup_measure.getElementsByClass(meter.TimeSignature):
+                            pickup_measure.insert(0, self.timeSigs[second_measure.number])
+        elif (measures.measure(start_bar) is not None and 
             not measures.measure(start_bar).getElementsByClass(meter.TimeSignature)):
-            measures.measure(start_bar).insert(0, self.timeSigs[start_bar])
+            if hasattr(self, 'timeSigs') and start_bar in self.timeSigs:
+                measures.measure(start_bar).insert(0, self.timeSigs[start_bar])
 
         logger.info(f'Processing part {part_index} - bars {start_bar} to {end_bar}')
         
         # Process each measure
         for bar_index in range(start_bar, end_bar + 1):
-            measure = measures.measure(bar_index)
-            if measure is not None:
-                self.update_events_for_measure(measure, intermediate_events)
+            if start_bar == 0:
+                # For pickup, we only have one measure numbered 0
+                measure_to_process = measures.getElementsByClass('Measure')[0] if measures.getElementsByClass('Measure') else None
+            else:
+                measure_to_process = measures.measure(bar_index)
+                
+            if measure_to_process is not None:
+                logger.info(f'Processing measure {bar_index}, actual measure number: {measure_to_process.number}')
+                # Force the measure number for our processing
+                original_number = measure_to_process.number
+                measure_to_process.number = bar_index
+                self.update_events_for_measure(measure_to_process, intermediate_events)
+                # Restore original number
+                measure_to_process.number = original_number
+            else:
+                logger.warning(f'No measure found for bar {bar_index}')
         
         # Add dynamic spanners (crescendo, diminuendo) if enabled
         if settings.get('include_dynamics', True):
@@ -1682,6 +1753,7 @@ class HTMLTalkingScoreFormatter:
                 start_bar=pickup_bar_num, end_bar=pickup_bar_num, web_path=web_path
             )
             
+            segment['original_start_bar'] = pickup_bar_num
             segment['start_bar'] = 'Pickup'
             segment['end_bar'] = ''
             music_segments.append(segment)
