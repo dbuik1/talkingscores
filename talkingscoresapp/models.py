@@ -20,15 +20,21 @@ import xml.etree.ElementTree as ET
 logger = logging.getLogger("TSScore")
 logger.setLevel(logging.DEBUG)
 console_handler = logging.StreamHandler()
-file_handler = logging.FileHandler(os.path.join(*(MEDIA_ROOT, "log1.txt")))
 console_handler.setLevel(logging.DEBUG)
-file_handler.setLevel(logging.INFO)
 console_format = logging.Formatter("Ln %(lineno)d - %(message)s")
-file_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 console_handler.setFormatter(console_format)
-file_handler.setFormatter(file_format)
 logger.addHandler(console_handler)
-logger.addHandler(file_handler)
+
+# File logging — only if the media directory exists (not available on all hosts)
+os.makedirs(MEDIA_ROOT, exist_ok=True)
+try:
+    file_handler = logging.FileHandler(os.path.join(MEDIA_ROOT, "log1.txt"))
+    file_handler.setLevel(logging.INFO)
+    file_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    file_handler.setFormatter(file_format)
+    logger.addHandler(file_handler)
+except OSError:
+    logger.warning("Could not create file log handler — logging to console only")
 
 
 def hashfile(afile, hasher, blocksize=65536):
