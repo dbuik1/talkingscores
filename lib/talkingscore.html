@@ -37,8 +37,22 @@
             color: #f8f8f2;
         }
 
+        /* Also detect OS-level dark mode preference */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #282c34;
+                color: #f8f8f2;
+            }
+            a { color: #90cfff; }
+        }
+
         a { color: var(--link-color, #0056b3); }
         html[data-theme="dark"] a { color: #90cfff; }
+        html[data-theme="light"] body {
+            background-color: #ffffff;
+            color: #333333;
+        }
+        html[data-theme="light"] a { color: #0056b3; }
         
         h4 {
             margin-block-end:1rem;
