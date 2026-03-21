@@ -27,10 +27,18 @@
         body {
             font-family: Georgia;
             font-size: 26pt;
-            background-color: var(--background-color);
-            color: var(--text-color);
+            background-color: #ffffff;
+            color: #333333;
             transition: background-color 0.3s ease, color 0.3s ease;
         }
+
+        html[data-theme="dark"] body {
+            background-color: #282c34;
+            color: #f8f8f2;
+        }
+
+        a { color: var(--link-color, #0056b3); }
+        html[data-theme="dark"] a { color: #90cfff; }
         
         h4 {
             margin-block-end:1rem;
