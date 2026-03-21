@@ -1,29 +1,15 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN">
 <html>
 <head>
-    <title>Talking score for {{ basic_information['title'] }}</title>
+    <title>Talking score for {{ basic_information['title'] }} (Standalone)</title>
     <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
     <meta name="robots" content="noindex" />
-
-    <!-- Mobile optimization -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#5a2d91">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
     <script type='text/javascript' src='//www.midijs.net/lib/midi.js'></script> 
 
-    <link href="http://127.0.0.1:8000/static/css/talkingscores.css" rel="stylesheet">
-
-    <script>
-        (function() {
-            const theme = localStorage.getItem('theme-preference') || 'light';
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
-    </script>
-    
     <style type="text/css">
+        /* Include all the CSS from the original template inline */
         body{font-family: Georgia; font-size: 26pt}
         
         h4 {
@@ -81,14 +67,34 @@
             border-color: #dc6502;
         }
 
-        /* ALL PLAY BUTTONS - Use main stylesheet classes and theme colors */
+        /* ALL PLAY BUTTONS - Use CSS variables for theming */
+        :root {
+            --btn-primary-bg: #0d6efd;
+            --btn-primary-color: #ffffff;
+            --btn-primary-hover-bg: #0b5ed7;
+            --background-color: #ffffff;
+            --text-color: #212529;
+            --form-control-bg: #ffffff;
+            --form-control-border: #ced4da;
+            --form-control-color: #212529;
+        }
+
+        html[data-theme="dark"] {
+            --btn-primary-bg: #0d6efd;
+            --btn-primary-color: #ffffff;
+            --btn-primary-hover-bg: #0b5ed7;
+            --background-color: #212529;
+            --text-color: #ffffff;
+            --form-control-bg: #495057;
+            --form-control-border: #6c757d;
+            --form-control-color: #ffffff;
+        }
+
         .lnkPlay {
-            /* Use the exact same styling as main stylesheet buttons */
             background-color: var(--btn-primary-bg) !important;
             color: var(--btn-primary-color) !important;
             border: 2px solid var(--btn-primary-bg) !important;
             
-            /* Basic button styling */
             display: inline-block;
             text-decoration: none !important;
             padding: 0.3rem 0.8rem;
@@ -122,19 +128,13 @@
             box-shadow: 0 2px 6px rgba(0,0,0,0.2);
         }
 
-        /* Remove ALL color overrides for part buttons */
         .part-midi-list .lnkPlay {
-            /* Just make them slightly smaller, but keep same colors */
             font-size: 0.75em !important;
             padding: 0.18rem 0.6rem !important;
             margin: 0.08rem 0.2rem 0.08rem 0;
-            /* Colors inherited from base .lnkPlay class above */
         }
 
-        /* Remove ALL special styling for different button types */
-
-
-        /* Layout helpers only */
+        /* Layout styles - same as original */
         .global-controls-section {
             background: var(--background-color);
             border: 2px solid #dc6502;
@@ -249,8 +249,26 @@
             padding-bottom: 0.08rem;
         }
 
+        /* Standalone-specific styles */
+        .standalone-notice {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin: 1rem 0;
+            color: #0c5460;
+        }
+
+        html[data-theme="dark"] .standalone-notice {
+            background: #155160;
+            border-color: #0c5460;
+            color: #d1ecf1;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
+            body { font-size: 22pt; }
+            
             .playback-controls {
                 flex-direction: column;
                 align-items: stretch;
@@ -266,92 +284,21 @@
             }
         }
     </style>
+
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme-preference') || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
 </head>
 <body class="score-page">
-    <div id="download-section" style="background: var(--card-bg, #f0f8ff); border: 2px solid var(--primary-color, #4a90e2); border-radius: 8px; padding: 1.5em; margin-bottom: 2em; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h3 style="margin-top: 0; color: var(--text-color, #333);">💾 Save for Offline Use</h3>
-        <p style="font-size: 0.9em; margin-bottom: 1em; color: var(--text-color, #333);">
-            Download this talking score as a self-contained HTML file to use on your phone, iPad, or any device - even without internet!
-            All MIDI playback and controls are included.
-        </p>
-        <a href="#" id="download-standalone-btn" class="btn btn-primary" style="font-size: 1.1em; padding: 0.6em 1.2em;">
-            📱 Download Standalone Score
-        </a>
-        <details style="margin-top: 1em; font-size: 0.85em;">
-            <summary style="cursor: pointer; color: var(--primary-color, #4a90e2); font-weight: 600;">How do I use this on my phone or iPad?</summary>
-            <ol style="margin-top: 0.5em; padding-left: 1.5em; color: var(--text-color, #333);">
-                <li>Click the download button above to save the HTML file to your computer</li>
-                <li>Transfer the file to your mobile device using:
-                    <ul>
-                        <li>Email it to yourself and open on your phone/iPad</li>
-                        <li>Upload to Google Drive, Dropbox, or iCloud and download on mobile</li>
-                        <li>Use AirDrop (Apple devices) or USB cable</li>
-                    </ul>
-                </li>
-                <li>Open the HTML file in Safari, Chrome, or any browser</li>
-                <li>Works completely offline - perfect for use at the piano!</li>
-            </ol>
-        </details>
+    <!-- Standalone notice -->
+    <div class="standalone-notice">
+        <strong>Standalone Talking Score</strong><br>
+        This is a self-contained version that works offline. All MIDI files are embedded for mobile compatibility.
+        Generated: {{ generation_timestamp }}
     </div>
-    <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            const downloadBtn = document.getElementById('download-standalone-btn');
-            if (downloadBtn) {
-                // Extract id and filename from current URL
-                const pathParts = window.location.pathname.split('/');
-                // URL format: /score/{id}/{filename}
-                if (pathParts.length >= 4 && pathParts[1] === 'score') {
-                    const id = pathParts[2];
-                    const filename = pathParts[3];
-                    downloadBtn.href = `/download_standalone/${id}/${filename}`;
-                } else {
-                    // Fallback: hide the button if we can't determine the URL
-                    downloadBtn.style.display = 'none';
-                }
-            }
-        });
-    </script>
-
-    <!-- Fixed Stop Playback Button -->
-    <div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
-        <button id="stop-playback-btn" style="
-            background-color: var(--btn-danger-bg, #dc3545);
-            color: white;
-            border: 2px solid var(--btn-danger-border, #bd2130);
-            border-radius: 50px;
-            padding: 15px 25px;
-            font-size: 1.1em;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            transition: all 0.3s ease;
-            display: none;
-        " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-            ⏹ Stop Playback
-        </button>
-    </div>
-    <script>
-        // Show stop button when MIDI is playing
-        const stopBtn = document.getElementById('stop-playback-btn');
-        if (stopBtn) {
-            stopBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                if (typeof MIDIjs !== 'undefined') {
-                    MIDIjs.stop();
-                }
-                stopBtn.style.display = 'none';
-            });
-
-            // Show button when any play link is clicked
-            document.body.addEventListener('click', function(e) {
-                if (e.target.matches('.lnkPlay') || e.target.closest('.lnkPlay')) {
-                    setTimeout(function() {
-                        stopBtn.style.display = 'block';
-                    }, 100);
-                }
-            });
-        }
-    </script>
     <div class="container">
         <main id="score-main-content">
         <h1>Info</h1>
@@ -378,26 +325,24 @@
                     </select>
                 </div>
             
-                    
-                    <div class="instrument-buttons-container">
-                        {% for index, ins in full_score_midis.selected_instruments_midis.items() %}
-                            <div class="single-instrument-row">
-                                {% if preamble.number_of_parts > 1 %}
-                                    <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">{{instruments[ins.ins][0]}}</a>
-                                {% else %}
-                                    <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play Score</a>
-                                {% endif %}
-                                
-                                {% if ins.midi_parts|length > 0 %}
-                                    <div class="part-midi-list">
-                                        {% for midipart in ins.midi_parts %}
-                                            <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1]}}</a>
-                                        {% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                        {% endfor %}
-                    </div>
+                <div class="instrument-buttons-container">
+                    {% for index, ins in full_score_midis.selected_instruments_midis.items() %}
+                        <div class="single-instrument-row">
+                            {% if preamble.number_of_parts > 1 %}
+                                <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">{{instruments[ins.ins][0]}}</a>
+                            {% else %}
+                                <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play Score</a>
+                            {% endif %}
+                            
+                            {% if ins.midi_parts|length > 0 %}
+                                <div class="part-midi-list">
+                                    {% for midipart in ins.midi_parts %}
+                                        <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1]}}</a>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
                 </div>
             </div>
 
@@ -563,6 +508,11 @@
         <a href="#score-nav-ribbon" class="skip-link">Back to navigation</a>
     </main>
 
+    <!-- Embedded MIDI files mapping script -->
+    <script>
+        {{ embedded_midi_script|safe }}
+    </script>
+
     <script>
         document.addEventListener("DOMContentLoaded", (event) => {
             function updateLink(link) {
@@ -582,9 +532,10 @@
             document.body.addEventListener('click', function(e) {
                 if (e.target.matches('.lnkPlay')) {
                     e.preventDefault();
-                    MIDIjs.stop(); // <-- Ensure previous MIDI is stopped before playing new one
+                    MIDIjs.stop(); // Ensure previous MIDI is stopped before playing new one
                     const urlToPlay = e.target.dataset.finalUrl;
                     if (urlToPlay) {
+                        console.log('Playing MIDI (standalone):', urlToPlay);
                         MIDIjs.play(urlToPlay);
                     } else {
                         console.error("No final URL found for this link.", e.target);
@@ -608,66 +559,6 @@
             });
     
             document.querySelectorAll('.lnkPlay').forEach(updateLink);
-        });
-    </script>
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const navRibbon = document.querySelector('.score-nav-ribbon');
-            const ribbonLinks = document.querySelectorAll('.score-nav-ribbon li a');
-            const segments = document.querySelectorAll('div[id^="segment-"]');
-            const stopBtn = document.getElementById('stop-playback-btn');
-            if (stopBtn) {
-                stopBtn.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    MIDIjs.stop();
-                });
-            }
-
-            if (navRibbon) {
-                navRibbon.addEventListener('click', function(event) {
-                    const targetLink = event.target.closest('a');
-                    if (!targetLink) return;
-
-                    const href = targetLink.getAttribute('href');
-                    if (href === '#') {
-                        event.preventDefault();
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                        history.replaceState(null, null, ' ');
-                        return;
-                    }
-
-                    const targetElement = document.querySelector(href);
-                    if (targetElement) {
-                        event.preventDefault();
-                        targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        history.replaceState(null, null, href);
-                    }
-                });
-            }
-
-            if ('IntersectionObserver' in window && segments.length > 0 && ribbonLinks.length > 0) {
-                const observerOptions = {
-                    root: null, 
-                    rootMargin: '0px 0px -50% 0px',
-                    threshold: 0
-                };
-
-                const observer = new IntersectionObserver((entries, observer) => {
-                    entries.forEach(entry => {
-                        const segmentId = entry.target.getAttribute('id');
-                        const correspondingLink = document.querySelector(`.score-nav-ribbon li a[href="#${segmentId}"]`);
-                        
-                        if (entry.isIntersecting && correspondingLink) {
-                            ribbonLinks.forEach(link => link.classList.remove('active'));
-                            correspondingLink.classList.add('active');
-                        }
-                    });
-                }, observerOptions);
-
-                segments.forEach(segment => {
-                    observer.observe(segment);
-                });
-            }
         });
     </script>
 </body>

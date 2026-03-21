@@ -1531,6 +1531,8 @@ class HTMLTalkingScoreFormatter:
             'repetition_in_contexts': self.music_analyser.repetition_in_contexts,
             'selected_part_names': self.score.selected_part_names,
             'immediate_repetition_contexts': self.music_analyser.immediate_repetition_contexts,
+            'id': self.options.get('id', ''),
+            'filename': self.options.get('filename', ''),
         })
 
     def _setup_template_environment(self):

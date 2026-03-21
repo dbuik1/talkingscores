@@ -1,6 +1,8 @@
 .talkingscore-env/
 .talkingscore2-env/
 venv_talkingscores/
+.venv_talkingscores/
+.venv_talkingscorres/
 test_scores/
 media/
 staticfiles/
@@ -8,3 +10,5 @@ __pycache__
 tmp/
 .vscode/
 db.sqlite3
+.env
+CLAUDE.md

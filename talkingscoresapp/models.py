@@ -182,14 +182,17 @@ class TSScore(object):
         web_path = f"/midis/{self.id}/{self.filename}"
         midi_output_path = os.path.join(MEDIA_ROOT, self.id)
         os.makedirs(midi_output_path, exist_ok=True)
-        
+
         self.logger.info(f"Dynamically generating HTML for {data_path}")
         try:
             mxmlScore = Music21TalkingScore(data_path)
             tsf = HTMLTalkingScoreFormatter(mxmlScore)
-            html_content = tsf.generateHTML(output_path=midi_output_path, web_path=web_path)
+            # Pass id and filename for the download button
+            html_content = tsf.generateHTML(
+                output_path=midi_output_path,
+                web_path=web_path
+            )
             return html_content
-            
         except Exception as e:
             self.logger.exception(f"Failed to generate HTML from score {data_path}")
             return f"<h1>Error Generating Score</h1><p>There was an error processing the MusicXML file: {e}</p>"
