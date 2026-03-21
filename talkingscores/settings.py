@@ -27,6 +27,8 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'www.talkingscores.co.uk,www.talkingscores.org,127.0.0.1').split(',')
 
+CSRF_TRUSTED_ORIGINS = [f'https://{host}' for host in ALLOWED_HOSTS if host]
+
 
 # Application definition
 
