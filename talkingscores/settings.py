@@ -21,9 +21,20 @@ sys.path.append(os.path.join(BASE_DIR, 'lib'))
 
 
 # Security settings — override these via environment variables in production
-SECRET_KEY = os.environ.get('SECRET_KEY', 'y+-8s4elpz(oge_o42txk#0i5=u9gd0)3q&u+y^+cs#tj9qv1#')
+# In production, SECRET_KEY must be set as an environment variable.
+# The fallback is only for local development convenience.
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    import warnings
+    warnings.warn(
+        "SECRET_KEY environment variable is not set! Using an insecure default. "
+        "Do NOT use this in production.",
+        stacklevel=1,
+    )
+    SECRET_KEY = 'dev-only-insecure-key-do-not-use-in-production'
 
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
+# Default to False so production is safe even if the variable is accidentally unset
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'www.talkingscores.co.uk,www.talkingscores.org,127.0.0.1').split(',')
 
@@ -129,4 +140,8 @@ STORAGES = {
 }
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Limit upload size to 10 MB to prevent DoS via large file uploads
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
 

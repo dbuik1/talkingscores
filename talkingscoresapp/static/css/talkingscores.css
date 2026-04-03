@@ -357,7 +357,7 @@ html[data-theme="dark"] .form-horizontal legend {
 .welcome-intro {
     font-size: 1.3rem;
     line-height: 1.6;
-    color: var(--link-colour);
+    color: var(--link-color);
     font-weight: 500;
     margin-bottom: 2rem;
 }
@@ -379,7 +379,7 @@ html[data-theme="dark"] .form-horizontal legend {
 }
 
 .how-it-works-section h2 {
-    color: var(--link-colour);
+    color: var(--link-color);
     text-align: center;
     margin-bottom: 2rem;
     font-size: 1.75rem;
@@ -410,7 +410,7 @@ html[data-theme="dark"] .form-horizontal legend {
     width: 3.2rem;
     height: 3.2rem;
     background: var(--accent-highlight-bg);
-    color: var(--accent-highlight-colour);
+    color: var(--accent-highlight-color);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -423,7 +423,7 @@ html[data-theme="dark"] .form-horizontal legend {
 }
 
 .step-item h3 {
-    color: var(--text-colour);
+    color: var(--text-color);
     margin-bottom: 0.5rem;
     font-size: 1.2rem;
     text-align: center;
@@ -432,7 +432,7 @@ html[data-theme="dark"] .form-horizontal legend {
 
 .step-item p {
     font-size: 0.95rem;
-    color: var(--muted-text-colour);
+    color: var(--muted-text-color);
     line-height: 1.4;
     text-align: center;
     margin: 0;
@@ -451,7 +451,7 @@ html[data-theme="dark"] .form-horizontal legend {
 .processing-time {
     text-align: center;
     font-style: italic;
-    color: var(--muted-text-colour);
+    color: var(--muted-text-color);
     font-size: 0.95rem;
 }
 
@@ -466,7 +466,7 @@ html[data-theme="dark"] .form-horizontal legend {
 
 .features-section h2 {
     text-align: center;
-    color: var(--link-colour);
+    color: var(--link-color);
     margin-bottom: 2rem;
     font-size: 2rem;
 }
@@ -479,7 +479,7 @@ html[data-theme="dark"] .form-horizontal legend {
 
 .feature-item {
     padding: 1.5rem;
-    background: var(--background-colour);
+    background: var(--background-color);
     border-radius: 0.75rem;
     border: 1px solid var(--form-control-border);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -491,14 +491,14 @@ html[data-theme="dark"] .form-horizontal legend {
 }
 
 .feature-item h3 {
-    color: var(--text-colour);
+    color: var(--text-color);
     margin-bottom: 1rem;
     font-size: 1.3rem;
 }
 
 .feature-item p {
     font-size: 1rem;
-    color: var(--muted-text-colour);
+    color: var(--muted-text-color);
     line-height: 1.6;
 }
 
@@ -508,14 +508,14 @@ html[data-theme="dark"] .form-horizontal legend {
 }
 
 .example-output h2 {
-    color: var(--link-colour);
+    color: var(--link-color);
     margin-bottom: 1rem;
     font-size: 1.75rem;
 }
 
 .example-description {
     font-size: 1.1rem;
-    color: var(--muted-text-colour);
+    color: var(--muted-text-color);
     margin-bottom: 1.5rem;
 }
 
@@ -529,7 +529,7 @@ html[data-theme="dark"] .form-horizontal legend {
 .example-content {
     padding: 2rem;
     font-style: italic;
-    background: var(--background-colour);
+    background: var(--background-color);
 }
 
 .example-audio-note,
@@ -556,7 +556,7 @@ html[data-theme="dark"] .example-audio-note strong {
 
 .upload-instructions {
     font-size: 1.2rem;
-    color: var(--text-colour);
+    color: var(--text-color);
     margin-bottom: 1rem;
 }
 
@@ -625,7 +625,7 @@ html[data-theme="dark"] .example-audio-note strong {
 #file-chosen-name {
     font-size: 1rem;
     font-style: normal;
-    color: var(--text-colour);
+    color: var(--text-color);
     flex-shrink: 1;
     min-width: 0;
     white-space: nowrap;
@@ -637,7 +637,7 @@ html[data-theme="dark"] .example-audio-note strong {
 .url-format-help {
     margin-top: 1rem;
     font-size: 0.9rem;
-    color: var(--muted-text-colour);
+    color: var(--muted-text-color);
     font-style: italic;
 }
 
@@ -662,7 +662,7 @@ html[data-theme="dark"] .example-audio-note strong {
 }
 
 .processing-info small {
-    color: var(--muted-text-colour);
+    color: var(--muted-text-color);
     font-style: italic;
 }
 
@@ -677,7 +677,7 @@ html[data-theme="dark"] .example-audio-note strong {
 }
 
 .sample-files-section h2 {
-    color: var(--link-colour);
+    color: var(--link-color);
     margin-bottom: 1rem;
     font-size: 1.75rem;
 }
@@ -734,13 +734,13 @@ html[data-theme="dark"] .example-audio-note strong {
 
 .composer-byline {
     font-size: 1.3rem;
-    color: var(--text-colour) !important;
+    color: var(--text-color) !important;
     opacity: 0.8;
     margin: 0 0 3rem 0;
 }
 
 html[data-theme="dark"] .composer-byline {
-    color: var(--text-colour) !important;
+    color: var(--text-color) !important;
     opacity: 0.9;
 }
 
@@ -755,7 +755,7 @@ html[data-theme="dark"] .composer-byline {
 
 .preview-header h3 {
     margin: 0;
-    color: var(--link-colour);
+    color: var(--link-color);
     font-size: 1.3rem;
 }
 
@@ -769,13 +769,13 @@ html[data-theme="dark"] .composer-byline {
     align-items: center;
     gap: 0.5rem;
     font-size: 0.8rem;
-    color: var(--text-colour);
+    color: var(--text-color);
     transition: all 0.2s ease;
 }
 
 .keyboard-shortcuts-toggle:hover {
     background: var(--accent-highlight-bg);
-    color: var(--accent-highlight-colour);
+    color: var(--accent-highlight-color);
 }
 
 .keyboard-shortcuts-toggle[aria-pressed="false"] {
@@ -790,7 +790,7 @@ html[data-theme="dark"] .composer-byline {
 }
 
 .preview-card {
-    background: var(--background-colour);
+    background: var(--background-color);
     border: 1px solid var(--form-control-border);
     border-radius: 0.75rem;
     padding: 1rem;
@@ -804,7 +804,7 @@ html[data-theme="dark"] .composer-byline {
 
 .preview-card h4 {
     margin: 0 0 0.75rem 0;
-    color: var(--text-colour);
+    color: var(--text-color);
     font-size: 1rem;
     font-weight: 600;
     display: flex;
@@ -814,7 +814,7 @@ html[data-theme="dark"] .composer-byline {
 
 .shortcut-key {
     background: var(--form-control-border);
-    color: var(--text-colour);
+    color: var(--text-color);
     padding: 0.2rem 0.4rem;
     border-radius: 0.25rem;
     font-size: 0.7rem;
@@ -827,7 +827,7 @@ html[data-theme="dark"] .composer-byline {
 
 .preview-text {
     font-size: 0.9rem;
-    color: var(--muted-text-colour);
+    color: var(--muted-text-color);
     line-height: 1.4;
     font-style: italic;
 }
@@ -855,7 +855,7 @@ html[data-theme="dark"] .composer-byline {
     border-radius: 0.5rem;
     padding: 1rem;
     text-align: center;
-    color: var(--text-colour);
+    color: var(--text-color);
 }
 
 .match-icon {
@@ -882,14 +882,14 @@ html[data-theme="dark"] .composer-byline {
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem 2rem;
-    background: var(--background-colour);
+    background: var(--background-color);
     border-bottom: 1px solid var(--form-control-border);
 }
 
 .section-header h2,
 .section-title {
     margin: 0;
-    color: var(--link-colour);
+    color: var(--link-color);
     font-size: 1.5rem;
 }
 
@@ -913,13 +913,13 @@ html[data-theme="dark"] .composer-byline {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    color: var(--text-colour);
+    color: var(--text-color);
     transition: all 0.2s ease;
 }
 
 .section-collapse-btn:hover {
     background: var(--accent-highlight-bg);
-    color: var(--accent-highlight-colour);
+    color: var(--accent-highlight-color);
     transform: scale(1.05);
 }
 
@@ -934,14 +934,14 @@ html[data-theme="dark"] .composer-byline {
 }
 
 .section-description {
-    color: var(--muted-text-colour);
+    color: var(--muted-text-color);
     font-size: 1.1rem;
     margin-bottom: 2rem;
     line-height: 1.5;
 }
 
 .additional-colour-section {
-    background: var(--background-colour);
+    background: var(--background-color);
     border-radius: 0.75rem;
     border: 1px solid var(--form-control-border);
     margin-top: 2rem;
@@ -973,14 +973,14 @@ html[data-theme="dark"] .composer-byline {
     align-items: center;
     font-weight: 600;
     font-size: 1.1rem;
-    color: var(--text-colour);
+    color: var(--text-color);
     margin-bottom: 0.75rem;
 }
 
 .form-legend {
     font-weight: 600;
     font-size: 1.2rem;
-    color: var(--text-colour);
+    color: var(--text-color);
     margin-bottom: 1rem;
     padding: 0;
     border: none;
@@ -988,7 +988,7 @@ html[data-theme="dark"] .composer-byline {
 
 .form-subheading {
     font-size: 1.3rem;
-    color: var(--text-colour);
+    color: var(--text-color);
     margin-bottom: 1rem;
     font-weight: 600;
 }
@@ -1051,7 +1051,7 @@ html[data-theme="dark"] .validation-message {
 .radio-label {
     font-size: 1rem;
     color: var(--text-color);
-    margin-left: 0.5;
+    margin-left: 0.5rem;
     display: inline-block;
     font-weight: normal;
 }
@@ -1074,7 +1074,7 @@ html[data-theme="dark"] .validation-message {
 
 .checkbox-item label {
     font-size: 1rem;
-    color: var(--text-colour) !important;
+    color: var(--text-color) !important;
     margin: 0;
     cursor: pointer;
     line-height: 1.5;
@@ -1096,7 +1096,7 @@ html[data-theme="dark"] .validation-message {
 html[data-theme="dark"] .checkbox-item label,
 .checkbox-item input[type="checkbox"]:checked + label,
 html[data-theme="dark"] .checkbox-item input[type="checkbox"]:checked + label {
-    color: var(--text-colour) !important;
+    color: var(--text-color) !important;
     opacity: 1 !important;
     visibility: visible !important;
     display: block !important;
@@ -1116,12 +1116,12 @@ html[data-theme="dark"] .checkbox-item input[type="checkbox"]:checked + label {
 
 html[data-theme="dark"] .checkbox-item label,
 html[data-theme="dark"] .radio-item .radio-label {
-    color: var(--text-colour) !important;
+    color: var(--text-color) !important;
     opacity: 1 !important;
 }
 
 .colouring-details {
-    background: var(--background-colour);
+    background: var(--background-color);
     border-radius: 0.75rem;
     border: 1px solid var(--form-control-border);
     padding: 2rem;
@@ -1151,7 +1151,7 @@ html[data-theme="dark"] .radio-item .radio-label {
 }
 
 .colour-element-desc {
-    color: var(--muted-text-colour);
+    color: var(--muted-text-color);
     font-size: 0.95rem;
     margin-bottom: 1.5rem;
     line-height: 1.5;
@@ -1180,12 +1180,12 @@ html[data-theme="dark"] .radio-item .radio-label {
 .colour-pickers-title {
     font-size: 1.1rem;
     font-weight: 600;
-    color: var(--text-colour);
+    color: var(--text-color);
     margin-bottom: 1rem;
 }
 
 .colour-pickers-desc {
-    color: var(--muted-text-colour);
+    color: var(--muted-text-color);
     font-size: 0.9rem;
     margin-bottom: 1.5rem;
     line-height: 1.4;
@@ -1218,7 +1218,7 @@ html[data-theme="dark"] .radio-item .radio-label {
 
 .colour-picker-label {
     font-weight: 600;
-    color: var(--text-colour);
+    color: var(--text-color);
     font-size: 1rem;
     min-width: 60px;
 }
@@ -1250,7 +1250,7 @@ html[data-theme="dark"] .radio-item .radio-label {
     padding: 0.5rem;
     font-family: monospace;
     font-size: 0.9rem;
-    color: var(--text-colour);
+    color: var(--text-color);
     transition: all 0.2s ease;
 }
 
@@ -1261,7 +1261,7 @@ html[data-theme="dark"] .radio-item .radio-label {
 }
 
 .hex-input:invalid {
-    border-color: var(--clear-btn-colour);
+    border-color: var(--clear-btn-color);
     background-color: rgba(220, 53, 69, 0.1);
 }
 
@@ -1293,7 +1293,7 @@ html[data-theme="dark"] .radio-item .radio-label {
     border-radius: 50%;
     border: 1px solid var(--form-control-border);
     background: var(--form-control-bg);
-    color: var(--muted-text-colour);
+    color: var(--muted-text-color);
     font-size: 0.9rem;
     font-weight: bold;
     cursor: pointer;
@@ -1305,14 +1305,14 @@ html[data-theme="dark"] .radio-item .radio-label {
 .help-btn:hover,
 .help-btn:focus {
     background: var(--accent-highlight-bg);
-    color: var(--accent-highlight-colour);
+    color: var(--accent-highlight-color);
     border-color: var(--accent-highlight-bg);
     transform: scale(1.1);
 }
 
 .help-btn.active {
     background: var(--accent-highlight-bg);
-    color: var(--accent-highlight-colour);
+    color: var(--accent-highlight-color);
     border-color: var(--accent-highlight-bg);
 }
 
@@ -1333,11 +1333,11 @@ html[data-theme="dark"] .radio-item .radio-label {
 
 .help-list li {
     margin-bottom: 0.75rem;
-    color: var(--text-colour);
+    color: var(--text-color);
 }
 
 .help-list strong {
-    color: var(--link-colour);
+    color: var(--link-color);
 }
 
 .form-actions {
@@ -1556,13 +1556,13 @@ div[id^="segment-"] h5 {
 .score-nav-ribbon li a:hover,
 .score-nav-ribbon li a:focus-visible {
     background-color: var(--accent-highlight-bg);
-    color: var(--accent-highlight-colour);
+    color: var(--accent-highlight-color);
     text-decoration: none;
 }
 
 .score-nav-ribbon li a.active {
     background-color: var(--accent-highlight-bg);
-    color: var(--accent-highlight-colour);
+    color: var(--accent-highlight-color);
     font-weight: bold;
 }
 
@@ -1575,8 +1575,8 @@ div[id^="segment-"] h5 {
     font-weight: bold;
     text-decoration: none;
     border-radius: 4px;
-    background-color: var(--clear-btn-colour);
-    color: var(--accent-highlight-colour);
+    background-color: var(--clear-btn-color);
+    color: var(--accent-highlight-color);
     transition: opacity 0.2s ease;
     border: none;
     font-family: inherit;
@@ -1587,7 +1587,7 @@ div[id^="segment-"] h5 {
 .score-nav-ribbon .nav-link-stop:hover,
 .score-nav-ribbon .nav-link-stop:focus-visible {
     opacity: 0.8;
-    color: var(--accent-highlight-colour);
+    color: var(--accent-highlight-color);
     text-decoration: none;
 }
 
@@ -1612,7 +1612,7 @@ div[id^="segment-"] h5 {
 html[data-theme="dark"] #key-sig-help-text,
 html[data-theme="dark"] #key-sig-help-text p,
 html[data-theme="dark"] #key-sig-help-text li {
-    color: var(--text-colour) !important;
+    color: var(--text-color) !important;
 }
 
 html[data-theme="dark"] #key-sig-help-text {
@@ -1620,7 +1620,7 @@ html[data-theme="dark"] #key-sig-help-text {
 }
 
 html[data-theme="dark"] #key-sig-help-text strong {
-    color: var(--text-colour) !important;
+    color: var(--text-color) !important;
 }
 
 html[data-theme="dark"] .generate-btn:hover:not(:disabled) {

@@ -356,7 +356,11 @@ class NotifyEmailForm(forms.Form):
 
 
 def send_error_email(error_message):
-    if 'EMAIL_PASSWORD' in os.environ:
+    if 'EMAIL_PASSWORD' not in os.environ:
+        logger.warning("EMAIL_PASSWORD not configured, skipping error email")
+        return
+
+    try:
         msg = MIMEMultipart()
         password = os.environ['EMAIL_PASSWORD']
         msg['From'] = "talkingscores@gmail.com"
@@ -364,11 +368,13 @@ def send_error_email(error_message):
         msg['Subject'] = "Talking Scores Error"
 
         msg.attach(MIMEText(error_message, 'plain'))
-        server = smtplib.SMTP('smtp.gmail.com: 587')
+        server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(msg['From'], password)
         server.sendmail(msg['From'], msg['To'], msg.as_string())
         server.quit()
+    except Exception:
+        logger.exception("Failed to send error notification email")
 
 
 def process(request, id, filename):
@@ -409,8 +415,10 @@ def midi(request, id, filename):
     midi_file_path = mh.get_or_make_midi_file()
     
     if os.path.exists(midi_file_path):
-        fr = FileResponse(open(midi_file_path, "rb"))
-        fr['Access-Control-Allow-Origin'] = '*'
+        midi_file = open(midi_file_path, "rb")
+        fr = FileResponse(midi_file)
+        fr['Content-Type'] = 'audio/midi'
+        fr['Access-Control-Allow-Origin'] = 'https://www.talkingscores.co.uk'
         fr['X-Robots-Tag'] = "noindex"
         return fr
     else:

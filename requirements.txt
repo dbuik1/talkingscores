@@ -1,9 +1,9 @@
-Django>=4.2.6
-Jinja2==3.0.0
+Django>=4.2.6,<5.0
+Jinja2>=3.1.0,<4.0
 music21==9.1.0
-requests==2.31.0
-pathvalidate==3.2.0
-gunicorn
-whitenoise
-dj-database-url
-psycopg2-binary
+requests>=2.31.0,<3.0
+pathvalidate>=3.2.0,<4.0
+gunicorn>=21.2.0,<23.0
+whitenoise>=6.5.0,<7.0
+dj-database-url>=2.0.0,<3.0
+psycopg2-binary>=2.9.0,<3.0

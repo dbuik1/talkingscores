@@ -27,7 +27,11 @@ class MidiHandler:
 
     def get_selected_instruments(self):
         # Corrected to use .GET
-        bsi = int(self.queryString.GET.get("bsi"))
+        try:
+            bsi = int(self.queryString.GET.get("bsi", 0))
+        except (ValueError, TypeError):
+            logger.error(f"Invalid bsi parameter: {self.queryString.GET.get('bsi')}")
+            bsi = 0
         self.selected_instruments = []
         while (bsi > 1):
             if (bsi & 1 == True):
@@ -60,7 +64,11 @@ class MidiHandler:
             prev_instrument = part.partId
 
         # Corrected typo from .Get to .GET
-        bpi = int(self.queryString.GET.get("bpi"))
+        try:
+            bpi = int(self.queryString.GET.get("bpi", 0))
+        except (ValueError, TypeError):
+            logger.error(f"Invalid bpi parameter: {self.queryString.GET.get('bpi')}")
+            bpi = 0
         self.play_together_unselected = bpi & 1
         bpi = bpi >> 1
         self.play_together_selected = bpi & 1
@@ -77,8 +85,13 @@ class MidiHandler:
         
         start_param = self.queryString.GET.get("start")
         if start_param is not None:
-            start = int(start_param)
-            end = int(self.queryString.GET.get("end"))
+            try:
+                start = int(start_param)
+                end = int(self.queryString.GET.get("end", start_param))
+            except (ValueError, TypeError):
+                logger.error(f"Invalid start/end parameters: start={start_param}, end={self.queryString.GET.get('end')}")
+                start = self.score.parts[0].getElementsByClass('Measure')[0].number
+                end = self.score.parts[0].getElementsByClass('Measure')[-1].number
         else:
             start = self.score.parts[0].getElementsByClass('Measure')[0].number
             end = self.score.parts[0].getElementsByClass('Measure')[-1].number

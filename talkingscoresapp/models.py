@@ -18,23 +18,26 @@ import zipfile
 import xml.etree.ElementTree as ET
 
 logger = logging.getLogger("TSScore")
-logger.setLevel(logging.DEBUG)
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)
-console_format = logging.Formatter("Ln %(lineno)d - %(message)s")
-console_handler.setFormatter(console_format)
-logger.addHandler(console_handler)
 
-# File logging — only if the media directory exists (not available on all hosts)
-os.makedirs(MEDIA_ROOT, exist_ok=True)
-try:
-    file_handler = logging.FileHandler(os.path.join(MEDIA_ROOT, "log1.txt"))
-    file_handler.setLevel(logging.INFO)
-    file_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    file_handler.setFormatter(file_format)
-    logger.addHandler(file_handler)
-except OSError:
-    logger.warning("Could not create file log handler — logging to console only")
+# Configure logging once at module level; avoid adding duplicate handlers
+if not logger.handlers:
+    logger.setLevel(logging.DEBUG)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+    console_format = logging.Formatter("Ln %(lineno)d - %(message)s")
+    console_handler.setFormatter(console_format)
+    logger.addHandler(console_handler)
+
+    # File logging — only if the media directory exists (not available on all hosts)
+    os.makedirs(MEDIA_ROOT, exist_ok=True)
+    try:
+        file_handler = logging.FileHandler(os.path.join(MEDIA_ROOT, "log1.txt"))
+        file_handler.setLevel(logging.INFO)
+        file_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        file_handler.setFormatter(file_format)
+        logger.addHandler(file_handler)
+    except OSError:
+        logger.warning("Could not create file log handler — logging to console only")
 
 
 def hashfile(afile, hasher, blocksize=65536):
@@ -165,8 +168,14 @@ class TSScore(object):
             return None
         
         # SECURITY FIX: Sanitize the filename to prevent path traversal
-        safe_filename = os.path.basename(self.filename)  # Removes any path components
+        # Normalize backslashes to forward slashes first (os.path.basename on Linux ignores \)
+        normalized = self.filename.replace('\\', '/')
+        safe_filename = os.path.basename(normalized)  # Removes any path components
+        # Strip any remaining '..' sequences after sanitization
+        safe_filename = safe_filename.replace('..', '')
         safe_filename = sanitize_filename(safe_filename)  # Already imported, use it properly
+        if not safe_filename:
+            safe_filename = 'unnamed_score'
         
         path = os.path.join(root, self.id, safe_filename)
         
@@ -221,14 +230,15 @@ class TSScore(object):
         if not destination_path:
             raise Exception("Could not determine file destination path.")
 
-        # Clear any stale .opts file
+        # Clear any stale .opts file (use try/except to avoid TOCTOU race condition)
         opts_path = destination_path + '.opts'
-        if os.path.exists(opts_path):
-            try:
-                os.remove(opts_path)
-                score.logger.info(f"Removed stale options file: {opts_path}")
-            except OSError as e:
-                score.logger.error(f"Could not remove stale options file {opts_path}: {e}")
+        try:
+            os.remove(opts_path)
+            score.logger.info(f"Removed stale options file: {opts_path}")
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            score.logger.error(f"Could not remove stale options file {opts_path}: {e}")
 
         uploaded_file.seek(0)
         
