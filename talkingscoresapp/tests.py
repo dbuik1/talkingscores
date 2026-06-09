@@ -52,6 +52,23 @@ class BasicFunctionalityTests(TestCase):
         response = self.client.get(reverse('index'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Talking Scores')
+
+    @patch("talkingscoresapp.views.logger.warning")
+    @patch("talkingscoresapp.views.os.listdir", side_effect=OSError("missing"))
+    def test_homepage_loads_when_example_scores_unavailable(self, mock_listdir, mock_logger_warning):
+        response = self.client.get(reverse('index'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Talking Scores')
+        mock_logger_warning.assert_called_once()
+
+    @patch("talkingscoresapp.views.os.listdir")
+    def test_example_scores_are_filtered_and_sorted(self, mock_listdir):
+        from talkingscoresapp.views import get_example_scores
+
+        mock_listdir.return_value = ["z.html", "notes.txt", "a.html"]
+
+        self.assertEqual(get_example_scores(), ["a.html", "z.html"])
         
     def test_change_log_loads(self):
         """Test the change log page loads correctly."""

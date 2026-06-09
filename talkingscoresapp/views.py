@@ -172,6 +172,15 @@ def validate_midi_query_params(query_params):
         raise forms.ValidationError("MIDI start parameter cannot be after end.")
 
 
+def get_example_scores():
+    example_score_path = os.path.join(BASE_DIR, 'talkingscoresapp', 'static', 'data')
+    try:
+        return sorted(f for f in os.listdir(example_score_path) if f.endswith('.html'))
+    except OSError:
+        logger.warning("Could not list example scores from %s", example_score_path)
+        return []
+
+
 class MusicXMLSubmissionForm(forms.Form):
     filename = forms.FileField(label='MusicXML file', widget=forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.xml,.musicxml,.mxl'}),
                                required=False)
@@ -518,6 +527,6 @@ def index(request):
     else:
         form = MusicXMLSubmissionForm()
 
-    example_scores = [f for f in os.listdir(os.path.join(BASE_DIR, 'talkingscoresapp', 'static', 'data')) if f.endswith('.html')]
+    example_scores = get_example_scores()
     context = {'form': form, 'example_scores': example_scores}
     return render(request, 'index.html', context)
