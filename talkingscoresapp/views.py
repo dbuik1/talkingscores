@@ -7,16 +7,11 @@ from django.contrib import messages
 from django.utils.text import slugify
 from pathvalidate import sanitize_filename
 import os
-import sys
 import json
 import logging
-import logging.handlers
-import logging.config
 import re
-from talkingscores.settings import BASE_DIR, MEDIA_ROOT
-from lib.midiHandler import *
-
-from talkingscoreslib import Music21TalkingScore
+from talkingscores.settings import BASE_DIR
+from lib.midiHandler import MidiHandler
 
 from talkingscoresapp.models import TSScore, TSScoreState
 

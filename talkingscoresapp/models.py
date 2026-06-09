@@ -1,22 +1,14 @@
-from django.db import models
-
 import os
-import errno
 import hashlib
 import requests
 import json
 import logging
-import logging.handlers
-import logging.config
-from talkingscores.settings import BASE_DIR, MEDIA_ROOT, STATIC_ROOT, STATIC_URL
+from talkingscores.settings import MEDIA_ROOT
 from urllib.parse import urlparse
-from urllib.request import url2pathname
 import tempfile
 from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
 from pathvalidate import sanitize_filename
-import shutil
 import zipfile
-import xml.etree.ElementTree as ET
 import threading
 import time
 
