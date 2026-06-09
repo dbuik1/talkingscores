@@ -296,6 +296,62 @@ class DownloadTests(TestCase):
         self.assertEqual(response["Location"], reverse("process", kwargs={"id": "abc123", "filename": "score.musicxml"}))
         mock_clear.assert_called_once()
 
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_options_post_rejects_invalid_instrument_selection(self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            mock_data_path.return_value = os.path.join(temp_dir, "score.musicxml")
+            mock_info.return_value = {
+                "title": "Score",
+                "composer": "Composer",
+                "instruments": ["Piano"],
+                "rhythm_range": [],
+                "beat_division_options": [],
+            }
+
+            response = self.client.post(
+                reverse("options", kwargs={"id": "abc123", "filename": "score.musicxml"}),
+                {
+                    "instruments": ["99"],
+                    "bars_at_a_time": "2",
+                    "beat_division": "",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invalid instrument selection")
+        mock_clear.assert_not_called()
+
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_options_post_rejects_non_numeric_instrument_selection(self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            mock_data_path.return_value = os.path.join(temp_dir, "score.musicxml")
+            mock_info.return_value = {
+                "title": "Score",
+                "composer": "Composer",
+                "instruments": ["Piano"],
+                "rhythm_range": [],
+                "beat_division_options": [],
+            }
+
+            response = self.client.post(
+                reverse("options", kwargs={"id": "abc123", "filename": "score.musicxml"}),
+                {
+                    "instruments": ["not-a-number"],
+                    "bars_at_a_time": "2",
+                    "beat_division": "",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invalid instrument selection")
+        mock_clear.assert_not_called()
+
 
 class CacheAndMaintenanceTests(TestCase):
     def test_score_logger_configuration_is_idempotent(self):

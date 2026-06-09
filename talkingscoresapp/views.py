@@ -21,6 +21,21 @@ import smtplib
 
 logger = logging.getLogger("TSScore")
 
+ACCESSIBLE_PALETTE = [
+    '#E6194B',  # Red
+    '#3CB44B',  # Green
+    '#4363D8',  # Blue
+    '#F58231',  # Orange
+    '#911EB4',  # Purple
+    '#46F0F0',  # Cyan
+    '#FABEBE',  # Pink
+    '#008080',  # Teal
+    '#F032E6',  # Magenta
+    '#FFE119',  # Yellow
+    '#BFEF45',  # Lime
+    '#9A6324',  # Brown
+]
+
 
 def safe_export_basename(filename):
     base_name = os.path.splitext(os.path.basename(filename))[0]
@@ -83,6 +98,38 @@ def clean_html_export(html):
     )
     html = html.replace("Music segment descriptions and playback", "Music segment descriptions")
     return html
+
+
+def add_rhythm_colour_defaults(score_info):
+    if not score_info.get('rhythm_range'):
+        return score_info
+
+    score_info['rhythm_range'] = [
+        {
+            'name': rhythm_name,
+            'id_name': slugify(rhythm_name),
+            'default_color': ACCESSIBLE_PALETTE[index % len(ACCESSIBLE_PALETTE)],
+        }
+        for index, rhythm_name in enumerate(score_info['rhythm_range'])
+    ]
+    return score_info
+
+
+def parse_selected_instruments(post_data, instrument_count):
+    selected = post_data.getlist("instruments")
+    if not selected:
+        raise forms.ValidationError("Please select at least one instrument to describe.")
+
+    try:
+        instrument_ids = [int(instrument_id) for instrument_id in selected]
+    except (TypeError, ValueError):
+        raise forms.ValidationError("Invalid instrument selection.")
+
+    valid_ids = set(range(1, instrument_count + 1))
+    if any(instrument_id not in valid_ids for instrument_id in instrument_ids):
+        raise forms.ValidationError("Invalid instrument selection.")
+
+    return instrument_ids
 
 
 class MusicXMLSubmissionForm(forms.Form):
@@ -299,20 +346,6 @@ def privacy_policy(request):
 
 
 def options(request, id, filename):
-    ACCESSIBLE_PALETTE = [
-        '#E6194B',  # Red
-        '#3CB44B',  # Green
-        '#4363D8',  # Blue
-        '#F58231',  # Orange
-        '#911EB4',  # Purple
-        '#46F0F0',  # Cyan
-        '#FABEBE',  # Pink
-        '#008080',  # Teal
-        '#F032E6',  # Magenta
-        '#FFE119',  # Yellow
-        '#BFEF45',  # Lime
-        '#9A6324',  # Brown
-    ]
     try:
         score_obj = TSScore(id=id, filename=filename)
         data_path = score_obj.get_data_file_path()
@@ -324,21 +357,13 @@ def options(request, id, filename):
         return redirect('error', id, filename)
 
     if request.method == 'POST':
-        instruments = [int(i) for i in request.POST.getlist("instruments")]
+        form = TalkingScoreGenerationOptionsForm(request.POST)
 
-        if not instruments:
-            form = TalkingScoreGenerationOptionsForm(request.POST)
-            form.add_error(None, "Please select at least one instrument to describe.")
-            if score_info.get('rhythm_range'):
-                rhythms_with_colors = []
-                for i, rhythm_name in enumerate(score_info['rhythm_range']):
-                    default_color = ACCESSIBLE_PALETTE[i % len(ACCESSIBLE_PALETTE)]
-                    rhythms_with_colors.append({
-                        'name': rhythm_name,
-                        'id_name': slugify(rhythm_name),
-                        'default_color': default_color
-                    })
-                score_info['rhythm_range'] = rhythms_with_colors
+        try:
+            instruments = parse_selected_instruments(request.POST, len(score_info.get('instruments', [])))
+        except forms.ValidationError as exc:
+            form.add_error(None, exc)
+            add_rhythm_colour_defaults(score_info)
             context = {'form': form, 'score_info': score_info}
             return render(request, 'options.html', context)
 
@@ -359,7 +384,7 @@ def options(request, id, filename):
             "play_all": "chk_playAll" in request.POST,
             "play_selected": "chk_playSelected" in request.POST,
             "play_unselected": "chk_playUnselected" in request.POST,
-            "instruments": [int(i) for i in request.POST.getlist("instruments")],
+            "instruments": instruments,
             "pitch_description": request.POST.get("pitch_description", "noteName"),
             "rhythm_description": request.POST.get("rhythm_description", "british"),
             "dot_position": request.POST.get("dot_position", "before"),
@@ -391,16 +416,7 @@ def options(request, id, filename):
         return redirect('process', id, filename)
 
     else:
-        if score_info.get('rhythm_range'):
-            rhythms_with_colors = []
-            for i, rhythm_name in enumerate(score_info['rhythm_range']):
-                default_color = ACCESSIBLE_PALETTE[i % len(ACCESSIBLE_PALETTE)]
-                rhythms_with_colors.append({
-                    'name': rhythm_name,
-                    'id_name': slugify(rhythm_name),
-                    'default_color': default_color
-                })
-            score_info['rhythm_range'] = rhythms_with_colors
+        add_rhythm_colour_defaults(score_info)
 
         form = TalkingScoreGenerationOptionsForm()
         context = {'form': form, 'score_info': score_info}
