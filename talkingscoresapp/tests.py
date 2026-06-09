@@ -9,7 +9,7 @@ from talkingscoresapp.models import TSScore
 from talkingscoresapp import models as score_models
 from talkingscoresapp.management.commands import cleanup_media
 from jinja2 import Environment, FileSystemLoader
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 from io import StringIO
 import tempfile
 import os
@@ -76,6 +76,70 @@ class BasicFunctionalityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'aria-live="polite"')
         self.assertContains(response, "Starting score generation")
+
+
+class ErrorNotificationTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("talkingscoresapp.views.smtplib.SMTP")
+    def test_send_error_email_skips_without_password(self, mock_smtp):
+        from talkingscoresapp.views import send_error_email
+
+        self.assertFalse(send_error_email("error"))
+        mock_smtp.assert_not_called()
+
+    @patch.dict(os.environ, {"EMAIL_PASSWORD": "secret"})
+    @patch("talkingscoresapp.views.smtplib.SMTP")
+    def test_send_error_email_uses_tls_and_configured_port(self, mock_smtp):
+        from talkingscoresapp.views import send_error_email
+
+        server = Mock()
+        mock_smtp.return_value.__enter__.return_value = server
+
+        self.assertTrue(send_error_email("error details"))
+        mock_smtp.assert_called_once_with("smtp.gmail.com", 587, timeout=20)
+        server.starttls.assert_called_once()
+        server.login.assert_called_once_with("talkingscores@gmail.com", "secret")
+        server.sendmail.assert_called_once()
+
+    @patch.dict(os.environ, {"EMAIL_PASSWORD": "secret"})
+    @patch("talkingscoresapp.views.logger.exception")
+    @patch("talkingscoresapp.views.smtplib.SMTP")
+    def test_send_error_email_logs_failure(self, mock_smtp, mock_logger_exception):
+        from talkingscoresapp.views import send_error_email
+
+        mock_smtp.side_effect = OSError("network down")
+
+        self.assertFalse(send_error_email("error details"))
+        mock_logger_exception.assert_called_once()
+
+    @patch("talkingscoresapp.views.send_error_email")
+    @patch("talkingscoresapp.views.logger.error")
+    def test_error_page_accepts_valid_notification_email(self, mock_logger_error, mock_send_error_email):
+        response = self.client.post(
+            reverse("error", kwargs={"id": "abc123", "filename": "score.musicxml"}),
+            {"notify_email": "user@example.com"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Thank you")
+        mock_logger_error.assert_called_once()
+        mock_send_error_email.assert_called_once()
+
+    @patch("talkingscoresapp.views.send_error_email")
+    @patch("talkingscoresapp.views.logger.warning")
+    def test_error_page_rejects_invalid_notification_email(self, mock_logger_warning, mock_send_error_email):
+        response = self.client.post(
+            reverse("error", kwargs={"id": "abc123", "filename": "score.musicxml"}),
+            {"notify_email": "not-an-email"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invalid email address")
+        mock_logger_warning.assert_called_once()
+        mock_send_error_email.assert_not_called()
 
 
 class DownloadTests(TestCase):

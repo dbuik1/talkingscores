@@ -209,19 +209,26 @@ class NotifyEmailForm(forms.Form):
 
 
 def send_error_email(error_message):
-    if 'EMAIL_PASSWORD' in os.environ:
-        msg = MIMEMultipart()
-        password = os.environ['EMAIL_PASSWORD']
-        msg['From'] = "talkingscores@gmail.com"
-        msg['To'] = "talkingscores@gmail.com"
-        msg['Subject'] = "Talking Scores Error"
+    password = os.environ.get('EMAIL_PASSWORD')
+    if not password:
+        return False
 
-        msg.attach(MIMEText(error_message, 'plain'))
-        server = smtplib.SMTP('smtp.gmail.com: 587')
-        server.starttls()
-        server.login(msg['From'], password)
-        server.sendmail(msg['From'], msg['To'], msg.as_string())
-        server.quit()
+    msg = MIMEMultipart()
+    msg['From'] = "talkingscores@gmail.com"
+    msg['To'] = "talkingscores@gmail.com"
+    msg['Subject'] = "Talking Scores Error"
+    msg.attach(MIMEText(error_message, 'plain'))
+
+    try:
+        with smtplib.SMTP('smtp.gmail.com', 587, timeout=20) as server:
+            server.starttls()
+            server.login(msg['From'], password)
+            server.sendmail(msg['From'], msg['To'], msg.as_string())
+    except Exception:
+        logger.exception("Failed to send Talking Scores error notification email.")
+        return False
+
+    return True
 
 
 def process(request, id, filename):
@@ -318,7 +325,7 @@ def error(request, id, filename):
             logger.error(notification_message)
             send_error_email(notification_message)
         else:
-            logger.warn(str(form.errors))
+            logger.warning(str(form.errors))
     else:
         form = NotifyEmailForm()
 
