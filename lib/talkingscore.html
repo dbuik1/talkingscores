@@ -5,13 +5,29 @@
     <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
     <meta name="robots" content="noindex" />
     
+    {% if not export_mode %}
     <script type='text/javascript' src='//www.midijs.net/lib/midi.js'></script> 
+    {% endif %}
 
+    {% if inline_css %}
+    <style type="text/css">
+{{ inline_css }}
+    </style>
+    {% else %}
     <link href="http://127.0.0.1:8000/static/css/talkingscores.css" rel="stylesheet">
+    {% endif %}
 
     <script>
         (function() {
-            const theme = localStorage.getItem('theme-preference') || 'light';
+            const exportedTheme = "{{ export_theme|default('', true) }}";
+            if (exportedTheme === 'light' || exportedTheme === 'dark') {
+                document.documentElement.setAttribute('data-theme', exportedTheme);
+                return;
+            }
+
+            const preference = localStorage.getItem('theme-preference');
+            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = preference || (systemPrefersDark ? 'dark' : 'light');
             document.documentElement.setAttribute('data-theme', theme);
         })();
     </script>
@@ -225,6 +241,32 @@
             color: var(--form-control-color);
         }
 
+        .download-controls {
+            display: flex;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+            margin: 1rem 0 1.5rem 0;
+        }
+
+        .download-link {
+            display: inline-block;
+            text-decoration: none !important;
+            padding: 0.35rem 0.8rem;
+            border-radius: 0.35rem;
+            font-weight: 600;
+            font-size: 0.75em;
+            background-color: var(--btn-primary-bg);
+            color: var(--btn-primary-color) !important;
+            border: 2px solid var(--btn-primary-bg);
+        }
+
+        .download-link:hover,
+        .download-link:focus {
+            background-color: var(--btn-primary-hover-bg);
+            border-color: var(--btn-primary-hover-bg);
+            color: var(--btn-primary-color) !important;
+        }
+
         .bar-info {
             background: var(--form-control-bg);
             border: 1px solid var(--form-control-border);
@@ -264,8 +306,10 @@
 
     <nav class="score-nav-ribbon">
         <a href="#" class="nav-link-top">Back to Top</a>
+        {% if not export_mode %}
         <a href="#" id="stop-playback-btn" class="nav-link-stop">Stop Playback</a>
         <hr>
+        {% endif %}
         <ul>
             {% for segment in music_segments %}
                 <li>
@@ -291,6 +335,13 @@
             <p>Time signature of {{ preamble['time_signature'] }}, key signature of {{ preamble['key_signature'] }}, tempo of {{ preamble['tempo']|default('no tempo specified') }}</p>
             <p>Music, both hands, a bar at a time, beat by beat</p>
 
+            {% if download_html_url and not export_mode %}
+            <div class="download-controls" aria-label="Download score">
+                <a class="download-link" href="{{ download_html_url }}" data-download-html>Download HTML</a>
+            </div>
+            {% endif %}
+
+            {% if not export_mode %}
             <div id="global-controls" class="global-controls-section">
                 <h2>Entire Score Playback</h2>
                 <div class="playback-controls">
@@ -330,6 +381,7 @@
                     </div>
                 </div>
             </div>
+            {% endif %}
 
         <h1>Summary:</h1>
         {{general_summary}}
@@ -340,7 +392,11 @@
         {% endfor %}
         <br/>
 
+        {% if export_mode %}
+        <h1>Music segment descriptions</h1>
+        {% else %}
         <h1>Music segment descriptions and playback</h1>
+        {% endif %}
 {% for segment in music_segments %}
 <div id="segment-{{ segment.start_bar }}">
     <div class="bar-heading">
@@ -353,6 +409,7 @@
         {% endif %}
     </div>
 
+    {% if not export_mode %}
     <div class="playback-controls">
         <label for="segment-tempo-{{ segment.start_bar }}">Tempo:</label>
         <select class="ddlTempo" name="tempo" id="segment-tempo-{{ segment.start_bar }}">
@@ -406,6 +463,7 @@
             {% endfor %}
         </div>
     </div>
+    {% endif %}
 
     {% for instrument_index, part_descriptions in segment.selected_instruments_descriptions.items() %}
     {% if segment.selected_instruments_descriptions|length > 1 %}<h3>{{instruments[instrument_index][0]}}</h3>{% endif %}
@@ -493,17 +551,31 @@
         <a href="#score-nav-ribbon" class="skip-link">Back to navigation</a>
     </main>
 
+    {% if not export_mode %}
     <script>
         document.addEventListener("DOMContentLoaded", (event) => {
             function updateLink(link) {
                 const parentScope = link.closest('#global-controls, div[id^="segment-"]');
                 if (!parentScope) return;
     
-                const baseUrl = link.dataset.baseUrl;
-                if (!baseUrl) return;
-    
                 const tempo = parentScope.querySelector('.ddlTempo').value;
                 const click = parentScope.querySelector('.ddlClick').value;
+
+                if (link.dataset.midiFiles) {
+                    try {
+                        const midiFiles = JSON.parse(link.dataset.midiFiles);
+                        const localUrl = midiFiles[`${tempo}|${click}`];
+                        if (localUrl) {
+                            link.dataset.finalUrl = localUrl;
+                        }
+                    } catch (error) {
+                        console.error("Could not read local MIDI file map.", error);
+                    }
+                    return;
+                }
+
+                const baseUrl = link.dataset.baseUrl;
+                if (!baseUrl) return;
     
                 const finalUrl = `${baseUrl}&t=${tempo}&c=${click}`;
                 link.dataset.finalUrl = finalUrl;
@@ -538,13 +610,26 @@
             });
     
             document.querySelectorAll('.lnkPlay').forEach(updateLink);
+
+            document.querySelectorAll('[data-download-html]').forEach(link => {
+                link.addEventListener('click', function() {
+                    const theme = document.documentElement.getAttribute('data-theme');
+                    if (theme !== 'light' && theme !== 'dark') return;
+
+                    const url = new URL(link.getAttribute('href'), window.location.href);
+                    url.searchParams.set('theme', theme);
+                    link.setAttribute('href', `${url.pathname}${url.search}`);
+                });
+            });
         });
     </script>
+    {% endif %}
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             const navRibbon = document.querySelector('.score-nav-ribbon');
             const ribbonLinks = document.querySelectorAll('.score-nav-ribbon li a');
             const segments = document.querySelectorAll('div[id^="segment-"]');
+            {% if not export_mode %}
             const stopBtn = document.getElementById('stop-playback-btn');
             if (stopBtn) {
                 stopBtn.addEventListener('click', function(event) {
@@ -552,6 +637,7 @@
                     MIDIjs.stop();
                 });
             }
+            {% endif %}
 
             if (navRibbon) {
                 navRibbon.addEventListener('click', function(event) {

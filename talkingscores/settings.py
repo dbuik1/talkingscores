@@ -22,12 +22,15 @@ sys.path.append(os.path.join(BASE_DIR, 'lib'))
 # See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'y+-8s4elpz(oge_o42txk#0i5=u9gd0)3q&u+y^+cs#tj9qv1#'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'dev-only-talkingscores-secret-key')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = ['www.talkingscores.co.uk', 'www.talkingscores.org', '127.0.0.1']
+ALLOWED_HOSTS = os.environ.get(
+    'DJANGO_ALLOWED_HOSTS',
+    'www.talkingscores.co.uk,www.talkingscores.org,127.0.0.1,localhost',
+).split(',')
 
 
 # Application definition

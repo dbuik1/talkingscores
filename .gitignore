@@ -1,6 +1,7 @@
 .talkingscore-env/
 .talkingscore2-env/
 venv_talkingscores/
+venv/
 test_scores/
 media/
 staticfiles/

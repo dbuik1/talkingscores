@@ -31,14 +31,96 @@ us = environment.UserSettings()
 us['warnings'] = 0
 logger = logging.getLogger("TSScore")
 
-# Global settings - TODO: Consider moving to a settings class in future refactoring
+
+class TalkingScoreSettings(dict):
+    """Dict-compatible settings object used by rendering and analysis code."""
+
+    DEFAULTS = {
+        'rhythmDescription': 'british',
+        'dotPosition': 'before',
+        'octaveDescription': 'name',
+        'pitchDescription': 'noteName',
+        'barsAtATime': 2,
+        'beat_division': None,
+        'include_rests': True,
+        'include_ties': True,
+        'include_arpeggios': True,
+        'describe_chords': True,
+        'playAll': False,
+        'playSelected': False,
+        'playUnselected': False,
+        'instruments': [],
+        'rhythmAnnouncement': 'onChange',
+        'octavePosition': 'before',
+        'octaveAnnouncement': 'onChange',
+        'include_dynamics': True,
+        'accidental_style': 'words',
+        'repetition_mode': 'learning',
+        'key_signature_accidentals': 'applied',
+        'colourPosition': 'none',
+        'colourPitch': False,
+        'rhythm_colour_mode': 'none',
+        'octave_colour_mode': 'none',
+        'figureNoteColours': {},
+        'advanced_rhythm_colours': {},
+        'advanced_octave_colours': {},
+    }
+
+    OPTION_MAP = {
+        'barsAtATime': ('bars_at_a_time', 2, int),
+        'beat_division': ('beat_division', None, None),
+        'include_rests': ('include_rests', True, None),
+        'include_ties': ('include_ties', True, None),
+        'include_arpeggios': ('include_arpeggios', True, None),
+        'describe_chords': ('describe_chords', True, None),
+        'playAll': ('play_all', False, None),
+        'playSelected': ('play_selected', False, None),
+        'playUnselected': ('play_unselected', False, None),
+        'instruments': ('instruments', [], None),
+        'pitchDescription': ('pitch_description', 'noteName', None),
+        'rhythmDescription': ('rhythm_description', 'british', None),
+        'dotPosition': ('dot_position', 'before', None),
+        'rhythmAnnouncement': ('rhythm_announcement', 'onChange', None),
+        'octaveDescription': ('octave_description', 'name', None),
+        'octavePosition': ('octave_position', 'before', None),
+        'octaveAnnouncement': ('octave_announcement', 'onChange', None),
+        'include_dynamics': ('include_dynamics', True, None),
+        'accidental_style': ('accidental_style', 'words', None),
+        'repetition_mode': ('repetition_mode', 'learning', None),
+        'key_signature_accidentals': ('key_signature_accidentals', 'applied', None),
+        'colourPosition': ('colour_position', 'none', None),
+        'colourPitch': ('colour_pitch', False, None),
+        'rhythm_colour_mode': ('rhythm_colour_mode', 'none', None),
+        'octave_colour_mode': ('octave_colour_mode', 'none', None),
+        'figureNoteColours': ('figureNoteColours', {}, None),
+        'advanced_rhythm_colours': ('advanced_rhythm_colours', {}, None),
+        'advanced_octave_colours': ('advanced_octave_colours', {}, None),
+    }
+
+    def __init__(self, values=None):
+        super().__init__(self.DEFAULTS)
+        if values:
+            self.update(values)
+
+    @classmethod
+    def from_options(cls, options):
+        values = {}
+        for target_key, (option_key, default, converter) in cls.OPTION_MAP.items():
+            value = options.get(option_key, default)
+            if converter and value is not None:
+                value = converter(value)
+            values[target_key] = value
+        return cls(values)
+
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError as exc:
+            raise AttributeError(name) from exc
+
+
 global settings
-settings = {
-    'rhythmDescription': 'british',
-    'dotPosition': 'before',
-    'octaveDescription': 'name',
-    'pitchDescription': 'noteName',
-}
+settings = TalkingScoreSettings()
 
 
 def get_contrast_color(hex_color):
@@ -1448,45 +1530,36 @@ class HTMLTalkingScoreFormatter:
     def _update_settings_from_options(self):
         """Update global settings dictionary with user options."""
         global settings
-        
-        settings.update({
-            'barsAtATime': int(self.options.get("bars_at_a_time", 2)),
-            'beat_division': self.options.get("beat_division"),
-            'include_rests': self.options.get("include_rests", True),
-            'include_ties': self.options.get("include_ties", True),
-            'include_arpeggios': self.options.get("include_arpeggios", True),
-            'describe_chords': self.options.get("describe_chords", True),
-            'playAll': self.options.get("play_all", False),
-            'playSelected': self.options.get("play_selected", False),
-            'playUnselected': self.options.get("play_unselected", False),
-            'instruments': self.options.get("instruments", []),
-            'pitchDescription': self.options.get("pitch_description", "noteName"),
-            'rhythmDescription': self.options.get("rhythm_description", "british"),
-            'dotPosition': self.options.get("dot_position", "before"),
-            'rhythmAnnouncement': self.options.get("rhythm_announcement", "onChange"),
-            'octaveDescription': self.options.get("octave_description", "name"),
-            'octavePosition': self.options.get("octave_position", "before"),
-            'octaveAnnouncement': self.options.get("octave_announcement", "onChange"),
-            'include_dynamics': self.options.get("include_dynamics", True),
-            'accidental_style': self.options.get("accidental_style", "words"),
-            'repetition_mode': self.options.get('repetition_mode', 'learning'),
-            'key_signature_accidentals': self.options.get("key_signature_accidentals", "applied"),
-            'colourPosition': self.options.get("colour_position", "none"),
-            'colourPitch': self.options.get("colour_pitch", False),
-            'rhythm_colour_mode': self.options.get("rhythm_colour_mode", "none"),
-            'octave_colour_mode': self.options.get("octave_colour_mode", "none"),
-            'figureNoteColours': self.options.get("figureNoteColours", {}),
-            'advanced_rhythm_colours': self.options.get("advanced_rhythm_colours", {}),
-            'advanced_octave_colours': self.options.get("advanced_octave_colours", {}),
-        })
+        settings = TalkingScoreSettings.from_options(self.options)
+        self.settings = settings
 
-    def generateHTML(self, output_path="", web_path=""):
+    def _get_inline_css(self, export_mode):
+        if not export_mode:
+            return ""
+        css_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "talkingscoresapp",
+            "static",
+            "css",
+            "talkingscores.css",
+        )
+        try:
+            with open(css_path, "r", encoding="utf-8") as css_file:
+                return css_file.read()
+        except OSError:
+            logger.warning(f"Could not inline export CSS from {css_path}")
+            return ""
+
+    def generateHTML(self, output_path="", web_path="", download_html_url="", export_theme=None, export_mode=False):
         """
         Generate the complete HTML talking score.
         
         Args:
             output_path (str): Directory for MIDI file output
             web_path (str): Base URL for web resources
+            download_html_url (str): URL for downloading this score as HTML
+            export_theme (str): Optional fixed light/dark theme for exported HTML
+            export_mode (bool): True when rendering a standalone HTML download
             
         Returns:
             str: Complete HTML content for the talking score
@@ -1494,7 +1567,7 @@ class HTMLTalkingScoreFormatter:
         global settings
         
         # Set up template environment
-        template = self._setup_template_environment()
+        template = self._setup_template_environment(export_mode=export_mode)
         
         # Prepare score data
         self._prepare_score_analysis()
@@ -1525,6 +1598,10 @@ class HTMLTalkingScoreFormatter:
             'play_all': settings['playAll'],
             'play_selected': settings['playSelected'],
             'play_unselected': settings['playUnselected'],
+            'download_html_url': download_html_url,
+            'export_theme': export_theme,
+            'export_mode': export_mode,
+            'inline_css': self._get_inline_css(export_mode),
             'time_and_keys': self.time_and_keys,
             'parts_summary': self.music_analyser.summary_parts,
             'general_summary': self.music_analyser.general_summary,
@@ -1533,11 +1610,12 @@ class HTMLTalkingScoreFormatter:
             'immediate_repetition_contexts': self.music_analyser.immediate_repetition_contexts,
         })
 
-    def _setup_template_environment(self):
+    def _setup_template_environment(self, export_mode=False):
         """Set up Jinja2 template environment and load template."""
         from jinja2 import Environment, FileSystemLoader
         env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)))
-        return env.get_template('talkingscore.html')
+        template_name = 'talkingscore_export.html' if export_mode else 'talkingscore.html'
+        return env.get_template(template_name)
 
     def _prepare_score_analysis(self):
         """Prepare instrument data and musical analysis."""

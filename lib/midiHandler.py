@@ -91,8 +91,16 @@ class MidiHandler:
         flag_path = os.path.join(MEDIA_ROOT, self.folder, flag_name)
 
         if os.path.exists(flag_path):
-            logger.info(f"MIDI cache hit for {flag_name}. Skipping generation.")
-            return
+            requested_midi_path = None
+            if hasattr(self, "midiname"):
+                requested_midi_path = os.path.join(MEDIA_ROOT, self.folder, self.midiname)
+            if requested_midi_path is None or os.path.exists(requested_midi_path):
+                logger.info(f"MIDI cache hit for {flag_name}. Skipping generation.")
+                return
+            logger.warning(
+                f"MIDI cache flag {flag_name} exists, but requested file "
+                f"{requested_midi_path} is missing. Regenerating MIDI files."
+            )
         # --- END: Flag File Logic ---
 
         if is_upfront_call:

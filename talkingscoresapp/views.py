@@ -1,16 +1,18 @@
 from django import forms
-from django.http import HttpResponse, FileResponse
+from django.http import HttpResponse, FileResponse, JsonResponse
 from django.template import loader
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.contrib import messages
 from django.utils.text import slugify
+from pathvalidate import sanitize_filename
 import os
 import sys
 import json
 import logging
 import logging.handlers
 import logging.config
+import re
 from talkingscores.settings import BASE_DIR, MEDIA_ROOT
 from lib.midiHandler import *
 
@@ -23,6 +25,69 @@ from email.mime.text import MIMEText
 import smtplib
 
 logger = logging.getLogger("TSScore")
+
+
+def safe_export_basename(filename):
+    base_name = os.path.splitext(os.path.basename(filename))[0]
+    return slugify(sanitize_filename(base_name)) or "talking-score"
+
+
+def clean_export_theme(theme):
+    return theme if theme in ("light", "dark") else None
+
+
+def clean_html_export(html):
+    """Remove controls that only work on the Django-served score page."""
+    html = re.sub(
+        r"\s*<script[^>]+src=['\"][^'\"]*midijs\.net[^'\"]*['\"][^>]*>\s*</script>",
+        "",
+        html,
+        flags=re.IGNORECASE,
+    )
+    html = re.sub(
+        r"\s*<a[^>]+id=['\"]stop-playback-btn['\"][^>]*>.*?</a>",
+        "",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    html = re.sub(
+        r"\s*<div[^>]+class=['\"][^'\"]*\bdownload-controls\b[^'\"]*['\"][^>]*>.*?</div>",
+        "",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    html = re.sub(
+        r"\s*<div[^>]+id=['\"]global-controls['\"][^>]*>.*?</div>\s*</div>",
+        "",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    html = re.sub(
+        r"\s*<div[^>]+class=['\"][^'\"]*\bplayback-controls\b[^'\"]*['\"][^>]*>.*?</div>",
+        "",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    html = re.sub(
+        r"\s*<div[^>]+class=['\"][^'\"]*\bplay-buttons-container\b[^'\"]*['\"][^>]*>.*?</div>\s*</div>",
+        "",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    html = re.sub(
+        r"\s*<div[^>]+class=['\"][^'\"]*\binstrument-midi-section\b[^'\"]*['\"][^>]*>.*?</div>\s*</div>\s*</div>",
+        "",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    html = re.sub(
+        r"\s*<a[^>]+class=['\"][^'\"]*\blnkPlay\b[^'\"]*['\"][^>]*>.*?</a>",
+        "",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    html = html.replace("Music segment descriptions and playback", "Music segment descriptions")
+    return html
 
 
 class MusicXMLSubmissionForm(forms.Form):
@@ -118,9 +183,23 @@ def send_error_email(error_message):
 
 
 def process(request, id, filename):
+    score_obj = TSScore(id=id, filename=filename)
+    if score_obj.state() == TSScoreState.PROCESSED:
+        score_obj.start_background_processing()
     template = loader.get_template('processing.html')
     context = {'id': id, 'filename': filename}
     return HttpResponse(template.render(context, request))
+
+
+def process_status(request, id, filename):
+    score_obj = TSScore(id=id, filename=filename)
+    status = score_obj.processing_status()
+    if status.get("status") == "complete":
+        status["score_url"] = reverse('score', args=[id, filename])
+    elif status.get("status") in ("pending", "unknown") and score_obj.state() == TSScoreState.PROCESSED:
+        score_obj.start_background_processing()
+        status = score_obj.processing_status()
+    return JsonResponse(status)
 
 
 def score(request, id, filename):
@@ -142,17 +221,50 @@ def score(request, id, filename):
 
 def midi(request, id, filename):
     mh = MidiHandler(request, id, filename)
-    
-    midi_file_path = mh.get_or_make_midi_file()
+
+    try:
+        midi_file_path = mh.get_or_make_midi_file()
+    except Exception:
+        logger.exception("Unable to generate MIDI: http://%s%s" % (request.get_host(), request.get_full_path()))
+        return HttpResponse("MIDI generation failed.", status=500)
     
     if os.path.exists(midi_file_path):
-        fr = FileResponse(open(midi_file_path, "rb"))
+        fr = FileResponse(
+            open(midi_file_path, "rb"),
+            content_type="audio/midi",
+            as_attachment=False,
+            filename=os.path.basename(midi_file_path),
+        )
         fr['Access-Control-Allow-Origin'] = '*'
         fr['X-Robots-Tag'] = "noindex"
         return fr
     else:
         logger.error(f"MIDI file not found at path: {midi_file_path}")
         return HttpResponse("MIDI file not found.", status=404)
+
+
+def download_html(request, id, filename):
+    score_obj = TSScore(id=id, filename=filename)
+
+    if score_obj.state() != TSScoreState.PROCESSED:
+        messages.error(request, "The requested score is not ready to download.")
+        return redirect('index')
+
+    try:
+        export_theme = clean_export_theme(request.GET.get("theme"))
+        html = score_obj.html(export_theme=export_theme, export_mode=True)
+        response = HttpResponse(
+            clean_html_export(html),
+            content_type="text/html; charset=utf-8",
+        )
+        response['Content-Disposition'] = (
+            f'attachment; filename="{safe_export_basename(filename)}-talking-score.html"'
+        )
+        response['X-Robots-Tag'] = "noindex"
+        return response
+    except Exception:
+        logger.exception("Unable to generate HTML download: http://%s%s" % (request.get_host(), request.get_full_path()))
+        return redirect('error', id, filename)
 
 
 def error(request, id, filename):

@@ -4,6 +4,7 @@ import os
 import errno
 import hashlib
 import requests
+import json
 import logging
 import logging.handlers
 import logging.config
@@ -16,19 +17,36 @@ from pathvalidate import sanitize_filename
 import shutil
 import zipfile
 import xml.etree.ElementTree as ET
+import threading
+import time
 
-logger = logging.getLogger("TSScore")
-logger.setLevel(logging.DEBUG)
-console_handler = logging.StreamHandler()
-file_handler = logging.FileHandler(os.path.join(*(MEDIA_ROOT, "log1.txt")))
-console_handler.setLevel(logging.DEBUG)
-file_handler.setLevel(logging.INFO)
-console_format = logging.Formatter("Ln %(lineno)d - %(message)s")
-file_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-console_handler.setFormatter(console_format)
-file_handler.setFormatter(file_format)
-logger.addHandler(console_handler)
-logger.addHandler(file_handler)
+REMOTE_FETCH_TIMEOUT = 20
+MAX_REMOTE_SCORE_BYTES = 10 * 1024 * 1024
+
+
+def configure_score_logger():
+    score_logger = logging.getLogger("TSScore")
+    score_logger.setLevel(logging.DEBUG)
+
+    if getattr(score_logger, "_talkingscores_configured", False):
+        return score_logger
+
+    console_handler = logging.StreamHandler()
+    os.makedirs(MEDIA_ROOT, exist_ok=True)
+    file_handler = logging.FileHandler(os.path.join(MEDIA_ROOT, "log1.txt"))
+    console_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(logging.INFO)
+    console_format = logging.Formatter("Ln %(lineno)d - %(message)s")
+    file_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    console_handler.setFormatter(console_format)
+    file_handler.setFormatter(file_format)
+    score_logger.addHandler(console_handler)
+    score_logger.addHandler(file_handler)
+    score_logger._talkingscores_configured = True
+    return score_logger
+
+
+logger = configure_score_logger()
 
 
 def hashfile(afile, hasher, blocksize=65536):
@@ -174,12 +192,74 @@ class TSScore(object):
             
         return path
 
-    def html(self):
+    def get_html_cache_file_path(self):
+        data_path = self.get_data_file_path()
+        return data_path + ".html" if data_path else None
+
+    def get_processing_status_file_path(self):
+        data_path = self.get_data_file_path()
+        return data_path + ".status" if data_path else None
+
+    def _is_html_cache_fresh(self, html_path, data_path):
+        if not html_path or not os.path.exists(html_path):
+            return False
+
+        html_mtime = os.path.getmtime(html_path)
+        source_paths = [data_path, data_path + ".opts"]
+        return all(not os.path.exists(path) or os.path.getmtime(path) <= html_mtime for path in source_paths)
+
+    def _write_processing_status(self, status, message=""):
+        status_path = self.get_processing_status_file_path()
+        if not status_path:
+            return
+        os.makedirs(os.path.dirname(status_path), exist_ok=True)
+        with open(status_path, "w", encoding="utf-8") as status_file:
+            json.dump({
+                "status": status,
+                "message": message,
+                "updated": time.time(),
+            }, status_file)
+
+    def processing_status(self):
+        status_path = self.get_processing_status_file_path()
+        if not status_path or not os.path.exists(status_path):
+            return {"status": "pending", "message": ""}
+        try:
+            with open(status_path, "r", encoding="utf-8") as status_file:
+                return json.load(status_file)
+        except (OSError, json.JSONDecodeError):
+            return {"status": "unknown", "message": "Could not read processing status."}
+
+    def start_background_processing(self):
+        current_status = self.processing_status().get("status")
+        if current_status == "processing":
+            return
+
+        self._write_processing_status("processing", "Generating score.")
+
+        def generate():
+            try:
+                self.html(force_refresh=True, raise_errors=True)
+                self._write_processing_status("complete", "Score ready.")
+            except Exception as exc:
+                self.logger.exception(f"Background score generation failed for {self.id}/{self.filename}")
+                self._write_processing_status("failed", str(exc))
+
+        thread = threading.Thread(target=generate, daemon=True)
+        thread.start()
+
+    def html(self, export_theme=None, export_mode=False, force_refresh=False, raise_errors=False):
         data_path = self.get_data_file_path()
         if not data_path:
             return "Error: Could not find score data file."
 
+        html_cache_path = self.get_html_cache_file_path()
+        if not export_mode and not force_refresh and self._is_html_cache_fresh(html_cache_path, data_path):
+            with open(html_cache_path, "r", encoding="utf-8") as html_file:
+                return html_file.read()
+
         web_path = f"/midis/{self.id}/{self.filename}"
+        download_html_url = f"/download/html/{self.id}/{self.filename}"
         midi_output_path = os.path.join(MEDIA_ROOT, self.id)
         os.makedirs(midi_output_path, exist_ok=True)
         
@@ -187,11 +267,22 @@ class TSScore(object):
         try:
             mxmlScore = Music21TalkingScore(data_path)
             tsf = HTMLTalkingScoreFormatter(mxmlScore)
-            html_content = tsf.generateHTML(output_path=midi_output_path, web_path=web_path)
+            html_content = tsf.generateHTML(
+                output_path=midi_output_path,
+                web_path=web_path,
+                download_html_url=download_html_url,
+                export_theme=export_theme,
+                export_mode=export_mode,
+            )
+            if not export_mode and html_cache_path:
+                with open(html_cache_path, "w", encoding="utf-8") as html_file:
+                    html_file.write(html_content)
             return html_content
             
         except Exception as e:
             self.logger.exception(f"Failed to generate HTML from score {data_path}")
+            if raise_errors:
+                raise
             return f"<h1>Error Generating Score</h1><p>There was an error processing the MusicXML file: {e}</p>"
     
     @classmethod
@@ -261,14 +352,26 @@ class TSScore(object):
     @classmethod
     def from_url(cls, url):
         score = cls(url=url)
-        
-        response = requests.get(url)
+
+        parsed_url = urlparse(url)
+        if parsed_url.scheme not in ("http", "https"):
+            raise ValueError("Only HTTP and HTTPS MusicXML URLs are supported.")
+
+        response = requests.get(url, timeout=REMOTE_FETCH_TIMEOUT, stream=True)
         response.raise_for_status()
-        file_content = response.content
+        file_chunks = []
+        total_bytes = 0
+        for chunk in response.iter_content(chunk_size=65536):
+            if not chunk:
+                continue
+            total_bytes += len(chunk)
+            if total_bytes > MAX_REMOTE_SCORE_BYTES:
+                raise ValueError("Remote MusicXML file is too large.")
+            file_chunks.append(chunk)
+        file_content = b"".join(file_chunks)
         
         score.id = hashlib.sha256(file_content).hexdigest()
         
-        parsed_url = urlparse(url)
         original_filename = os.path.basename(parsed_url.path)
         sanitized_name = sanitize_filename(original_filename.replace("'", "").replace("\"", ""))
         base_name = os.path.splitext(sanitized_name)[0]

@@ -12,6 +12,8 @@
         <h4>Processing score... this may take a minute or two while all the files are generated. Please
             be patient and don't close or refresh this page.</h4>
 
+        <p id="processing-status" role="status" aria-live="polite">Starting score generation...</p>
+
         <div class="text-center" style="margin-top: 50px" aria-hidden="true">
         <img class="loading" src="{% static 'img/loading.png' %}"/>
         </div>
@@ -19,9 +21,33 @@
     </div>
 
     <script>
-        setTimeout(function () {
-             window.location = "{% url 'score' id filename %}";
-        }, 3000);
+        const processingStatus = document.getElementById('processing-status');
+
+        function setProcessingStatus(message) {
+            if (processingStatus && message) {
+                processingStatus.textContent = message;
+            }
+        }
+
+        (function pollStatus() {
+            fetch("{% url 'process-status' id filename %}", {headers: {'Accept': 'application/json'}})
+                .then(response => response.json())
+                .then(data => {
+                    setProcessingStatus(data.message || `Current status: ${data.status}`);
+                    if (data.status === 'complete' && data.score_url) {
+                        window.location = data.score_url;
+                    } else if (data.status === 'failed') {
+                        setProcessingStatus(data.message || 'Score generation failed.');
+                        window.location = "{% url 'error' id filename %}";
+                    } else {
+                        setTimeout(pollStatus, 2000);
+                    }
+                })
+                .catch(() => {
+                    setProcessingStatus('Waiting for the server to respond...');
+                    setTimeout(pollStatus, 4000);
+                });
+        })();
     </script>
     </div>
 {% endblock content %}
