@@ -222,6 +222,11 @@ class TSScore(object):
         except (OSError, json.JSONDecodeError):
             return {"status": "unknown", "message": "Could not read processing status."}
 
+    def clear_generated_html_state(self):
+        for path in (self.get_html_cache_file_path(), self.get_processing_status_file_path()):
+            if path and os.path.exists(path):
+                os.remove(path)
+
     def start_background_processing(self):
         current_status = self.processing_status().get("status")
         if current_status == "processing":

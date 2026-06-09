@@ -268,6 +268,34 @@ class DownloadTests(TestCase):
         self.assertEqual(response.json()["status"], "processing")
         mock_start.assert_called_once()
 
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_options_post_clears_generated_html_state(self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            mock_data_path.return_value = os.path.join(temp_dir, "score.musicxml")
+            mock_info.return_value = {
+                "title": "Score",
+                "composer": "Composer",
+                "instruments": ["Piano"],
+                "rhythm_range": [],
+                "beat_division_options": [],
+            }
+
+            response = self.client.post(
+                reverse("options", kwargs={"id": "abc123", "filename": "score.musicxml"}),
+                {
+                    "instruments": ["1"],
+                    "bars_at_a_time": "2",
+                    "beat_division": "",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("process", kwargs={"id": "abc123", "filename": "score.musicxml"}))
+        mock_clear.assert_called_once()
+
 
 class CacheAndMaintenanceTests(TestCase):
     def test_score_logger_configuration_is_idempotent(self):
@@ -296,6 +324,24 @@ class CacheAndMaintenanceTests(TestCase):
                 os.utime(html_path, (now, now))
 
                 self.assertEqual(score.html(), "<html>cached</html>")
+
+    def test_clear_generated_html_state_removes_cache_and_status(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            score = TSScore(id="abc123", filename="score.musicxml")
+            data_path = os.path.join(temp_dir, "abc123", "score.musicxml")
+            os.makedirs(os.path.dirname(data_path), exist_ok=True)
+            with patch.object(score, "get_data_file_path", return_value=data_path):
+                html_path = score.get_html_cache_file_path()
+                status_path = score.get_processing_status_file_path()
+                with open(html_path, "w", encoding="utf-8") as html_file:
+                    html_file.write("<html>stale</html>")
+                with open(status_path, "w", encoding="utf-8") as status_file:
+                    status_file.write('{"status": "complete"}')
+
+                score.clear_generated_html_state()
+
+                self.assertFalse(os.path.exists(html_path))
+                self.assertFalse(os.path.exists(status_path))
 
     def test_html_can_raise_generation_errors_for_background_status(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -387,6 +387,7 @@ def options(request, id, filename):
         with open(options_path, "w") as options_fh:
             json.dump(options_data, options_fh)
 
+        score_obj.clear_generated_html_state()
         return redirect('process', id, filename)
 
     else:
