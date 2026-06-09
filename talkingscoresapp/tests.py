@@ -142,6 +142,24 @@ class ErrorNotificationTests(TestCase):
         mock_send_error_email.assert_not_called()
 
 
+class SubmissionFormTests(TestCase):
+    def test_submission_form_accepts_musicxml_url_with_query_string(self):
+        from talkingscoresapp.views import MusicXMLSubmissionForm
+
+        form = MusicXMLSubmissionForm(data={"url": "https://example.com/score.musicxml?download=1"})
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_submission_form_rejects_non_musicxml_url(self):
+        from talkingscoresapp.views import MusicXMLSubmissionForm
+
+        form = MusicXMLSubmissionForm(data={"url": "https://example.com/score.pdf"})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("url", form.errors)
+        self.assertIn(".xml", form.errors["url"][0])
+
+
 class DownloadTests(TestCase):
     """Tests for local save and MIDI download behavior."""
 

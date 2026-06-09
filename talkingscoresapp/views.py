@@ -10,6 +10,7 @@ import os
 import json
 import logging
 import re
+from urllib.parse import urlparse
 from talkingscores.settings import BASE_DIR
 from lib.midiHandler import MidiHandler
 
@@ -20,6 +21,8 @@ from email.mime.text import MIMEText
 import smtplib
 
 logger = logging.getLogger("TSScore")
+
+ALLOWED_MUSICXML_EXTENSIONS = ('.xml', '.musicxml', '.mxl')
 
 ACCESSIBLE_PALETTE = [
     '#E6194B',  # Red
@@ -142,12 +145,22 @@ class MusicXMLSubmissionForm(forms.Form):
         uploaded_file = self.cleaned_data.get('filename')
         if uploaded_file:
             file_extension = os.path.splitext(uploaded_file.name)[1].lower()
-            allowed_extensions = ['.xml', '.musicxml', '.mxl']
-            if file_extension not in allowed_extensions:
+            if file_extension not in ALLOWED_MUSICXML_EXTENSIONS:
                 raise forms.ValidationError(
                     f"Invalid file type. Please upload a MusicXML file (.xml, .musicxml, or .mxl)."
                 )
         return uploaded_file
+
+    def clean_url(self):
+        url = self.cleaned_data.get('url')
+        if url:
+            parsed_url = urlparse(url)
+            file_extension = os.path.splitext(parsed_url.path)[1].lower()
+            if file_extension not in ALLOWED_MUSICXML_EXTENSIONS:
+                raise forms.ValidationError(
+                    "Invalid URL file type. Please provide a URL ending in .xml, .musicxml, or .mxl."
+                )
+        return url
 
     def clean(self):
         cleaned_data = super().clean()
