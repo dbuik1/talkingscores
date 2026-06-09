@@ -176,7 +176,7 @@ class DownloadTests(TestCase):
 
         try:
             response = self.client.get(
-                reverse("midi", kwargs={"id": "abc123", "filename": "score.musicxml"})
+                reverse("midi", kwargs={"id": "abc123", "filename": "score.musicxml"}) + "?bsi=3&bpi=7&t=100&c=n"
             )
         finally:
             if "response" in locals():
@@ -187,6 +187,34 @@ class DownloadTests(TestCase):
         self.assertIn("audio/midi", response["Content-Type"])
         self.assertIn(".mid", response["Content-Disposition"])
         self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+
+    @patch("talkingscoresapp.views.MidiHandler.get_or_make_midi_file")
+    def test_midi_rejects_missing_required_query_params(self, mock_get_midi):
+        response = self.client.get(
+            reverse("midi", kwargs={"id": "abc123", "filename": "score.musicxml"})
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Missing MIDI parameter", status_code=400)
+        mock_get_midi.assert_not_called()
+
+    @patch("talkingscoresapp.views.MidiHandler.get_or_make_midi_file")
+    def test_midi_rejects_invalid_query_params(self, mock_get_midi):
+        invalid_urls = [
+            "?bsi=x&bpi=7&t=100&c=n",
+            "?bsi=3&bpi=7&start=8&end=4&t=100&c=n",
+            "?bsi=3&bpi=7&t=999&c=n",
+            "?bsi=3&bpi=7&t=100&c=bad",
+            "?bsi=3&bpi=7&sel=everything&t=100&c=n",
+        ]
+
+        for query_string in invalid_urls:
+            response = self.client.get(
+                reverse("midi", kwargs={"id": "abc123", "filename": "score.musicxml"}) + query_string
+            )
+            self.assertEqual(response.status_code, 400)
+
+        mock_get_midi.assert_not_called()
 
     @patch("talkingscoresapp.views.TSScore.state")
     @patch("talkingscoresapp.views.TSScore.html")

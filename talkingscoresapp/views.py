@@ -135,6 +135,43 @@ def parse_selected_instruments(post_data, instrument_count):
     return instrument_ids
 
 
+def validate_midi_query_params(query_params):
+    for required_param in ("bsi", "bpi"):
+        if query_params.get(required_param) is None:
+            raise forms.ValidationError(f"Missing MIDI parameter: {required_param}.")
+
+    integer_params = ("bsi", "bpi", "start", "end", "part", "ins")
+    for param in integer_params:
+        value = query_params.get(param)
+        if value is None:
+            continue
+        try:
+            parsed_value = int(value)
+        except (TypeError, ValueError):
+            raise forms.ValidationError(f"Invalid MIDI parameter: {param}.")
+        if parsed_value < 0:
+            raise forms.ValidationError(f"Invalid MIDI parameter: {param}.")
+
+    tempo_value = query_params.get("t")
+    if tempo_value is not None and tempo_value not in ("50", "100", "150"):
+        raise forms.ValidationError("Invalid MIDI tempo.")
+
+    click_value = query_params.get("c")
+    if click_value is not None and click_value not in ("n", "be"):
+        raise forms.ValidationError("Invalid MIDI click setting.")
+
+    selection_value = query_params.get("sel")
+    if selection_value is not None and selection_value not in ("all", "sel", "un"):
+        raise forms.ValidationError("Invalid MIDI selection.")
+
+    start_value = query_params.get("start")
+    end_value = query_params.get("end")
+    if (start_value is None) != (end_value is None):
+        raise forms.ValidationError("MIDI start and end parameters must be provided together.")
+    if start_value is not None and int(start_value) > int(end_value):
+        raise forms.ValidationError("MIDI start parameter cannot be after end.")
+
+
 class MusicXMLSubmissionForm(forms.Form):
     filename = forms.FileField(label='MusicXML file', widget=forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.xml,.musicxml,.mxl'}),
                                required=False)
@@ -282,6 +319,11 @@ def score(request, id, filename):
 
 
 def midi(request, id, filename):
+    try:
+        validate_midi_query_params(request.GET)
+    except forms.ValidationError as exc:
+        return HttpResponse(exc.messages[0], status=400)
+
     mh = MidiHandler(request, id, filename)
 
     try:
