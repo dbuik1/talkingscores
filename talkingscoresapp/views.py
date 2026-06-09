@@ -23,6 +23,7 @@ import smtplib
 logger = logging.getLogger("TSScore")
 
 ALLOWED_MUSICXML_EXTENSIONS = ('.xml', '.musicxml', '.mxl')
+MAX_UPLOADED_SCORE_BYTES = 10 * 1024 * 1024
 
 ACCESSIBLE_PALETTE = [
     '#E6194B',  # Red
@@ -194,6 +195,10 @@ class MusicXMLSubmissionForm(forms.Form):
             if file_extension not in ALLOWED_MUSICXML_EXTENSIONS:
                 raise forms.ValidationError(
                     f"Invalid file type. Please upload a MusicXML file (.xml, .musicxml, or .mxl)."
+                )
+            if uploaded_file.size > MAX_UPLOADED_SCORE_BYTES:
+                raise forms.ValidationError(
+                    "MusicXML file is too large. Please upload a file smaller than 10 MB."
                 )
         return uploaded_file
 

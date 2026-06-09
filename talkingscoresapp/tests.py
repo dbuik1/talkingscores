@@ -5,6 +5,7 @@ Essential tests for Talking Scores - focused on critical issues.
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.core.management import call_command
+from django.core.files.uploadedfile import SimpleUploadedFile
 from talkingscoresapp.models import TSScore
 from talkingscoresapp import models as score_models
 from talkingscoresapp.management.commands import cleanup_media
@@ -160,6 +161,25 @@ class ErrorNotificationTests(TestCase):
 
 
 class SubmissionFormTests(TestCase):
+    def test_submission_form_accepts_small_musicxml_upload(self):
+        from talkingscoresapp.views import MusicXMLSubmissionForm
+
+        upload = SimpleUploadedFile("score.musicxml", b"<score-partwise></score-partwise>")
+        form = MusicXMLSubmissionForm(files={"filename": upload})
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    @patch("talkingscoresapp.views.MAX_UPLOADED_SCORE_BYTES", 5)
+    def test_submission_form_rejects_large_musicxml_upload(self):
+        from talkingscoresapp.views import MusicXMLSubmissionForm
+
+        upload = SimpleUploadedFile("score.musicxml", b"123456")
+        form = MusicXMLSubmissionForm(files={"filename": upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("filename", form.errors)
+        self.assertIn("too large", form.errors["filename"][0])
+
     def test_submission_form_accepts_musicxml_url_with_query_string(self):
         from talkingscoresapp.views import MusicXMLSubmissionForm
 
