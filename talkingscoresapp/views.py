@@ -434,6 +434,10 @@ def options(request, id, filename):
 
     if request.method == 'POST':
         form = TalkingScoreGenerationOptionsForm(request.POST)
+        if not form.is_valid():
+            add_rhythm_colour_defaults(score_info)
+            context = {'form': form, 'score_info': score_info}
+            return render(request, 'options.html', context)
 
         try:
             instruments = parse_selected_instruments(request.POST, len(score_info.get('instruments', [])))
@@ -455,7 +459,7 @@ def options(request, id, filename):
             figure_note_colours = color_profiles.get(selected_profile, {})
 
         options_data = {
-            "bars_at_a_time": int(request.POST.get("bars_at_a_time", 2)),
+            "bars_at_a_time": int(form.cleaned_data.get("bars_at_a_time", 2)),
             "beat_division": request.POST.get("beat_division"),
             "play_all": "chk_playAll" in request.POST,
             "play_selected": "chk_playSelected" in request.POST,
