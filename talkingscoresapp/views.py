@@ -10,6 +10,7 @@ import os
 import json
 import logging
 import re
+import tempfile
 from urllib.parse import urlparse
 from talkingscores.settings import BASE_DIR
 from lib.midiHandler import MidiHandler
@@ -180,6 +181,19 @@ def get_example_scores():
     except OSError:
         logger.warning("Could not list example scores from %s", example_score_path)
         return []
+
+
+def write_json_file_atomic(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=os.path.dirname(path),
+        delete=False,
+    ) as options_file:
+        json.dump(data, options_file)
+        temp_path = options_file.name
+    os.replace(temp_path, path)
 
 
 class MusicXMLSubmissionForm(forms.Form):
@@ -489,8 +503,7 @@ def options(request, id, filename):
             "figureNoteColours": figure_note_colours
         }
 
-        with open(options_path, "w") as options_fh:
-            json.dump(options_data, options_fh)
+        write_json_file_atomic(options_path, options_data)
 
         score_obj.clear_generated_html_state()
         return redirect('process', id, filename)

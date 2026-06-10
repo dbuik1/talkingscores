@@ -15,6 +15,7 @@ from io import StringIO
 import tempfile
 import os
 import time
+import json
 
 
 class SecurityTests(TestCase):
@@ -195,6 +196,19 @@ class SubmissionFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("url", form.errors)
         self.assertIn(".xml", form.errors["url"][0])
+
+
+class FileWriteTests(TestCase):
+    def test_write_json_file_atomic_creates_readable_file(self):
+        from talkingscoresapp.views import write_json_file_atomic
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            json_path = os.path.join(temp_dir, "nested", "score.opts")
+
+            write_json_file_atomic(json_path, {"bars_at_a_time": 2})
+
+            with open(json_path, "r", encoding="utf-8") as json_file:
+                self.assertEqual(json.load(json_file), {"bars_at_a_time": 2})
 
 
 class DownloadTests(TestCase):
