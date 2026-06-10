@@ -205,12 +205,20 @@ class TSScore(object):
         if not status_path:
             return
         os.makedirs(os.path.dirname(status_path), exist_ok=True)
-        with open(status_path, "w", encoding="utf-8") as status_file:
-            json.dump({
-                "status": status,
-                "message": message,
-                "updated": time.time(),
-            }, status_file)
+        status_data = {
+            "status": status,
+            "message": message,
+            "updated": time.time(),
+        }
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=os.path.dirname(status_path),
+            delete=False,
+        ) as status_file:
+            json.dump(status_data, status_file)
+            temp_status_path = status_file.name
+        os.replace(temp_status_path, status_path)
 
     def processing_status(self):
         status_path = self.get_processing_status_file_path()

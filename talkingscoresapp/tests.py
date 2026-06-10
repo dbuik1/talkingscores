@@ -574,6 +574,19 @@ class CacheAndMaintenanceTests(TestCase):
                 self.assertFalse(os.path.exists(html_path))
                 self.assertFalse(os.path.exists(status_path))
 
+    def test_processing_status_write_is_readable_json(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            score = TSScore(id="abc123", filename="score.musicxml")
+            data_path = os.path.join(temp_dir, "abc123", "score.musicxml")
+            os.makedirs(os.path.dirname(data_path), exist_ok=True)
+            with patch.object(score, "get_data_file_path", return_value=data_path):
+                score._write_processing_status("processing", "Generating score.")
+
+                status = score.processing_status()
+                self.assertEqual(status["status"], "processing")
+                self.assertEqual(status["message"], "Generating score.")
+                self.assertIn("updated", status)
+
     def test_html_can_raise_generation_errors_for_background_status(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             score = TSScore(id="abc123", filename="score.musicxml")
