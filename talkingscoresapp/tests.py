@@ -614,6 +614,19 @@ class CacheAndMaintenanceTests(TestCase):
                 self.assertEqual(status["message"], "Generating score.")
                 self.assertIn("updated", status)
 
+    @patch("talkingscoresapp.models.os.replace", side_effect=OSError("replace failed"))
+    def test_processing_status_write_removes_temp_file_on_replace_failure(self, mock_replace):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            score = TSScore(id="abc123", filename="score.musicxml")
+            data_path = os.path.join(temp_dir, "abc123", "score.musicxml")
+            os.makedirs(os.path.dirname(data_path), exist_ok=True)
+            with patch.object(score, "get_data_file_path", return_value=data_path):
+                with self.assertRaises(OSError):
+                    score._write_processing_status("processing", "Generating score.")
+
+                temp_path = mock_replace.call_args.args[0]
+                self.assertFalse(os.path.exists(temp_path))
+
     def test_write_text_file_atomic_creates_readable_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             html_path = os.path.join(temp_dir, "nested", "score.html")

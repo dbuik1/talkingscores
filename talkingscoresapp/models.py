@@ -242,7 +242,11 @@ class TSScore(object):
         ) as status_file:
             json.dump(status_data, status_file)
             temp_status_path = status_file.name
-        os.replace(temp_status_path, status_path)
+        try:
+            os.replace(temp_status_path, status_path)
+        except OSError:
+            remove_file_quietly(temp_status_path)
+            raise
 
     def processing_status(self):
         status_path = self.get_processing_status_file_path()
