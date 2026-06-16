@@ -41,6 +41,13 @@ def configure_score_logger():
 logger = configure_score_logger()
 
 
+def remove_file_quietly(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
 def hashfile(afile, hasher, blocksize=65536):
     buf = afile.read(blocksize)
     while len(buf) > 0:
@@ -115,7 +122,11 @@ def write_text_file_atomic(path, content):
     ) as temp_file:
         temp_file.write(content)
         temp_path = temp_file.name
-    os.replace(temp_path, path)
+    try:
+        os.replace(temp_path, path)
+    except OSError:
+        remove_file_quietly(temp_path)
+        raise
 
 
 class TSScoreState(object):
@@ -347,10 +358,7 @@ class TSScore(object):
                 score.logger.info(f"Successfully extracted MusicXML from .mxl to {destination_path}")
             finally:
                 # Clean up temporary .mxl file
-                try:
-                    os.unlink(temp_mxl_path)
-                except OSError:
-                    pass
+                remove_file_quietly(temp_mxl_path)
         else:
             # Handle regular .xml/.musicxml files
             with open(destination_path, 'wb+') as destination:
@@ -414,10 +422,7 @@ class TSScore(object):
                 score.logger.info(f"Successfully extracted MusicXML from URL .mxl to {destination_path}")
             finally:
                 # Clean up temporary .mxl file
-                try:
-                    os.unlink(temp_mxl_path)
-                except OSError:
-                    pass
+                remove_file_quietly(temp_mxl_path)
         else:
             # Handle regular .xml/.musicxml files from URL
             with open(destination_path, 'wb') as f:

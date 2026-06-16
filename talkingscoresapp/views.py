@@ -16,6 +16,7 @@ from talkingscores.settings import BASE_DIR
 from lib.midiHandler import MidiHandler
 
 from talkingscoresapp.models import TSScore, TSScoreState
+from talkingscoresapp.models import remove_file_quietly
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -193,7 +194,11 @@ def write_json_file_atomic(path, data):
     ) as options_file:
         json.dump(data, options_file)
         temp_path = options_file.name
-    os.replace(temp_path, path)
+    try:
+        os.replace(temp_path, path)
+    except OSError:
+        remove_file_quietly(temp_path)
+        raise
 
 
 class MusicXMLSubmissionForm(forms.Form):

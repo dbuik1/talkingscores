@@ -210,6 +210,19 @@ class FileWriteTests(TestCase):
             with open(json_path, "r", encoding="utf-8") as json_file:
                 self.assertEqual(json.load(json_file), {"bars_at_a_time": 2})
 
+    @patch("talkingscoresapp.views.os.replace", side_effect=OSError("replace failed"))
+    def test_write_json_file_atomic_removes_temp_file_on_replace_failure(self, mock_replace):
+        from talkingscoresapp.views import write_json_file_atomic
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            json_path = os.path.join(temp_dir, "nested", "score.opts")
+
+            with self.assertRaises(OSError):
+                write_json_file_atomic(json_path, {"bars_at_a_time": 2})
+
+            temp_path = mock_replace.call_args.args[0]
+            self.assertFalse(os.path.exists(temp_path))
+
 
 class DownloadTests(TestCase):
     """Tests for local save and MIDI download behavior."""
@@ -609,6 +622,17 @@ class CacheAndMaintenanceTests(TestCase):
 
             with open(html_path, "r", encoding="utf-8") as html_file:
                 self.assertEqual(html_file.read(), "<html>cached</html>")
+
+    @patch("talkingscoresapp.models.os.replace", side_effect=OSError("replace failed"))
+    def test_write_text_file_atomic_removes_temp_file_on_replace_failure(self, mock_replace):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            html_path = os.path.join(temp_dir, "nested", "score.html")
+
+            with self.assertRaises(OSError):
+                score_models.write_text_file_atomic(html_path, "<html>cached</html>")
+
+            temp_path = mock_replace.call_args.args[0]
+            self.assertFalse(os.path.exists(temp_path))
 
     def test_html_can_raise_generation_errors_for_background_status(self):
         with tempfile.TemporaryDirectory() as temp_dir:
