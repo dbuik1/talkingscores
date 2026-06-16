@@ -105,6 +105,19 @@ def extract_musicxml_from_mxl(mxl_path, output_path):
         raise Exception(f"Failed to extract MusicXML from .mxl file: {e}")
 
 
+def write_text_file_atomic(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=os.path.dirname(path),
+        delete=False,
+    ) as temp_file:
+        temp_file.write(content)
+        temp_path = temp_file.name
+    os.replace(temp_path, path)
+
+
 class TSScoreState(object):
     IDLE = "idle"
     FETCHING = "fetching"
@@ -280,8 +293,7 @@ class TSScore(object):
                 export_mode=export_mode,
             )
             if not export_mode and html_cache_path:
-                with open(html_cache_path, "w", encoding="utf-8") as html_file:
-                    html_file.write(html_content)
+                write_text_file_atomic(html_cache_path, html_content)
             return html_content
             
         except Exception as e:

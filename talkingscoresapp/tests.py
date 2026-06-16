@@ -601,6 +601,15 @@ class CacheAndMaintenanceTests(TestCase):
                 self.assertEqual(status["message"], "Generating score.")
                 self.assertIn("updated", status)
 
+    def test_write_text_file_atomic_creates_readable_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            html_path = os.path.join(temp_dir, "nested", "score.html")
+
+            score_models.write_text_file_atomic(html_path, "<html>cached</html>")
+
+            with open(html_path, "r", encoding="utf-8") as html_file:
+                self.assertEqual(html_file.read(), "<html>cached</html>")
+
     def test_html_can_raise_generation_errors_for_background_status(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             score = TSScore(id="abc123", filename="score.musicxml")
