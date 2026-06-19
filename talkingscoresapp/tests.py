@@ -61,6 +61,12 @@ class BasicFunctionalityTests(TestCase):
         self.assertIn(".railway.app", score_settings.ALLOWED_HOSTS)
         self.assertIn("talkingscores.davidbuik.com", score_settings.ALLOWED_HOSTS)
 
+    def test_railway_origins_are_trusted_for_csrf(self):
+        self.assertIn("https://talkingscores.davidbuik.com", score_settings.CSRF_TRUSTED_ORIGINS)
+        self.assertIn("https://talkingscores-production.up.railway.app", score_settings.CSRF_TRUSTED_ORIGINS)
+        self.assertIn("https://*.up.railway.app", score_settings.CSRF_TRUSTED_ORIGINS)
+        self.assertEqual(score_settings.SECURE_PROXY_SSL_HEADER, ("HTTP_X_FORWARDED_PROTO", "https"))
+
     def test_static_files_are_configured_for_production(self):
         self.assertIn("whitenoise.middleware.WhiteNoiseMiddleware", score_settings.MIDDLEWARE)
         self.assertEqual(

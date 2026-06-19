@@ -45,6 +45,23 @@ env_allowed_hosts = [
 
 ALLOWED_HOSTS = list(dict.fromkeys(DEFAULT_ALLOWED_HOSTS + env_allowed_hosts))
 
+DEFAULT_CSRF_TRUSTED_ORIGINS = [
+    'https://talkingscores.davidbuik.com',
+    'https://talkingscores-production.up.railway.app',
+    'https://*.railway.app',
+    'https://*.up.railway.app',
+]
+
+env_csrf_trusted_origins = [
+    origin.strip()
+    for origin in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
+    if origin.strip()
+]
+
+CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(DEFAULT_CSRF_TRUSTED_ORIGINS + env_csrf_trusted_origins))
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 
 # Application definition
 

@@ -62,6 +62,7 @@ If you deploy this repo on Railway:
    DJANGO_SECRET_KEY=replace-this
    DJANGO_DEBUG=false
    DJANGO_ALLOWED_HOSTS=your-domain.com,talkingscores.davidbuik.com
+   DJANGO_CSRF_TRUSTED_ORIGINS=https://your-domain.com,https://talkingscores.davidbuik.com
    ```
 3. Attach persistent storage and point `MEDIA_ROOT` at it if you want uploaded files, generated HTML, and MIDI files to survive restarts.
 4. Let Railway use the `Procfile` in the repo root, which collects static assets, applies migrations, and starts Gunicorn:
