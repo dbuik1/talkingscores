@@ -88,6 +88,14 @@ class BasicFunctionalityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Security-Policy"], "upgrade-insecure-requests")
 
+    def test_site_shell_does_not_load_external_active_scripts(self):
+        response = self.client.get(reverse('index'))
+        content = response.content.decode("utf-8")
+
+        self.assertNotIn("googletagmanager.com", content)
+        self.assertNotIn("bootstrap.bundle.min.js", content)
+        self.assertNotIn('script src="https://', content)
+
     @patch("talkingscoresapp.views.logger.warning")
     @patch("talkingscoresapp.views.os.listdir", side_effect=OSError("missing"))
     def test_homepage_loads_when_example_scores_unavailable(self, mock_listdir, mock_logger_warning):
