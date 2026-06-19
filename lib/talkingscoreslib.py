@@ -23,6 +23,7 @@ import copy
 
 from jinja2 import Template, Environment, FileSystemLoader
 from music21 import *
+from django.conf import settings as django_settings
 
 from lib.musicAnalyser import *
 
@@ -1602,6 +1603,7 @@ class HTMLTalkingScoreFormatter:
             'export_theme': export_theme,
             'export_mode': export_mode,
             'inline_css': self._get_inline_css(export_mode),
+            'static_css_url': f"{django_settings.STATIC_URL}css/talkingscores.css",
             'time_and_keys': self.time_and_keys,
             'parts_summary': self.music_analyser.summary_parts,
             'general_summary': self.music_analyser.general_summary,

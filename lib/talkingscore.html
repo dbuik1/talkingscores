@@ -14,7 +14,7 @@
 {{ inline_css }}
     </style>
     {% else %}
-    <link href="http://127.0.0.1:8000/static/css/talkingscores.css" rel="stylesheet">
+    <link href="{{ static_css_url|default('/static/css/talkingscores.css', true) }}" rel="stylesheet">
     {% endif %}
 
     <script>

@@ -59,6 +59,15 @@ class BasicFunctionalityTests(TestCase):
     def test_railway_hosts_are_allowed(self):
         self.assertIn(".up.railway.app", score_settings.ALLOWED_HOSTS)
         self.assertIn(".railway.app", score_settings.ALLOWED_HOSTS)
+        self.assertIn("talkingscores.davidbuik.com", score_settings.ALLOWED_HOSTS)
+
+    def test_static_files_are_configured_for_production(self):
+        self.assertIn("whitenoise.middleware.WhiteNoiseMiddleware", score_settings.MIDDLEWARE)
+        self.assertEqual(
+            score_settings.STORAGES["staticfiles"]["BACKEND"],
+            "whitenoise.storage.CompressedStaticFilesStorage",
+        )
+        self.assertTrue(score_settings.STATIC_ROOT.endswith("staticfiles"))
 
     @patch("talkingscoresapp.views.logger.warning")
     @patch("talkingscoresapp.views.os.listdir", side_effect=OSError("missing"))
@@ -428,6 +437,37 @@ class DownloadTests(TestCase):
 
         self.assertIn("body { color: red; }", html)
         self.assertNotIn("127.0.0.1:8000/static/css/talkingscores.css", html)
+
+    def test_live_template_uses_static_css_path(self):
+        env = Environment(loader=FileSystemLoader(os.path.join(os.getcwd(), "lib")))
+        template = env.get_template("talkingscore.html")
+
+        html = template.render({
+            "export_mode": False,
+            "export_theme": None,
+            "inline_css": "",
+            "static_css_url": "/static/css/talkingscores.css",
+            "download_html_url": "/download/html/abc123/score.musicxml",
+            "basic_information": {"title": "Score", "composer": "Composer"},
+            "preamble": {"time_signature": "4 4", "key_signature": "C major", "tempo": "100", "number_of_parts": 1},
+            "full_score_midis": {"selected_instruments_midis": {}},
+            "music_segments": [],
+            "general_summary": "",
+            "parts_summary": [],
+            "selected_part_names": [],
+            "play_all": False,
+            "play_selected": False,
+            "play_unselected": False,
+            "instruments": {},
+            "part_names": [],
+            "time_and_keys": {},
+            "settings": {},
+            "repetition_in_contexts": {},
+            "immediate_repetition_contexts": {},
+        })
+
+        self.assertIn('href="/static/css/talkingscores.css"', html)
+        self.assertNotIn("127.0.0.1", html)
 
     @patch("talkingscoresapp.views.TSScore.state")
     @patch("talkingscoresapp.views.TSScore.start_background_processing")

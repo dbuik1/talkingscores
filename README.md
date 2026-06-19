@@ -61,14 +61,14 @@ If you deploy this repo on Railway:
    ```powershell
    DJANGO_SECRET_KEY=replace-this
    DJANGO_DEBUG=false
-   DJANGO_ALLOWED_HOSTS=your-domain.com
+   DJANGO_ALLOWED_HOSTS=your-domain.com,talkingscores.davidbuik.com
    ```
 3. Attach persistent storage and point `MEDIA_ROOT` at it if you want uploaded files, generated HTML, and MIDI files to survive restarts.
-4. Let Railway use the `Procfile` in the repo root, which runs:
+4. Let Railway use the `Procfile` in the repo root, which collects static assets, applies migrations, and starts Gunicorn:
    ```text
-   gunicorn talkingscores.wsgi:application --bind 0.0.0.0:$PORT
+   python manage.py collectstatic --noinput && python manage.py migrate && gunicorn talkingscores.wsgi:application --bind 0.0.0.0:$PORT
    ```
-5. Run `python manage.py migrate` after the first deploy.
+5. Static files are served by WhiteNoise, so Railway does not need a separate static-file service.
 
 If you need the app to keep generated files reliably, do not use an ephemeral filesystem only.
 
