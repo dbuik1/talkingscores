@@ -2,7 +2,7 @@
 Essential tests for Talking Scores - focused on critical issues.
 """
 
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -67,13 +67,26 @@ class BasicFunctionalityTests(TestCase):
         self.assertIn("https://*.up.railway.app", score_settings.CSRF_TRUSTED_ORIGINS)
         self.assertEqual(score_settings.SECURE_PROXY_SSL_HEADER, ("HTTP_X_FORWARDED_PROTO", "https"))
 
+    def test_https_security_defaults_are_configured(self):
+        self.assertTrue(score_settings.SECURE_CONTENT_TYPE_NOSNIFF)
+        self.assertEqual(score_settings.SECURE_REFERRER_POLICY, "same-origin")
+        self.assertFalse(score_settings.SECURE_HSTS_PRELOAD)
+
     def test_static_files_are_configured_for_production(self):
         self.assertIn("whitenoise.middleware.WhiteNoiseMiddleware", score_settings.MIDDLEWARE)
+        self.assertIn("talkingscores.middleware.ProductionSecurityHeadersMiddleware", score_settings.MIDDLEWARE)
         self.assertEqual(
             score_settings.STORAGES["staticfiles"]["BACKEND"],
             "whitenoise.storage.CompressedStaticFilesStorage",
         )
         self.assertTrue(score_settings.STATIC_ROOT.endswith("staticfiles"))
+
+    @override_settings(DEBUG=False)
+    def test_production_security_header_upgrades_insecure_requests(self):
+        response = self.client.get(reverse('index'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Security-Policy"], "upgrade-insecure-requests")
 
     @patch("talkingscoresapp.views.logger.warning")
     @patch("talkingscoresapp.views.os.listdir", side_effect=OSError("missing"))
