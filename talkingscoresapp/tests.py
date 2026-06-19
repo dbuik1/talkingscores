@@ -6,6 +6,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
+from talkingscores import settings as score_settings
 from talkingscoresapp.models import TSScore
 from talkingscoresapp import models as score_models
 from talkingscoresapp.management.commands import cleanup_media
@@ -54,6 +55,10 @@ class BasicFunctionalityTests(TestCase):
         response = self.client.get(reverse('index'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Talking Scores')
+
+    def test_railway_hosts_are_allowed(self):
+        self.assertIn(".up.railway.app", score_settings.ALLOWED_HOSTS)
+        self.assertIn(".railway.app", score_settings.ALLOWED_HOSTS)
 
     @patch("talkingscoresapp.views.logger.warning")
     @patch("talkingscoresapp.views.os.listdir", side_effect=OSError("missing"))

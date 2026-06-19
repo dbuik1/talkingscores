@@ -27,10 +27,22 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'dev-only-talkingscores-secret-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = os.environ.get(
-    'DJANGO_ALLOWED_HOSTS',
-    'www.talkingscores.co.uk,www.talkingscores.org,127.0.0.1,localhost',
-).split(',')
+DEFAULT_ALLOWED_HOSTS = [
+    'www.talkingscores.co.uk',
+    'www.talkingscores.org',
+    '127.0.0.1',
+    'localhost',
+    '.railway.app',
+    '.up.railway.app',
+]
+
+env_allowed_hosts = [
+    host.strip()
+    for host in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
+    if host.strip()
+]
+
+ALLOWED_HOSTS = list(dict.fromkeys(DEFAULT_ALLOWED_HOSTS + env_allowed_hosts))
 
 
 # Application definition
