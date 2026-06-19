@@ -9,3 +9,5 @@ __pycache__
 tmp/
 .vscode/
 db.sqlite3
+server.out.log
+server.err.log

@@ -52,6 +52,26 @@ $env:DJANGO_DEBUG = "false"
 $env:DJANGO_ALLOWED_HOSTS = "www.example.com,127.0.0.1"
 ```
 
+## Railway deployment
+
+If you deploy this repo on Railway:
+
+1. Use the `master` branch.
+2. Set these environment variables:
+   ```powershell
+   DJANGO_SECRET_KEY=replace-this
+   DJANGO_DEBUG=false
+   DJANGO_ALLOWED_HOSTS=your-domain.com
+   ```
+3. Attach persistent storage and point `MEDIA_ROOT` at it if you want uploaded files, generated HTML, and MIDI files to survive restarts.
+4. Let Railway use the `Procfile` in the repo root, which runs:
+   ```text
+   gunicorn talkingscores.wsgi:application --bind 0.0.0.0:$PORT
+   ```
+5. Run `python manage.py migrate` after the first deploy.
+
+If you need the app to keep generated files reliably, do not use an ephemeral filesystem only.
+
 ## macOS/Linux notes
 
 If you are not on Windows, create and activate the same `venv` folder with:
