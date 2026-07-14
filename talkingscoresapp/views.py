@@ -361,14 +361,18 @@ def send_error_email(error_message):
         return
 
     try:
+        email_address = os.environ.get('ERROR_EMAIL_ADDRESS', 'contact@davidbuik.com')
+        smtp_host = os.environ.get('ERROR_EMAIL_SMTP_HOST', 'smtp.gmail.com')
+        smtp_port = int(os.environ.get('ERROR_EMAIL_SMTP_PORT', '587'))
+
         msg = MIMEMultipart()
         password = os.environ['EMAIL_PASSWORD']
-        msg['From'] = "talkingscores@gmail.com"
-        msg['To'] = "talkingscores@gmail.com"
+        msg['From'] = email_address
+        msg['To'] = email_address
         msg['Subject'] = "Talking Scores Error"
 
         msg.attach(MIMEText(error_message, 'plain'))
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP(smtp_host, smtp_port)
         server.starttls()
         server.login(msg['From'], password)
         server.sendmail(msg['From'], msg['To'], msg.as_string())
@@ -418,7 +422,7 @@ def midi(request, id, filename):
         midi_file = open(midi_file_path, "rb")
         fr = FileResponse(midi_file)
         fr['Content-Type'] = 'audio/midi'
-        fr['Access-Control-Allow-Origin'] = 'https://www.talkingscores.co.uk'
+        fr['Access-Control-Allow-Origin'] = 'https://talkingscores.davidbuik.com'
         fr['X-Robots-Tag'] = "noindex"
         return fr
     else:

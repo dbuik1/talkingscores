@@ -36,7 +36,7 @@ if not SECRET_KEY:
 # Default to False so production is safe even if the variable is accidentally unset
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'www.talkingscores.co.uk,www.talkingscores.org,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'talkingscores.davidbuik.com,127.0.0.1,localhost').split(',')
 
 CSRF_TRUSTED_ORIGINS = [f'https://{host}' for host in ALLOWED_HOSTS if host]
 
