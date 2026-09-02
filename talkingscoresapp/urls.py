@@ -28,6 +28,8 @@ urlpatterns = [
     path('process_status/<scoreid:id>/<filename>', views.process_status, name='process-status'),
     path('oops/<scoreid:id>/<filename>', views.error, name='error'),
     path('download/html/<scoreid:id>/<filename>', views.download_html, name='download-html'),
+    path('download/text/<scoreid:id>/<filename>', views.download_text, name='download-text'),
+    path('download/braille/<scoreid:id>/<filename>', views.download_braille, name='download-braille'),
     path('midis/<scoreid:id>/<filename>', views.midi, name='midi'),
     path("robots.txt", TemplateView.as_view(template_name="robots.txt", content_type="text/plain"), ),
     path("sitemap.xml", TemplateView.as_view(template_name="sitemap.xml", content_type="text/xml"), ),

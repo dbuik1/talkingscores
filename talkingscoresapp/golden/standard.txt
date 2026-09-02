@@ -1,0 +1,73 @@
+Title: Untitled work
+Composer: Unknown composer
+Key: C major (no sharps or flats)
+Time signature: 3 4
+Tempo: animato (120 crotchet beats a minute)
+Bars: 25
+Instruments: (Inst0)
+
+Bars 1 to 4
+Bar 1
+Beat 1 mezzoforte together with minim high G, Beat 3 quaver E, C
+Bar 2
+Beat 1 crotchet high F, Beat 2 D, Beat 3 mid B
+Bar 3
+Same rhythm as bar 2
+Beat 1 crotchet high C, Beat 2 D, Beat 3 E
+Bar 4
+Beat 1 crotchet high F, Beat 2 D, Beat 3 crotchet rest
+
+Bars 5 to 8
+Bar 5
+Beat 1 minim high G, Beat 3 quaver E, C
+Bar 6
+Beat 1 crotchet high F, Beat 2 D, Beat 3 mid B
+Bar 7
+Same rhythm as bar 6
+Beat 1 crotchet high C, Beat 2 D, Beat 3 mid B
+Bar 8
+Beat 1 dotted minim high C
+
+Bars 9 to 12
+Bar 9
+Rests for the whole bar
+Bar 10
+Beat 1 piano together with minim high G, Beat 3 crotchet mid B
+Bar 11
+Beat 1 crotchet high C, Beat 2 D, Beat 3 E
+Bar 12
+Same rhythm as bar 11
+Beat 1 crotchet high F, Beat 2 F, Beat 3 F
+
+Bars 13 to 16
+Bar 13
+Beat 1 minim high F, Beat 3 crotchet E
+Bar 14
+Beat 1 crotchet high C, Beat 2 D, Beat 3 E
+Bar 15
+Same rhythm as bar 14
+Beat 1 crotchet high F, Beat 2 F, Beat 3 E
+Bar 16
+Beat 1 crotchet high E, Beat 2 quaver D, D together with crescendo starts, Beat 3 E together with crescendo ends, F
+
+Bars 17 to 20
+Bar 17
+Beat 1 forte together with minim high G, Beat 3 quaver E, C
+Bar 18
+Beat 1 crotchet high F, Beat 2 D, Beat 3 mid B
+Bar 19
+Same rhythm as bar 18
+Beat 1 crotchet high C, Beat 2 D, Beat 3 E
+Bar 20
+Beat 1 crotchet high F, Beat 2 D, Beat 3 crotchet rest
+
+Bars 21 to 24
+Bar 21
+Beat 1 minim high G, Beat 3 quaver E, C
+Bar 22
+Beat 1 crotchet high F, Beat 2 D, Beat 3 mid B
+Bar 23
+Same rhythm as bar 22
+Beat 1 crotchet high C, Beat 2 E, Beat 3 D
+Bar 24
+Beat 1 dotted minim high C

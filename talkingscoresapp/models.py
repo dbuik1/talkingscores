@@ -258,9 +258,11 @@ def extract_musicxml_from_mxl(mxl_path, output_path):
 
 def write_text_file_atomic(path, content):
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    # Line endings are written as given: braille files need CR LF on every platform.
     with tempfile.NamedTemporaryFile(
         "w",
         encoding="utf-8",
+        newline="",
         dir=os.path.dirname(path),
         delete=False,
     ) as temp_file:
@@ -325,7 +327,7 @@ class TSScore(object):
         except Exception as e:
             self.logger.exception(f"Failed to parse MusicXML info: {e}")
             return {
-                'title': 'Error reading title', 'composer': 'Unknown',
+                'title': 'Untitled work', 'composer': 'Unknown composer',
                 'instruments': ['Error'], 'time_signature': '',
                 'key_signature': '', 'tempo': '', 'number_of_bars': '',
                 'rhythm_range': [], 'octave_range': {'min': 0, 'max': 0},
@@ -350,6 +352,14 @@ class TSScore(object):
     def get_html_cache_file_path(self):
         data_path = self.get_data_file_path()
         return data_path + ".html" if data_path else None
+
+    def get_text_cache_file_path(self):
+        data_path = self.get_data_file_path()
+        return data_path + ".txt" if data_path else None
+
+    def get_braille_cache_file_path(self):
+        data_path = self.get_data_file_path()
+        return data_path + ".brf" if data_path else None
 
     def get_processing_status_file_path(self):
         data_path = self.get_data_file_path()
@@ -526,7 +536,8 @@ class TSScore(object):
             return {"status": "unknown", "message": "Could not read processing status."}
 
     def clear_generated_html_state(self):
-        for path in (self.get_html_cache_file_path(), self.get_processing_status_file_path()):
+        for path in (self.get_html_cache_file_path(), self.get_text_cache_file_path(),
+                     self.get_braille_cache_file_path(), self.get_processing_status_file_path()):
             if path and os.path.exists(path):
                 os.remove(path)
 
@@ -585,6 +596,15 @@ class TSScore(object):
         finally:
             self.release_generation_lock()
 
+    def export_text(self, braille=False):
+        """The text or braille download. Both are written when the page is generated."""
+        cache_path = self.get_braille_cache_file_path() if braille else self.get_text_cache_file_path()
+        data_path = self.get_data_file_path()
+        if not cache_path or not self._is_html_cache_fresh(cache_path, data_path):
+            self.html(force_refresh=True, raise_errors=True)
+        with open(cache_path, "r", encoding="utf-8", newline="") as cache_file:
+            return cache_file.read()
+
     def _generate_html(self, export_theme, export_mode, epoch):
         """Render the score. The caller holds the generation lock."""
         data_path = self.get_data_file_path()
@@ -592,6 +612,8 @@ class TSScore(object):
 
         web_path = f"/midis/{self.id}/{self.filename}"
         download_html_url = f"/download/html/{self.id}/{self.filename}"
+        download_text_url = f"/download/text/{self.id}/{self.filename}"
+        download_braille_url = f"/download/braille/{self.id}/{self.filename}"
         midi_output_path = os.path.join(MEDIA_ROOT, self.id)
         os.makedirs(midi_output_path, exist_ok=True)
         
@@ -605,10 +627,14 @@ class TSScore(object):
                 download_html_url=download_html_url,
                 export_theme=export_theme,
                 export_mode=export_mode,
+                download_text_url=download_text_url,
+                download_braille_url=download_braille_url,
             )
             # Options that changed during the run belong to a newer run, which writes its own cache.
             if not export_mode and html_cache_path and self.options_epoch() == epoch:
                 write_text_file_atomic(html_cache_path, html_content)
+                write_text_file_atomic(self.get_text_cache_file_path(), tsf.render_text())
+                write_text_file_atomic(self.get_braille_cache_file_path(), tsf.render_braille())
             return html_content
             
         except Exception:

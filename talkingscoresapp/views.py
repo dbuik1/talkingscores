@@ -17,6 +17,11 @@ from lib.midiHandler import MidiHandler
 
 from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress, RemoteAddressNotAllowed
 from talkingscoresapp.models import remove_file_quietly
+from lib.render_settings import DEFAULT_STYLE, STYLE_IDS
+
+
+def clean_style(value):
+    return value if value in STYLE_IDS else DEFAULT_STYLE
 
 logger = logging.getLogger("TSScore")
 
@@ -392,6 +397,37 @@ def download_html(request, id, filename):
         return redirect('error', id, filename)
 
 
+def _download_export(request, id, filename, braille):
+    score_obj = TSScore(id=id, filename=filename)
+    if score_obj.state() != TSScoreState.PROCESSED:
+        messages.error(request, "The requested score is not ready to download.")
+        return redirect('index')
+    try:
+        content = score_obj.export_text(braille=braille)
+    except ScoreGenerationInProgress:
+        return redirect('process', id, filename)
+    except Exception:
+        logger.exception("Unable to generate the text download: http://%s%s" % (request.get_host(), request.get_full_path()))
+        return redirect('error', id, filename)
+    if braille:
+        response = HttpResponse(content.encode("ascii", "replace"), content_type="application/x-brf")
+        extension = "brf"
+    else:
+        response = HttpResponse(content, content_type="text/plain; charset=utf-8")
+        extension = "txt"
+    response['Content-Disposition'] = f'attachment; filename="{safe_export_basename(filename)}-talking-score.{extension}"'
+    response['X-Robots-Tag'] = "noindex"
+    return response
+
+
+def download_text(request, id, filename):
+    return _download_export(request, id, filename, braille=False)
+
+
+def download_braille(request, id, filename):
+    return _download_export(request, id, filename, braille=True)
+
+
 def error(request, id, filename):
     template = loader.get_template('error.html')
     context = {'id': id, 'filename': filename}
@@ -454,6 +490,7 @@ def options(request, id, filename):
             figure_note_colours = color_profiles.get(selected_profile, {})
 
         options_data = {
+            "style": clean_style(request.POST.get("style")),
             "bars_at_a_time": int(form.cleaned_data.get("bars_at_a_time", 2)),
             "beat_division": request.POST.get("beat_division"),
             "play_all": "chk_playAll" in request.POST,

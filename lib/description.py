@@ -1,0 +1,575 @@
+"""
+Turn extracted events into a structured description of each bar.
+
+The model built here (segment, instrument, part, bar, beat) is the single
+source for the web page, the text download and the braille download. Every
+beat carries the same words as plain text and as HTML; the HTML only adds
+colour classes.
+"""
+
+import math
+from dataclasses import dataclass, field
+from fractions import Fraction
+from html import escape
+
+from lib.vocabulary import Vocabulary
+
+# Event kinds that are read out when a note or chord sounds at the same moment.
+KINDS_WITH_NOTES = ("note", "chord", "dynamic", "chord_symbol")
+
+TOGETHER = " together with "
+IN_BEAT_SEPARATOR = ", "
+
+
+@dataclass
+class Fragment:
+    text: str
+    css_class: str = ""
+
+    @property
+    def html(self):
+        if self.css_class:
+            return f'<span class="{self.css_class}">{escape(self.text)}</span>'
+        return escape(self.text)
+
+
+@dataclass
+class BeatDescription:
+    number: int
+    label: str
+    fragments: list = field(default_factory=list)
+
+    @property
+    def text(self):
+        return "".join(fragment.text for fragment in self.fragments)
+
+    @property
+    def html(self):
+        return "".join(fragment.html for fragment in self.fragments)
+
+    @property
+    def text_with_label(self):
+        if self.label:
+            return f"{self.label} {self.text}"
+        return self.text
+
+
+@dataclass
+class BarDescription:
+    number: int
+    label: str
+    signatures: list = field(default_factory=list)
+    repeat_note: str = ""
+    repeat_type: str = ""            # exact, rhythm or empty
+    repeat_detail: str = ""
+    collapsed: bool = False          # learning mode folds an exact repeat away
+    whole_bar_rest: bool = False
+    rest_text: str = ""
+    beats: list = field(default_factory=list)
+
+    @property
+    def text(self):
+        if self.whole_bar_rest:
+            return self.rest_text
+        return IN_BEAT_SEPARATOR.join(beat.text_with_label for beat in self.beats)
+
+    def text_lines(self, one_beat_per_line=False):
+        lines = [self.label]
+        lines.extend(self.signatures)
+        if self.repeat_note:
+            lines.append(self.repeat_note)
+        if self.whole_bar_rest:
+            lines.append(self.rest_text)
+        elif one_beat_per_line:
+            lines.extend(beat.text_with_label for beat in self.beats)
+        else:
+            lines.append(self.text)
+        return lines
+
+
+@dataclass
+class PartDescription:
+    part_index: int
+    name: str
+    octave_reference: str = ""
+    bars: list = field(default_factory=list)
+
+
+@dataclass
+class InstrumentDescription:
+    number: int
+    name: str
+    parts: list = field(default_factory=list)
+
+
+@dataclass
+class SegmentDescription:
+    start_bar: int
+    end_bar: int
+    label: str
+    anchor: str
+    is_pickup: bool = False
+    instruments: list = field(default_factory=list)
+    midi_all: str = ""
+    midi_sel: str = ""
+    midi_un: str = ""
+    selected_instruments_midis: dict = field(default_factory=dict)
+
+
+@dataclass
+class Fact:
+    label: str
+    value: str
+
+
+@dataclass
+class ScoreFacts:
+    piece: list = field(default_factory=list)      # title, composer, key, time, tempo, bars, parts
+    changes: list = field(default_factory=list)    # time, key and tempo changes with bar numbers
+    parts: list = field(default_factory=list)      # per part: name and a list of Fact
+
+
+def contrast_colour(hex_colour):
+    """Black or white, whichever reads better on the given colour."""
+    try:
+        value = hex_colour.lstrip("#")
+        red, green, blue = (int(value[i:i + 2], 16) for i in (0, 2, 4))
+    except (ValueError, AttributeError, TypeError):
+        return "white"
+    luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255
+    return "black" if luminance > 0.5 else "white"
+
+
+def slugify_colour_key(value):
+    return "".join(ch if ch.isalnum() else "-" for ch in str(value).lower()).strip("-")
+
+
+class Palette:
+    """CSS classes and the stylesheet for the colour choices stored with a score."""
+
+    def __init__(self, settings):
+        self.settings = settings
+        self.active = settings.colour_position in ("text", "background")
+        self.pitch_colours = {k.upper(): v for k, v in (settings.pitch_colours or {}).items() if v}
+        self.rhythm_colours = {slugify_colour_key(k): v for k, v in (settings.rhythm_colours or {}).items() if v}
+        self.octave_colours = {k.lower(): v for k, v in (settings.octave_colours or {}).items() if v}
+
+    @property
+    def root_class(self):
+        if not self.active:
+            return ""
+        return f"colour-{self.settings.colour_position}"
+
+    def pitch_class(self, step):
+        if self.active and self.settings.colour_pitch and step in self.pitch_colours:
+            return f"colour-pitch-{step.lower()}"
+        return ""
+
+    def rhythm_class(self, duration_slug, step):
+        if not self.active:
+            return ""
+        mode = self.settings.rhythm_colour_mode
+        if mode == "inherit":
+            return self.pitch_class(step)
+        if mode == "custom" and duration_slug in self.rhythm_colours:
+            return f"colour-rhythm-{duration_slug}"
+        return ""
+
+    def octave_class(self, band, step):
+        if not self.active:
+            return ""
+        mode = self.settings.octave_colour_mode
+        if mode == "inherit":
+            return self.pitch_class(step)
+        if mode == "custom" and band in self.octave_colours:
+            return f"colour-octave-{band}"
+        return ""
+
+    def css(self):
+        if not self.active:
+            return ""
+        rules = []
+        background = self.settings.colour_position == "background"
+
+        def rule(selector, colour):
+            if background:
+                rules.append(f".colour-background {selector} {{ background-color: {colour}; color: {contrast_colour(colour)}; padding: 0 0.15em; border-radius: 0.2em; }}")
+            else:
+                rules.append(f".colour-text {selector} {{ color: {colour}; }}")
+
+        if self.settings.colour_pitch:
+            for step, colour in self.pitch_colours.items():
+                rule(f".colour-pitch-{step.lower()}", colour)
+        if self.settings.rhythm_colour_mode == "custom":
+            for slug, colour in self.rhythm_colours.items():
+                rule(f".colour-rhythm-{slug}", colour)
+        if self.settings.octave_colour_mode == "custom":
+            for band, colour in self.octave_colours.items():
+                rule(f".colour-octave-{band}", colour)
+        return "\n".join(rules)
+
+
+def _safe_colour(value):
+    """Only hex colours reach the stylesheet; anything else is dropped."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if len(value) in (4, 7) and value.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in value[1:]):
+        return value
+    return None
+
+
+def clean_colour_map(colours):
+    cleaned = {}
+    for key, value in (colours or {}).items():
+        colour = _safe_colour(value)
+        if colour:
+            cleaned[key] = colour
+    return cleaned
+
+
+class PartState:
+    """What the reader has just heard, reset at the start of every bar."""
+
+    def __init__(self):
+        self.previous_rhythm = None
+        self.previous_pitch = None
+        self.first_pitch_seen = False
+
+
+class DescriptionBuilder:
+    def __init__(self, settings, time_and_keys=None, immediate_repetitions=None, detailed_repetitions=None):
+        self.settings = settings
+        self.vocabulary = Vocabulary(settings)
+        self.palette = Palette(settings)
+        self.time_and_keys = time_and_keys or {}
+        self.immediate_repetitions = immediate_repetitions or {}
+        self.detailed_repetitions = detailed_repetitions or {}
+
+    # Bars
+
+    def build_part(self, part_index, name, events_by_bar, bar_lengths, beat_quarter_length, pickup_bar=None):
+        """
+        events_by_bar: {bar_number: [time_point, ...]} as produced by the score.
+        bar_lengths: {bar_number: (written bar length, actual length)} in quarter notes.
+        """
+        part = PartDescription(part_index=part_index, name=name,
+                               octave_reference=self.vocabulary.octave_reference_line())
+        for bar_number in sorted(events_by_bar):
+            written_length, actual_length = bar_lengths.get(bar_number, (None, None))
+            part.bars.append(self.build_bar(
+                bar_number, events_by_bar[bar_number], part_index,
+                beat_quarter_length, written_length, actual_length,
+                is_pickup=(bar_number == pickup_bar),
+            ))
+        return part
+
+    def build_bar(self, bar_number, time_points, part_index, beat_quarter_length,
+                  written_length=None, actual_length=None, is_pickup=False):
+        bar = BarDescription(number=bar_number, label=self.bar_label(bar_number, is_pickup))
+        bar.signatures = list(self.time_and_keys.get(bar_number, []))
+        self._add_repeat_notes(bar, part_index, bar_number)
+
+        has_sounding_event = any(
+            event.kind in ("note", "chord")
+            for time_point in time_points
+            for events in time_point["voices"].values()
+            for event in events
+        )
+        if not has_sounding_event:
+            bar.whole_bar_rest = True
+            bar.rest_text = self.vocabulary.whole_bar_rest()
+            return bar
+
+        # A pickup bar counts its beats back from the bar line.
+        beat_shift = 0.0
+        if is_pickup and written_length and actual_length and actual_length < written_length:
+            beat_shift = written_length - actual_length
+
+        beat_ql = beat_quarter_length or 1.0
+        state = PartState()
+        current_beat = None
+        beat_description = None
+        for time_point in time_points:
+            events = self._events_at(time_point)
+            if not events:
+                continue
+            fragments = self._render_time_point(events, state, beat_ql, time_point)
+            if not fragments:
+                continue
+            beat_number = self._beat_number(time_point["offset"] + beat_shift, beat_ql)
+            if self.settings.beat_division == "bar":
+                beat_number = 1
+            if beat_description is None or beat_number != current_beat:
+                current_beat = beat_number
+                label = "" if self.settings.beat_division == "bar" else self.vocabulary.beat_label(beat_number)
+                beat_description = BeatDescription(number=beat_number, label=label)
+                bar.beats.append(beat_description)
+            elif beat_description.fragments:
+                beat_description.fragments.append(Fragment(IN_BEAT_SEPARATOR))
+            beat_description.fragments.extend(fragments)
+        return bar
+
+    def bar_label(self, bar_number, is_pickup):
+        if is_pickup:
+            return "Pickup bar"
+        return f"Bar {bar_number}"
+
+    def _add_repeat_notes(self, bar, part_index, bar_number):
+        mode = self.settings.repetition_mode
+        if mode == "none":
+            return
+        immediate = self.immediate_repetitions.get(part_index, {}).get(bar_number)
+        if immediate:
+            bar.repeat_type = immediate.get("type", "")
+            previous = bar_number - 1
+            if bar.repeat_type == "exact":
+                bar.repeat_note = self.vocabulary.same_as_bar(previous)
+                bar.collapsed = mode == "learning"
+            elif bar.repeat_type == "rhythm":
+                bar.repeat_note = self.vocabulary.same_rhythm_as_bar(previous)
+        if mode == "detailed":
+            detail = self.detailed_repetitions.get(part_index, {}).get(bar_number)
+            if detail:
+                bar.repeat_detail = detail
+
+    @staticmethod
+    def _beat_number(offset, beat_ql):
+        position = Fraction(offset).limit_denominator(96) / Fraction(beat_ql).limit_denominator(96)
+        return int(math.floor(position)) + 1
+
+    def _events_at(self, time_point):
+        """Events at one moment, voices in order, rests dropped when a note sounds."""
+        voices = time_point["voices"]
+        ordered = [event for voice in sorted(voices) for event in voices[voice]]
+        if any(event.kind in ("note", "chord") for event in ordered):
+            return [event for event in ordered if event.kind in KINDS_WITH_NOTES]
+        return ordered
+
+    def _render_time_point(self, events, state, beat_ql, time_point):
+        rendered = []
+        only_event = len(events) == 1
+        for event in events:
+            fragments = self.render_event(event, state, beat_ql, only_event_on_beat=only_event)
+            if not fragments:
+                continue
+            if rendered:
+                rendered.append(Fragment(TOGETHER))
+            rendered.extend(fragments)
+        return rendered
+
+    # Events
+
+    def render_event(self, event, state, beat_ql=1.0, only_event_on_beat=True):
+        kind = event.kind
+        if kind == "dynamic":
+            if not self.settings.dynamics:
+                return []
+            return [Fragment(self.vocabulary.dynamic(event))]
+        if kind == "chord_symbol":
+            if not self.settings.chord_symbols:
+                return []
+            return [Fragment(self.vocabulary.chord_symbol(event.figure))]
+        if kind == "rest":
+            if not self._rest_is_read(event, beat_ql, only_event_on_beat):
+                return []
+            fragments = self._tuplet_fragments(event, opening=True)
+            fragments.append(Fragment(self.vocabulary.rest(event, beat_ql)))
+            fragments.extend(self._tuplet_fragments(event, opening=False))
+            state.previous_rhythm = event.rhythm_key
+            return self._join(fragments)
+        if kind == "unpitched":
+            fragments = [Fragment(self.vocabulary.unpitched(event, beat_ql))]
+            state.previous_rhythm = event.rhythm_key
+            return self._join(fragments)
+        if kind == "note":
+            return self._render_note(event, state, beat_ql)
+        if kind == "chord":
+            return self._render_chord(event, state, beat_ql)
+        return []
+
+    def _rest_is_read(self, event, beat_ql, only_event_on_beat):
+        rule = self.settings.rests
+        if rule == "none":
+            return False
+        if rule == "all":
+            return True
+        # Structural rests: a beat or longer, at the start of the bar, or alone on their beat.
+        return (event.quarter_length >= beat_ql - 1e-6
+                or abs(event.start_offset) < 1e-6
+                or only_event_on_beat)
+
+    def _render_note(self, event, state, beat_ql):
+        words = []
+        for expression in event.expressions:
+            if "arpeggio" in expression.lower() and not self.settings.arpeggios:
+                continue
+            words.append(Fragment(self.vocabulary.expression(expression)))
+        rhythm = self._rhythm_fragments(event, state, event.pitch.step, beat_ql)
+        pitch = self._pitch_fragments(event.pitch, state.previous_pitch)
+        if self.settings.intervals and state.previous_pitch is not None:
+            interval = self.vocabulary.interval(state.previous_pitch, event.pitch)
+            if interval:
+                pitch.append(Fragment(interval))
+        if self.settings.word_order == "pitch_first":
+            words.extend(pitch)
+            words.extend(rhythm)
+        else:
+            words.extend(rhythm)
+            words.extend(pitch)
+        words.extend(self._tie_fragments(event))
+        words.extend(self._beam_fragments(event))
+        state.previous_pitch = event.pitch
+        state.previous_rhythm = event.rhythm_key
+        return self._join(words)
+
+    def _render_chord(self, event, state, beat_ql):
+        words = []
+        for expression in event.expressions:
+            if "arpeggio" in expression.lower() and not self.settings.arpeggios:
+                continue
+            words.append(Fragment(self.vocabulary.expression(expression)))
+        pitches = sorted(event.pitches, key=lambda p: p.pitch_number)
+        if not self.settings.chords_low_to_high:
+            pitches.reverse()
+        if self.settings.chords:
+            words.append(Fragment(self.vocabulary.chord_count(len(pitches))))
+        rhythm = self._rhythm_fragments(event, state, pitches[0].step if pitches else None, beat_ql)
+        pitch_words = []
+        previous = state.previous_pitch
+        for pitch in pitches:
+            pitch_words.extend(self._pitch_fragments(pitch, previous))
+            previous = pitch
+        if self.settings.word_order == "pitch_first":
+            words.extend(pitch_words)
+            words.extend(rhythm)
+        else:
+            words.extend(rhythm)
+            words.extend(pitch_words)
+        words.extend(self._tie_fragments(event))
+        words.extend(self._beam_fragments(event))
+        if pitches:
+            state.previous_pitch = pitches[-1]
+        state.previous_rhythm = event.rhythm_key
+        return self._join(words)
+
+    def _rhythm_fragments(self, event, state, step, beat_ql):
+        if self.settings.duration_names == "none":
+            return self._tuplet_fragments(event, opening=True) + self._tuplet_fragments(event, opening=False)
+        announce = (
+            self.settings.duration_frequency == "every_note"
+            or state.previous_rhythm != event.rhythm_key
+            or event.tuplet_start is not None
+        )
+        fragments = self._tuplet_fragments(event, opening=True)
+        if announce:
+            css = self.palette.rhythm_class(self.vocabulary.duration_slug(event), step) if step else ""
+            fragments.append(Fragment(self.vocabulary.duration(event, beat_ql), css))
+        fragments.extend(self._tuplet_fragments(event, opening=False))
+        return fragments
+
+    def _tuplet_fragments(self, event, opening):
+        if opening and event.tuplet_start:
+            return [Fragment(self.vocabulary.tuplet_start(event.tuplet_start))]
+        if not opening and event.tuplet_stop:
+            text = self.vocabulary.tuplet_stop()
+            return [Fragment(text)] if text else []
+        return []
+
+    def _pitch_fragments(self, pitch, previous_pitch):
+        fragments = []
+        octave_text = ""
+        if self._octave_is_read(pitch, previous_pitch):
+            octave_text = self.vocabulary.octave(pitch, previous_pitch)
+        octave_fragment = None
+        if octave_text:
+            band = self.vocabulary.octave_band(pitch.octave)
+            octave_fragment = Fragment(octave_text, self.palette.octave_class(band, pitch.step))
+        name = self.vocabulary.pitch(pitch, self.vocabulary.show_accidental(pitch))
+        name_fragment = Fragment(name, self.palette.pitch_class(pitch.step)) if name else None
+        if self.settings.octave_before_pitch:
+            if octave_fragment:
+                fragments.append(octave_fragment)
+            if name_fragment:
+                fragments.append(name_fragment)
+        else:
+            if name_fragment:
+                fragments.append(name_fragment)
+            if octave_fragment:
+                fragments.append(octave_fragment)
+        return fragments
+
+    def _octave_is_read(self, pitch, previous_pitch):
+        if self.settings.octave_naming == "none":
+            return False
+        frequency = self.settings.octave_frequency
+        if frequency == "every_note" or self.settings.octave_naming == "relative":
+            return True
+        if previous_pitch is None:
+            return True
+        if frequency == "first_note":
+            return False
+        if frequency == "braille_rules":
+            # Braille music: within a fourth no octave mark; a fifth to a seventh
+            # only when the octave changes; an octave or more always.
+            difference = abs(previous_pitch.pitch_number - pitch.pitch_number)
+            if difference <= 4:
+                return False
+            if difference <= 7:
+                return previous_pitch.octave != pitch.octave
+            return True
+        return previous_pitch.octave != pitch.octave
+
+    def _tie_fragments(self, event):
+        if event.tie and self.settings.ties:
+            text = self.vocabulary.tie(event.tie)
+            if text:
+                return [Fragment(text)]
+        return []
+
+    def _beam_fragments(self, event):
+        if event.beam and self.settings.beams:
+            text = self.vocabulary.beam(event.beam)
+            if text:
+                return [Fragment(text)]
+        return []
+
+    @staticmethod
+    def _join(fragments):
+        """Put a single space between the words of one event."""
+        joined = []
+        for fragment in fragments:
+            if not fragment.text:
+                continue
+            if joined:
+                joined.append(Fragment(" "))
+            joined.append(fragment)
+        return joined
+
+
+# Plain text
+
+def segments_to_text(segments, facts=None, title="", one_beat_per_line=False):
+    """The text download: one line per bar per part, or per beat when asked."""
+    lines = []
+    if title and not facts:
+        lines.append(title)
+        lines.append("")
+    if facts:
+        for fact in facts.piece:
+            lines.append(f"{fact.label}: {fact.value}")
+        for change in facts.changes:
+            lines.append(change)
+        lines.append("")
+    for segment in segments:
+        lines.append(segment.label)
+        for instrument in segment.instruments:
+            if len(segment.instruments) > 1:
+                lines.append(instrument.name)
+            for part in instrument.parts:
+                if len(instrument.parts) > 1:
+                    lines.append(part.name)
+                for bar in part.bars:
+                    lines.extend(bar.text_lines(one_beat_per_line))
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"

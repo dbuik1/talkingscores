@@ -1,0 +1,73 @@
+Title: Untitled work
+Composer: Unknown composer
+Key: C major (no sharps or flats)
+Time signature: 3 4
+Tempo: animato (120 1 beat beats a minute)
+Bars: 25
+Instruments: (Inst0)
+
+Bars 1 to 4
+Bar 1
+Beat 1 mezzoforte together with high G 2 beats, Beat 3 E half a beat, C half a beat
+Bar 2
+Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 middle B 1 beat
+Bar 3
+Same rhythm as bar 2
+Beat 1 high C 1 beat, Beat 2 D 1 beat, Beat 3 E 1 beat
+Bar 4
+Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 rest for 1 beat
+
+Bars 5 to 8
+Bar 5
+Beat 1 high G 2 beats, Beat 3 E half a beat, C half a beat
+Bar 6
+Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 middle B 1 beat
+Bar 7
+Same rhythm as bar 6
+Beat 1 high C 1 beat, Beat 2 D 1 beat, Beat 3 middle B 1 beat
+Bar 8
+Beat 1 high C 3 beats
+
+Bars 9 to 12
+Bar 9
+Rests for the whole bar
+Bar 10
+Beat 1 piano together with high G 2 beats, Beat 3 middle B 1 beat
+Bar 11
+Beat 1 high C 1 beat, Beat 2 D 1 beat, Beat 3 E 1 beat
+Bar 12
+Same rhythm as bar 11
+Beat 1 high F 1 beat, Beat 2 F 1 beat, Beat 3 F 1 beat
+
+Bars 13 to 16
+Bar 13
+Beat 1 high F 2 beats, Beat 3 E 1 beat
+Bar 14
+Beat 1 high C 1 beat, Beat 2 D 1 beat, Beat 3 E 1 beat
+Bar 15
+Same rhythm as bar 14
+Beat 1 high F 1 beat, Beat 2 F 1 beat, Beat 3 E 1 beat
+Bar 16
+Beat 1 high E 1 beat, Beat 2 D half a beat, D half a beat together with crescendo starts, Beat 3 E half a beat together with crescendo ends, F half a beat
+
+Bars 17 to 20
+Bar 17
+Beat 1 forte together with high G 2 beats, Beat 3 E half a beat, C half a beat
+Bar 18
+Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 middle B 1 beat
+Bar 19
+Same rhythm as bar 18
+Beat 1 high C 1 beat, Beat 2 D 1 beat, Beat 3 E 1 beat
+Bar 20
+Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 rest for 1 beat
+
+Bars 21 to 24
+Bar 21
+Beat 1 high G 2 beats, Beat 3 E half a beat, C half a beat
+Bar 22
+Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 middle B 1 beat
+Bar 23
+Same rhythm as bar 22
+Beat 1 high C 1 beat, Beat 2 E 1 beat, Beat 3 D 1 beat
+Bar 24
+Beat 1 high C 3 beats

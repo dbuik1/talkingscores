@@ -429,8 +429,9 @@ class DownloadTests(TestCase):
             "part_names": [],
             "time_and_keys": {},
             "settings": {},
-            "repetition_in_contexts": {},
-            "immediate_repetition_contexts": {},
+            "facts": None,
+            "palette_css": "",
+            "colour_root_class": "",
         })
 
         self.assertNotIn("Download HTML", html)
@@ -463,8 +464,9 @@ class DownloadTests(TestCase):
             "part_names": [],
             "time_and_keys": {},
             "settings": {},
-            "repetition_in_contexts": {},
-            "immediate_repetition_contexts": {},
+            "facts": None,
+            "palette_css": "",
+            "colour_root_class": "",
         })
 
         self.assertIn("body { color: red; }", html)
@@ -494,8 +496,9 @@ class DownloadTests(TestCase):
             "part_names": [],
             "time_and_keys": {},
             "settings": {},
-            "repetition_in_contexts": {},
-            "immediate_repetition_contexts": {},
+            "facts": None,
+            "palette_css": "",
+            "colour_root_class": "",
         })
 
         self.assertIn('href="/static/css/talkingscores.css"', html)
@@ -915,8 +918,9 @@ class CacheAndMaintenanceTests(TestCase):
             "part_names": [],
             "time_and_keys": {},
             "settings": {},
-            "repetition_in_contexts": {},
-            "immediate_repetition_contexts": {},
+            "facts": None,
+            "palette_css": "",
+            "colour_root_class": "",
         })
 
         self.assertNotIn("<script>alert(1)</script>", html)
@@ -992,6 +996,8 @@ class GenerationLockTests(TestCase):
     def _fake_formatter(self, html="<html>fresh</html>"):
         fake_formatter = Mock()
         fake_formatter.generateHTML.return_value = html
+        fake_formatter.render_text.return_value = "text"
+        fake_formatter.render_braille.return_value = "brf"
         return fake_formatter
 
     def test_lock_is_exclusive_while_a_run_is_live(self):
@@ -1153,3 +1159,131 @@ class GenerationLockTests(TestCase):
         response = Client().get(reverse("score", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
 
         self.assertRedirects(response, reverse("process", kwargs={"id": VALID_ID, "filename": "score.musicxml"}), fetch_redirect_response=False)
+
+
+class ReadingStyleTests(TestCase):
+    """The description engine words the same facts differently for each reading style."""
+
+    FIXTURE = os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml")
+    GOLDEN_DIR = os.path.join(os.getcwd(), "talkingscoresapp", "golden")
+
+    def _formatter(self, options):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        return HTMLTalkingScoreFormatter(Music21TalkingScore(self.FIXTURE), options=options)
+
+    def test_each_style_matches_its_golden_text(self):
+        from talkingscoreslib import HTMLTalkingScoreFormatter
+        from lib.render_settings import STYLE_IDS
+        for style in STYLE_IDS:
+            with self.subTest(style=style):
+                formatter = self._formatter({"style": style, "bars_at_a_time": 4})
+                with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+                    text = formatter.render_text()
+                with open(os.path.join(self.GOLDEN_DIR, f"{style}.txt"), encoding="utf-8") as golden:
+                    self.assertEqual(text, golden.read())
+
+    def test_page_uses_colour_classes_not_inline_styles(self):
+        from talkingscoreslib import HTMLTalkingScoreFormatter
+        formatter = self._formatter({
+            "style": "standard", "colour_position": "text", "colour_pitch": True,
+            "pitch_colours": {"C": "#ff0000", "D": "javascript:alert(1)"},
+        })
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            html = formatter.generateHTML(web_path="/midis/x/y")
+        self.assertIn('<body class="score-page colour-text">', html)
+        self.assertIn(".colour-text .colour-pitch-c { color: #ff0000; }", html)
+        self.assertNotIn("javascript:", html)
+        self.assertNotIn("style='color", html)
+        self.assertIn('<span class="colour-pitch-c">C</span>', html)
+
+    def test_braille_download_is_ascii_braille(self):
+        from lib.braille import text_to_brf
+        brf = text_to_brf("Bar 12\nSame as bar 3")
+        self.assertEqual(brf.split("\r\n")[0], ",bar #ab")
+        self.assertEqual(brf.split("\r\n")[1], ",same as bar #c")
+        self.assertTrue(all(ord(char) < 128 for char in brf))
+
+    def test_legacy_beat_division_sets_the_beat_unit(self):
+        from lib.render_settings import RenderSettings
+        settings = RenderSettings.from_options({"beat_division": "2/1.0", "rhythm_description": "american"})
+        self.assertEqual(settings.beat_division, "beat")
+        self.assertEqual(settings.beat_unit, 1.0)
+        self.assertEqual(settings.duration_names, "american")
+        self.assertEqual(RenderSettings.from_options({"beat_division": "bar"}).beat_division, "bar")
+
+    def test_beats_are_numbered_from_the_offset(self):
+        from lib.description import DescriptionBuilder
+        self.assertEqual(DescriptionBuilder._beat_number(0.0, 1.0), 1)
+        self.assertEqual(DescriptionBuilder._beat_number(1.75, 1.0), 2)
+        self.assertEqual(DescriptionBuilder._beat_number(3.0, 1.5), 3)
+
+    def test_plain_style_reads_lengths_in_beats(self):
+        from lib.vocabulary import beats_phrase
+        self.assertEqual(beats_phrase(1.0, 1.0), "1 beat")
+        self.assertEqual(beats_phrase(0.5, 1.0), "half a beat")
+        self.assertEqual(beats_phrase(3.0, 1.0), "3 beats")
+        self.assertEqual(beats_phrase(1.5, 1.0), "1 and a half beats")
+
+    def test_structural_rests_keep_only_rests_that_shape_the_bar(self):
+        from lib.description import DescriptionBuilder
+        from lib.events import TSRest
+        from lib.render_settings import RenderSettings
+        builder = DescriptionBuilder(RenderSettings.from_options({"style": "compact"}))
+        short_rest = TSRest()
+        short_rest.quarter_length = 0.5
+        short_rest.start_offset = 1.5
+        self.assertFalse(builder._rest_is_read(short_rest, 1.0, only_event_on_beat=False))
+        self.assertTrue(builder._rest_is_read(short_rest, 1.0, only_event_on_beat=True))
+        long_rest = TSRest()
+        long_rest.quarter_length = 2.0
+        long_rest.start_offset = 2.0
+        self.assertTrue(builder._rest_is_read(long_rest, 1.0, only_event_on_beat=False))
+
+
+class ExportDownloadTests(TestCase):
+    """The text and braille downloads serve the cached exports as attachments."""
+
+    def test_text_download_serves_the_cached_text(self):
+        with patch.object(TSScore, "state", return_value=score_models.TSScoreState.PROCESSED), \
+                patch.object(TSScore, "export_text", return_value="Bar 1\nBeat 1 crotchet C\n") as export:
+            response = self.client.get(f"/download/text/{VALID_ID}/score.musicxml")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/plain; charset=utf-8")
+        self.assertIn('filename="score-talking-score.txt"', response["Content-Disposition"])
+        self.assertEqual(response.content.decode("utf-8"), "Bar 1\nBeat 1 crotchet C\n")
+        export.assert_called_once_with(braille=False)
+
+    def test_braille_download_serves_the_cached_brf(self):
+        with patch.object(TSScore, "state", return_value=score_models.TSScoreState.PROCESSED), \
+                patch.object(TSScore, "export_text", return_value=",bar #a\r\n") as export:
+            response = self.client.get(f"/download/braille/{VALID_ID}/score.musicxml")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('filename="score-talking-score.brf"', response["Content-Disposition"])
+        self.assertEqual(response.content, b",bar #a\r\n")
+        export.assert_called_once_with(braille=True)
+
+    def test_downloads_redirect_home_when_the_score_is_not_ready(self):
+        with patch.object(TSScore, "state", return_value=score_models.TSScoreState.FETCHING):
+            response = self.client.get(f"/download/text/{VALID_ID}/score.musicxml")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/")
+
+    def test_generating_the_page_writes_the_text_and_braille_caches(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_path = os.path.join(temp_dir, "score.musicxml")
+            with open(data_path, "w", encoding="utf-8") as data_file:
+                data_file.write("<score-partwise></score-partwise>")
+            with open(data_path + ".opts", "w", encoding="utf-8") as opts_file:
+                opts_file.write("{}")
+            score = TSScore(id=VALID_ID, filename="score.musicxml")
+            fake = Mock()
+            fake.generateHTML.return_value = "<html>page</html>"
+            fake.render_text.return_value = "Bar 1\n"
+            fake.render_braille.return_value = ",bar #a\r\n"
+            with patch.object(score, "get_data_file_path", return_value=data_path), \
+                    patch.object(score_models, "Music21TalkingScore"), \
+                    patch.object(score_models, "HTMLTalkingScoreFormatter", return_value=fake):
+                score.html(force_refresh=True, raise_errors=True)
+                self.assertEqual(score.export_text(), "Bar 1\n")
+                self.assertEqual(score.export_text(braille=True), ",bar #a\r\n")
+            fake.generateHTML.assert_called_once()

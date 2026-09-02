@@ -302,8 +302,9 @@
             }
         }
     </style>
+{% if palette_css %}<style>{{ palette_css|safe }}</style>{% endif %}
 </head>
-<body class="score-page">
+<body class="score-page {{ colour_root_class }}">
 
     <nav id="score-nav-ribbon" class="score-nav-ribbon" aria-label="Score navigation">
         <a href="#" class="nav-link-top">Back to Top</a>
@@ -313,17 +314,7 @@
         {% endif %}
         <ul>
             {% for segment in music_segments %}
-                <li>
-                    <a href="#segment-{{ segment.start_bar }}">
-                        {% if segment.start_bar == 'Pickup' %}
-                            Pickup Bar
-                        {% elif segment.start_bar == segment.end_bar %}
-                            Bar {{ segment.start_bar }}
-                        {% else %}
-                            Bars {{ segment.start_bar }}-{{ segment.end_bar }}
-                        {% endif %}
-                    </a>
-                </li>
+                <li><a href="#{{ segment.anchor }}">{{ segment.label }}</a></li>
             {% endfor %}
         </ul>
     </nav>
@@ -339,6 +330,8 @@
             {% if download_html_url and not export_mode %}
             <div class="download-controls" aria-label="Download score">
                 <a class="download-link" href="{{ download_html_url }}" data-download-html>Download HTML</a>
+                {% if download_text_url %}<a class="download-link" href="{{ download_text_url }}">Download text</a>{% endif %}
+                {% if download_braille_url %}<a class="download-link" href="{{ download_braille_url }}">Download braille</a>{% endif %}
             </div>
             {% endif %}
 
@@ -384,13 +377,32 @@
             </div>
             {% endif %}
 
-        <h1>Summary:</h1>
-        {{general_summary}}
-        {% for summary in parts_summary %}
-            <h3>{{selected_part_names[loop.index-1]}}</h3>
-            {{summary}}
-            <br/>
+        <section class="score-facts" aria-labelledby="score-facts-heading">
+        <h1 id="score-facts-heading">About this score</h1>
+        {% if facts %}
+        <dl class="fact-list">
+            {% for fact in facts.piece %}
+            <div class="fact"><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
+            {% endfor %}
+        </dl>
+        {% if facts.changes %}
+        <h2>Changes</h2>
+        <ul class="fact-changes">
+            {% for change in facts.changes %}<li>{{ change }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% for part in facts.parts %}
+            {% if part.facts %}
+            <h2>{{ part.name }}</h2>
+            <dl class="fact-list">
+                {% for fact in part.facts %}
+                <div class="fact"><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
+                {% endfor %}
+            </dl>
+            {% endif %}
         {% endfor %}
+        {% endif %}
+        </section>
         <br/>
 
         {% if export_mode %}
@@ -399,15 +411,8 @@
         <h1>Music segment descriptions and playback</h1>
         {% endif %}
 {% for segment in music_segments %}
-<div id="segment-{{ segment.start_bar }}">
-    <div class="bar-heading">
-        {% if segment.start_bar == 'Pickup' %}
-            Pickup Bar
-        {% elif segment.start_bar == segment.end_bar %}
-            Bar {{ segment.start_bar }}
-        {% else %}
-            Bars {{ segment.start_bar }} to {{ segment.end_bar }}
-        {% endif %}
+<div id="{{ segment.anchor }}">
+    <div class="bar-heading">{{ segment.label }}</div>
     </div>
 
     {% if not export_mode %}
@@ -426,7 +431,7 @@
         </select>
     </div>
 
-    {% set segment_label = "bars " ~ segment.start_bar ~ " to " ~ segment.end_bar if segment.start_bar != 'Pickup' and segment.start_bar != segment.end_bar else "bar " ~ segment.start_bar if segment.start_bar != 'Pickup' else "Pickup Bar" %}
+    {% set segment_label = segment.label %}
     
     <div class="play-buttons-container">
         <div class="main-play-buttons">
@@ -466,85 +471,32 @@
     </div>
     {% endif %}
 
-    {% for instrument_index, part_descriptions in segment.selected_instruments_descriptions.items() %}
-    {% if segment.selected_instruments_descriptions|length > 1 %}<h3>{{instruments[instrument_index][0]}}</h3>{% endif %}
-    {% for part_description in part_descriptions %}
-        {% set part_index = loop.index0 %}
-        {% if part_descriptions|length > 1 %}<h4>{{part_names[instruments[instrument_index][1] + loop.index-1 ]}}</h4>{% endif %}
-
-        {% for bar, time_point_list in part_description.items()|sort %}
-            {# Use original_start_bar for pickup bar content lookup #}
-            {% set lookup_bar = segment.original_start_bar if segment.start_bar == 'Pickup' and bar == segment.original_start_bar else bar %}
-            
+    {% for instrument in segment.instruments %}
+    {% if segment.instruments|length > 1 %}<h3>{{ instrument.name }}</h3>{% endif %}
+    {% for part in instrument.parts %}
+        {% if instrument.parts|length > 1 %}<h4>{{ part.name }}</h4>{% endif %}
+        {% for bar in part.bars %}
             <div class="bar-info">
-                <div class="bar-number">Bar: {{ bar }}</div>
-                {% if lookup_bar in time_and_keys %}
+                <div class="bar-number">{{ bar.label }}</div>
+                {% if bar.signatures %}
                     <div class="music-info-badges">
-                        {% for tk in time_and_keys[lookup_bar] %}
-                            {% if 'Time signature' in tk %}
-                                <span class="music-info-badge time-signature-badge">{{ tk }}</span>
-                            {% elif 'Key signature' in tk %}
-                                <span class="music-info-badge key-signature-badge">{{ tk }}</span>
-                            {% endif %}
+                        {% for signature in bar.signatures %}
+                            <span class="music-info-badge">{{ signature }}</span>
                         {% endfor %}
                     </div>
                 {% endif %}
             </div>
-            
-            {% set detailed_info = repetition_in_contexts[instruments[instrument_index][1] + part_index].get(lookup_bar) %}
-            {% set learning_info = immediate_repetition_contexts[instruments[instrument_index][1] + part_index].get(lookup_bar) %}
-            {% if settings.repetition_mode == 'learning' and learning_info %}<div class="repetition-info">{{ learning_info.text }}</div>
-            {% elif settings.repetition_mode == 'detailed' and detailed_info %}<div class="repetition-info"><strong>Repetition:</strong> {{ detailed_info }}</div>{% endif %}
-
-            {# Rest of the content rendering logic stays the same #}
-            {% set N = namespace(has_renderable_event=false) %}
-            {% for time_point in time_point_list %}{% for voice, events_in_voice in time_point.voices|dictsort %}{% for event in events_in_voice %}{% if event.__class__.__name__ in ['TSNote', 'TSChord'] %}{% set N.has_renderable_event = true %}{% endif %}{% endfor %}{% endfor %}{% endfor %}
-
-            {% if not N.has_renderable_event %}
-                <p>(This part rests for the entire bar)</p>
-            {% elif not (settings.repetition_mode == 'learning' and learning_info and learning_info.type == 'exact') %}
-                    {%- if settings.beat_division == 'bar' or segment.start_bar == 'Pickup' -%}
-                        <p class="beat-group"><span class="beat-content">
-                        {%- set ns = namespace(previous_event=None, rendered_content=[]) -%}
-                        {%- for time_point in time_point_list -%}
-                            {%- set filtered = namespace(events=[], has_note_or_chord=false) -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- if event.__class__.__name__ in ['TSNote', 'TSChord'] -%}{%- set filtered.has_note_or_chord = true -%}{%- endif -%}{%- endfor -%}{%- endfor -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- set event_type = event.__class__.__name__ -%}{%- if filtered.has_note_or_chord -%}{%- if event_type in ['TSNote', 'TSChord', 'TSDynamic'] -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- else -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
-                            {%- for event in filtered.events -%}
-                                {%- set rendered_event = event.render(settings, ns.previous_event) -%}
-                                {%- if rendered_event -%}
-                                    {%- if ns.rendered_content -%}, &nbsp;{%- endif -%}
-                                    {{- rendered_event|join(' ') | safe -}}
-                                    {%- set ns.rendered_content = ns.rendered_content + [rendered_event|join(' ')] -%}
-                                    {%- set ns.previous_event = event -%}
-                                {%- endif -%}
-                            {%- endfor -%}
-                        {%- endfor -%}
-                        </span></p>
-                    {%- else -%}
-                        {%- set ns = namespace(current_integer_beat=0, previous_event=None, rendered_content=[]) -%}
-                        {%- for time_point in time_point_list -%}
-                            {%- set integer_beat = (time_point.beat - 0.001)|round|int if time_point.beat is number and time_point.beat > 0 else ns.current_integer_beat -%}
-                            {%- if integer_beat > ns.current_integer_beat -%}
-                                {%- if ns.rendered_content -%}</span></p>{%- endif -%}
-                                <p class="beat-group"><strong>Beat {{ integer_beat }}:</strong> <span class="beat-content">
-                                {%- set ns.current_integer_beat = integer_beat -%}
-                                {%- set ns.rendered_content = [] -%}
-                            {%- elif ns.rendered_content -%}, {% endif -%}
-                            {%- set filtered = namespace(events=[], has_note_or_chord=false) -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- if event.__class__.__name__ in ['TSNote', 'TSChord'] -%}{%- set filtered.has_note_or_chord = true -%}{%- endif -%}{%- endfor -%}{%- endfor -%}{%- for voice, events_in_voice in time_point.voices|dictsort -%}{%- for event in events_in_voice -%}{%- set event_type = event.__class__.__name__ -%}{%- if filtered.has_note_or_chord -%}{%- if event_type in ['TSNote', 'TSChord', 'TSDynamic'] -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- else -%}{%- set filtered.events = filtered.events + [event] -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
-                            {%- for event in filtered.events -%}
-                                {%- set rendered_event = event.render(settings, ns.previous_event) -%}
-                                {%- if rendered_event -%}
-                                    {%- if not loop.first %} - together with {% endif -%}
-                                    {{- rendered_event|join(' ') | safe -}}
-                                    {%- set ns.rendered_content = ns.rendered_content + [rendered_event|join(' ')] -%}
-                                    {%- set ns.previous_event = event -%}
-                                {%- endif -%}
-                            {%- endfor -%}
-                        {%- endfor -%}
-                        {%- if ns.rendered_content -%}</span></p>{%- endif -%}
-                    {%- endif -%}
-                {% endif %}
-            {% endfor %}
+            {% if bar.repeat_note %}<div class="repetition-info">{{ bar.repeat_note }}</div>{% endif %}
+            {% if bar.repeat_detail %}<div class="repetition-info">{{ bar.repeat_detail }}</div>{% endif %}
+            {% if bar.whole_bar_rest %}
+                <p class="beat-group"><span class="beat-content">{{ bar.rest_text }}</span></p>
+            {% elif not bar.collapsed %}
+                {% for beat in bar.beats %}
+                <p class="beat-group">{% if beat.label %}<strong>{{ beat.label }}</strong> {% endif %}<span class="beat-content">{{ beat.html|safe }}</span></p>
+                {% endfor %}
+            {% endif %}
         {% endfor %}
+    {% endfor %}
     {% endfor %}
 </div>
 {% endfor %}
