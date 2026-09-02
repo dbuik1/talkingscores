@@ -53,54 +53,94 @@
       "x": 0,
       "y": 2100,
       "w": 960,
-      "h": 1900,
-      "title": "Score reader"
+      "h": 2200,
+      "title": "Score reader, standard text"
+    },
+    {
+      "file": "ScoreReaderLarge.dc.html",
+      "x": 1060,
+      "y": 2100,
+      "w": 960,
+      "h": 2700,
+      "title": "Score reader, large text"
+    },
+    {
+      "file": "ScoreReaderExtraLarge.dc.html",
+      "x": 2120,
+      "y": 2100,
+      "w": 960,
+      "h": 2900,
+      "title": "Score reader, extra large text"
+    },
+    {
+      "file": "ReadingSettings.dc.html",
+      "x": 3180,
+      "y": 2100,
+      "w": 960,
+      "h": 3300,
+      "title": "Reading settings open"
+    },
+    {
+      "file": "TextSizes.dc.html",
+      "x": 4240,
+      "y": 2100,
+      "w": 960,
+      "h": 2500,
+      "title": "Text sizes compared"
     },
     {
       "file": "ScoreReaderPhone.dc.html",
-      "x": 1060,
-      "y": 2100,
+      "x": 0,
+      "y": 5600,
       "w": 390,
-      "h": 2260,
+      "h": 2400,
       "title": "Score reader, phone"
     },
     {
+      "file": "ScoreReaderPhoneLarge.dc.html",
+      "x": 490,
+      "y": 5600,
+      "w": 390,
+      "h": 2600,
+      "title": "Score reader, phone, large text"
+    },
+    {
       "file": "ScoreReaderDark.dc.html",
-      "x": 1550,
-      "y": 2100,
+      "x": 980,
+      "y": 5600,
       "w": 960,
-      "h": 1900,
-      "title": "Score reader, dark"
+      "h": 2700,
+      "title": "Score reader, dark, large text"
     },
     {
       "file": "ScoreReaderHighContrast.dc.html",
-      "x": 2610,
-      "y": 2100,
+      "x": 2040,
+      "y": 5600,
       "w": 960,
-      "h": 1900,
+      "h": 2200,
       "title": "Score reader, Windows high contrast"
     },
     {
       "file": "ScoreReaderNoScript.dc.html",
-      "x": 3670,
-      "y": 2100,
+      "x": 3100,
+      "y": 5600,
       "w": 960,
-      "h": 1500,
+      "h": 1800,
       "title": "Score reader, no JavaScript"
     },
     {
       "file": "Print.dc.html",
-      "x": 4730,
-      "y": 2100,
+      "x": 4160,
+      "y": 5600,
       "w": 794,
-      "h": 1600,
+      "h": 1700,
       "title": "Print, A4",
       "print": "flow"
     },
     {
       "file": "DirectionConsole.dc.html",
       "x": 0,
-      "y": 4500,
+      "y": 8500,
       "w": 620,
       "h": 420,
       "title": "Alternative: Console"
@@ -108,7 +148,7 @@
     {
       "file": "DirectionLedger.dc.html",
       "x": 720,
-      "y": 4500,
+      "y": 8500,
       "w": 620,
       "h": 420,
       "title": "Alternative: Ledger"
