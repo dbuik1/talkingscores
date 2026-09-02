@@ -357,8 +357,6 @@ class Music21TalkingScore(TalkingScoreBase):
                 first.insert(0, self.timeSigs[start_bar])
 
         for bar_index in range(start_bar, end_bar + 1):
-            # Accidentals last until the bar line, so the memory of them starts afresh each bar.
-            state = {}
             if start_bar == 0:
                 found = measures.getElementsByClass('Measure')
                 measure = found[0] if found else None
@@ -369,6 +367,8 @@ class Music21TalkingScore(TalkingScoreBase):
                 continue
             original_number = measure.number
             measure.number = bar_index
+            # Accidentals last until the bar line, so each bar starts from the key signature alone.
+            state = self._key_signature_alters(measure)
             self.update_events_for_measure(measure, intermediate_events, state=state)
             measure.number = original_number
 
@@ -454,6 +454,17 @@ class Music21TalkingScore(TalkingScoreBase):
                   .append(event)
 
     @staticmethod
+    def _key_signature_alters(measure):
+        """{step: alter} for the key signature in force, plus the key itself under "key"."""
+        ks = measure.keySignature or measure.getContextByClass(key.KeySignature)
+        alters = {}
+        if ks is not None:
+            alters = {p.step: p.alter for p in ks.alteredPitches}
+        state = dict(alters)
+        state["key"] = alters
+        return state
+
+    @staticmethod
     def _make_pitch(pitch, state):
         accidental = pitch.accidental
         name = accidental.name if accidental is not None else None
@@ -461,9 +472,10 @@ class Music21TalkingScore(TalkingScoreBase):
         last_alter = state.get(pitch.step)
         changed = last_alter is None or pitch.alter != last_alter
         state[pitch.step] = pitch.alter
+        cancels_key = name == 'natural' and bool(state.get("key", {}).get(pitch.step))
         return TSPitch(pitch.step, pitch.octave, pitch.alter, pitch.ps,
                        accidental_name=name, accidental_displayed=displayed,
-                       accidental_changed=changed)
+                       accidental_changed=changed, cancels_key=cancels_key)
 
     def _create_event_from_element(self, element, state):
         element_type = type(element).__name__

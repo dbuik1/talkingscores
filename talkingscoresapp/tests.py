@@ -1341,6 +1341,17 @@ class ReviewedEngineTests(TestCase):
         bar_two = text.split("Bar 2")[1]
         self.assertIn("F sharp", bar_two)
 
+    def test_a_natural_is_read_when_it_undoes_the_key_signature(self):
+        from music21 import note, key
+        sharp, natural = note.Note("F#4"), note.Note("F4")
+        natural.pitch.accidental = "natural"
+        score = self._score_of_bars([[key.KeySignature(1), sharp, natural, note.Note("G4"), note.Note("A4")]])
+        text = self._text(score, {"style": "standard", "key_signature_accidentals": "applied"})
+        self.assertIn("F sharp", text)
+        self.assertIn("F natural", text)
+        c_major = self._score_of_bars([[note.Note("F#4"), natural, note.Note("G4"), note.Note("A4")]])
+        self.assertNotIn("F natural", self._text(c_major, {"style": "standard", "key_signature_accidentals": "applied"}))
+
     def test_grace_notes_are_read_before_the_note_they_decorate(self):
         from music21 import note
         grace = note.Note("D5").getGrace()
