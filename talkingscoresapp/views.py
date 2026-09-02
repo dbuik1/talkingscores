@@ -19,11 +19,14 @@ import requests
 from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress
 from talkingscoresapp.models import RemoteAddressNotAllowed, RemoteHostNotFound, RemoteFetchRefused
 from talkingscoresapp.models import remove_file_quietly
-from lib.render_settings import DEFAULT_STYLE, STYLE_IDS
+from lib.render_settings import DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES
 
 
 def clean_style(value):
     return value if value in STYLE_IDS else DEFAULT_STYLE
+
+
+STYLE_CHOICES = [(style_id, STYLE_NAMES[style_id]) for style_id in STYLE_IDS]
 
 
 HEX_COLOUR_PATTERN = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
@@ -482,7 +485,7 @@ def options(request, id, filename):
         form = TalkingScoreGenerationOptionsForm(request.POST)
         if not form.is_valid():
             add_rhythm_colour_defaults(score_info)
-            context = {'form': form, 'score_info': score_info}
+            context = {'form': form, 'score_info': score_info, 'style_choices': STYLE_CHOICES}
             return render(request, 'options.html', context)
 
         try:
@@ -490,7 +493,7 @@ def options(request, id, filename):
         except forms.ValidationError as exc:
             form.add_error(None, exc)
             add_rhythm_colour_defaults(score_info)
-            context = {'form': form, 'score_info': score_info}
+            context = {'form': form, 'score_info': score_info, 'style_choices': STYLE_CHOICES}
             return render(request, 'options.html', context)
 
         color_profiles = {
@@ -545,7 +548,7 @@ def options(request, id, filename):
         add_rhythm_colour_defaults(score_info)
 
         form = TalkingScoreGenerationOptionsForm()
-        context = {'form': form, 'score_info': score_info}
+        context = {'form': form, 'score_info': score_info, 'style_choices': STYLE_CHOICES}
         return render(request, 'options.html', context)
 
 

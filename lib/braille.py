@@ -8,6 +8,7 @@ octaves are spelled out as words and numbers.
 """
 
 import re
+import unicodedata
 
 CELLS_PER_LINE = 40
 LINES_PER_PAGE = 25
@@ -16,6 +17,7 @@ LINE_END = "\r\n"
 
 CAPITAL = ","
 NUMBER = "#"
+UNKNOWN = "="   # a full cell stands in for a character with no braille here
 
 DIGITS = {
     "1": "a", "2": "b", "3": "c", "4": "d", "5": "e",
@@ -36,8 +38,10 @@ WORD_SUBSTITUTIONS = {
 
 
 def normalise(text):
+    """Accented letters lose their accents; everything else keeps its meaning."""
     for source, target in WORD_SUBSTITUTIONS.items():
         text = text.replace(source, target)
+    text = "".join(ch for ch in unicodedata.normalize("NFKD", text) if not unicodedata.combining(ch))
     return re.sub(r"[ \t]+", " ", text)
 
 
@@ -63,7 +67,7 @@ def encode_word(word):
             cells.append(char.lower())
             continue
         in_number = False
-        cells.append(PUNCTUATION.get(char, ""))
+        cells.append(PUNCTUATION.get(char, UNKNOWN))
     return "".join(cells)
 
 

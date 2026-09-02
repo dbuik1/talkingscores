@@ -23,10 +23,10 @@ from lib.description import (
     DescriptionBuilder, Fact, InstrumentDescription, ScoreFacts, SegmentDescription,
     clean_colour_map, segments_to_text,
 )
-from lib.events import TSChord, TSChordSymbol, TSDynamic, TSNote, TSPitch, TSRest
+from lib.events import TSChord, TSChordSymbol, TSDynamic, TSNote, TSPitch, TSRest, TSUnpitched
 from lib.musicAnalyser import MusicAnalyser
 from lib.render_settings import RenderSettings
-from lib.vocabulary import BRITISH_DURATIONS, Vocabulary
+from lib.vocabulary import AMERICAN_DURATIONS, BRITISH_DURATIONS, DOT_WORDS, Vocabulary
 
 us = environment.UserSettings()
 us['warnings'] = 0
@@ -136,10 +136,15 @@ class Music21TalkingScore(TalkingScoreBase):
         return None
 
     def get_initial_tempo(self):
-        boundaries = self.score.metronomeMarkBoundaries()
-        if not boundaries:
+        """The tempo mark at the start of the piece, or nothing when the file gives none."""
+        marks = self.score.flatten().getElementsByClass('MetronomeMark')
+        if not marks:
             return ""
-        return self.describe_tempo(boundaries[0][2])
+        first_bar = self.score.parts[0].getElementsByClass('Measure')[0].number
+        mark = marks[0]
+        if mark.measureNumber is not None and mark.measureNumber > first_bar:
+            return ""
+        return self.describe_tempo(mark)
 
     @staticmethod
     def fix_tempo_number(tempo):
@@ -156,10 +161,11 @@ class Music21TalkingScore(TalkingScoreBase):
         return beats
 
     def describe_tempo_referent(self, tempo):
+        """The beat a metronome mark counts, always as a note name."""
         referent = tempo.referent
-        event = SimpleNamespace(duration_type=referent.type, dots=referent.dots,
-                                quarter_length=referent.quarterLength)
-        return self.vocabulary.duration(event, referent.quarterLength)
+        table = AMERICAN_DURATIONS if self.settings.duration_names == 'american' else BRITISH_DURATIONS
+        base = table.get(referent.type, referent.type)
+        return f"{DOT_WORDS.get(referent.dots, '')} {base}".strip()
 
     def get_beat_division_options(self):
         """Ways of grouping a bar's events, from the first time signature."""
@@ -214,7 +220,11 @@ class Music21TalkingScore(TalkingScoreBase):
         return float(ts.beatDuration.quarterLength)
 
     def get_number_of_bars(self):
-        return len(self.score.parts[0].getElementsByClass('Measure'))
+        """Counted by bar number, the same way the bars are described."""
+        measures = self.score.parts[0].getElementsByClass('Measure')
+        if not measures:
+            return 0
+        return measures[-1].number - measures[0].number + 1
 
     # Instruments and parts
 
@@ -346,8 +356,9 @@ class Music21TalkingScore(TalkingScoreBase):
                     and start_bar in self.timeSigs and self.timeSigs[start_bar] is not None):
                 first.insert(0, self.timeSigs[start_bar])
 
-        state = {}
         for bar_index in range(start_bar, end_bar + 1):
+            # Accidentals last until the bar line, so the memory of them starts afresh each bar.
+            state = {}
             if start_bar == 0:
                 found = measures.getElementsByClass('Measure')
                 measure = found[0] if found else None
@@ -402,10 +413,12 @@ class Music21TalkingScore(TalkingScoreBase):
                 event.beat = first.beat
                 intermediate_events.setdefault(first.measureNumber, {}).setdefault(
                     first.offset, {}).setdefault(1, []).append(event)
-            if last.measureNumber <= end_bar:
+            if last.measureNumber <= end_bar and last is not first:
+                # The hairpin closes on its last note, so the ending is read with that note.
+                # A wedge the file never closes has nothing to end.
                 event = TSDynamic(long_name=end_name)
-                event.start_offset = last.offset + last.duration.quarterLength
-                event.beat = last.beat + last.duration.quarterLength
+                event.start_offset = last.offset
+                event.beat = last.beat
                 intermediate_events.setdefault(last.measureNumber, {}).setdefault(
                     event.start_offset, {}).setdefault(1, []).append(event)
 
@@ -463,6 +476,8 @@ class Music21TalkingScore(TalkingScoreBase):
             return event
         if element_type == 'Rest':
             return TSRest()
+        if element_type == 'Unpitched':
+            return TSUnpitched()
         if element_type == 'ChordSymbol':
             if not self.settings.chord_symbols:
                 return None
@@ -487,6 +502,7 @@ class Music21TalkingScore(TalkingScoreBase):
         event.quarter_length = float(element.duration.quarterLength)
         event.duration_type = element.duration.type
         event.dots = element.duration.dots
+        event.grace = bool(element.duration.isGrace)
         if element.duration.tuplets:
             tuplet = element.duration.tuplets[0]
             if tuplet.type == "start":
@@ -541,10 +557,7 @@ class Music21TalkingScore(TalkingScoreBase):
     def get_octave_range(self):
         all_octaves = []
         for element in self.score.flatten().notes:
-            if 'Chord' in element.classes:
-                all_octaves.extend(p.octave for p in element.pitches if p.octave is not None)
-            elif 'Note' in element.classes and element.pitch.octave is not None:
-                all_octaves.append(element.pitch.octave)
+            all_octaves.extend(p.octave for p in getattr(element, 'pitches', ()) if p.octave is not None)
         if not all_octaves:
             return {'min': 0, 'max': 0}
         return {'min': min(all_octaves), 'max': max(all_octaves)}
@@ -553,8 +566,8 @@ class Music21TalkingScore(TalkingScoreBase):
         """(lowest, highest) music21 pitches in a part, or (None, None) when it has no notes."""
         lowest = highest = None
         for element in self.score.parts[part_index].flatten().notes:
-            pitches = element.pitches if 'Chord' in element.classes else [element.pitch]
-            for p in pitches:
+            # Unpitched percussion has no pitches and takes no part in the range.
+            for p in getattr(element, 'pitches', ()):
                 if p.ps is None:
                     continue
                 if lowest is None or p.ps < lowest.ps:
@@ -562,6 +575,12 @@ class Music21TalkingScore(TalkingScoreBase):
                 if highest is None or p.ps > highest.ps:
                     highest = p
         return lowest, highest
+
+
+# The only colour-map keys that become CSS class names.
+PITCH_COLOUR_KEYS = frozenset("abcdefg")
+OCTAVE_COLOUR_KEYS = frozenset(("high", "mid", "low"))
+RHYTHM_COLOUR_KEYS = frozenset(name.lower().replace(' ', '-') for name in BRITISH_DURATIONS.values())
 
 
 class HTMLTalkingScoreFormatter:
@@ -579,9 +598,9 @@ class HTMLTalkingScoreFormatter:
                 logger.warning(f"Options file not found: {options_path}. Using the default settings.")
         self.options = options
         self.settings = RenderSettings.from_options(options)
-        self.settings.pitch_colours = clean_colour_map(self.settings.pitch_colours)
-        self.settings.rhythm_colours = clean_colour_map(self.settings.rhythm_colours)
-        self.settings.octave_colours = clean_colour_map(self.settings.octave_colours)
+        self.settings.pitch_colours = clean_colour_map(self.settings.pitch_colours, PITCH_COLOUR_KEYS)
+        self.settings.rhythm_colours = clean_colour_map(self.settings.rhythm_colours, RHYTHM_COLOUR_KEYS)
+        self.settings.octave_colours = clean_colour_map(self.settings.octave_colours, OCTAVE_COLOUR_KEYS)
         self.score.use_settings(self.settings)
         self.built = False
         self.segments = []
@@ -784,9 +803,10 @@ class HTMLTalkingScoreFormatter:
             for part_index in range(first_part_index, first_part_index + part_count):
                 events = self.score.get_events_for_bar_range(start_bar, end_bar, part_index)
                 lengths = self.score.bar_lengths(start_bar, end_bar, part_index)
+                beat_lengths = {bar: self.score.beat_quarter_length(bar) for bar in range(start_bar, end_bar + 1)}
                 instrument.parts.append(self.builder.build_part(
                     part_index, self.score.part_name(ins, part_index), events, lengths,
-                    self.score.beat_quarter_length(start_bar), pickup_bar=pickup_bar))
+                    beat_lengths, pickup_bar=pickup_bar))
             segment.instruments.append(instrument)
         return segment
 

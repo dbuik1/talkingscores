@@ -15,7 +15,9 @@ from html import escape
 from lib.vocabulary import Vocabulary
 
 # Event kinds that are read out when a note or chord sounds at the same moment.
-KINDS_WITH_NOTES = ("note", "chord", "dynamic", "chord_symbol")
+KINDS_WITH_NOTES = ("note", "chord", "unpitched", "dynamic", "chord_symbol")
+SOUNDING_KINDS = ("note", "chord", "unpitched")
+LEADING_KINDS = ("dynamic", "chord_symbol")
 
 TOGETHER = " together with "
 IN_BEAT_SEPARATOR = ", "
@@ -78,6 +80,8 @@ class BarDescription:
         lines.extend(self.signatures)
         if self.repeat_note:
             lines.append(self.repeat_note)
+        if self.collapsed:
+            return lines
         if self.whole_bar_rest:
             lines.append(self.rest_text)
         elif one_beat_per_line:
@@ -133,6 +137,8 @@ def contrast_colour(hex_colour):
     """Black or white, whichever reads better on the given colour."""
     try:
         value = hex_colour.lstrip("#")
+        if len(value) == 3:
+            value = "".join(ch * 2 for ch in value)
         red, green, blue = (int(value[i:i + 2], 16) for i in (0, 2, 4))
     except (ValueError, AttributeError, TypeError):
         return "white"
@@ -219,12 +225,16 @@ def _safe_colour(value):
     return None
 
 
-def clean_colour_map(colours):
+def clean_colour_map(colours, allowed_keys=None):
+    """Keys become CSS class names, so only known keys made of safe characters survive."""
     cleaned = {}
     for key, value in (colours or {}).items():
+        slug = slugify_colour_key(key)
+        if not slug or (allowed_keys is not None and slug not in allowed_keys):
+            continue
         colour = _safe_colour(value)
         if colour:
-            cleaned[key] = colour
+            cleaned[slug] = colour
     return cleaned
 
 
@@ -252,14 +262,20 @@ class DescriptionBuilder:
         """
         events_by_bar: {bar_number: [time_point, ...]} as produced by the score.
         bar_lengths: {bar_number: (written bar length, actual length)} in quarter notes.
+        beat_quarter_length: one length for every bar, or {bar_number: length} when
+        the time signature changes inside the range.
         """
         part = PartDescription(part_index=part_index, name=name,
                                octave_reference=self.vocabulary.octave_reference_line())
         for bar_number in sorted(events_by_bar):
             written_length, actual_length = bar_lengths.get(bar_number, (None, None))
+            if isinstance(beat_quarter_length, dict):
+                beat_ql = beat_quarter_length.get(bar_number, 1.0)
+            else:
+                beat_ql = beat_quarter_length
             part.bars.append(self.build_bar(
                 bar_number, events_by_bar[bar_number], part_index,
-                beat_quarter_length, written_length, actual_length,
+                beat_ql, written_length, actual_length,
                 is_pickup=(bar_number == pickup_bar),
             ))
         return part
@@ -271,7 +287,7 @@ class DescriptionBuilder:
         self._add_repeat_notes(bar, part_index, bar_number)
 
         has_sounding_event = any(
-            event.kind in ("note", "chord")
+            event.kind in SOUNDING_KINDS
             for time_point in time_points
             for events in time_point["voices"].values()
             for event in events
@@ -306,7 +322,7 @@ class DescriptionBuilder:
                 beat_description = BeatDescription(number=beat_number, label=label)
                 bar.beats.append(beat_description)
             elif beat_description.fragments:
-                beat_description.fragments.append(Fragment(IN_BEAT_SEPARATOR))
+                beat_description.fragments.append(Fragment(IN_BEAT_SEPARATOR, "sep"))
             beat_description.fragments.extend(fragments)
         return bar
 
@@ -342,20 +358,34 @@ class DescriptionBuilder:
         """Events at one moment, voices in order, rests dropped when a note sounds."""
         voices = time_point["voices"]
         ordered = [event for voice in sorted(voices) for event in voices[voice]]
-        if any(event.kind in ("note", "chord") for event in ordered):
+        if any(event.kind in SOUNDING_KINDS for event in ordered):
             return [event for event in ordered if event.kind in KINDS_WITH_NOTES]
         return ordered
 
     def _render_time_point(self, events, state, beat_ql, time_point):
+        """
+        One moment in the bar: dynamics and chord symbols lead, grace notes come
+        next, and only the notes that sound together are joined with "together with".
+        """
+        leading = [event for event in events if event.kind in LEADING_KINDS]
+        graces = [event for event in events if event.kind not in LEADING_KINDS and event.grace]
+        sounding = [event for event in events if event.kind not in LEADING_KINDS and not event.grace]
+        only_event = len(sounding) == 1
         rendered = []
-        only_event = len(events) == 1
-        for event in events:
-            fragments = self.render_event(event, state, beat_ql, only_event_on_beat=only_event)
-            if not fragments:
+        for group, joiner in ((leading, IN_BEAT_SEPARATOR), (graces, IN_BEAT_SEPARATOR), (sounding, TOGETHER)):
+            group_fragments = []
+            for event in group:
+                fragments = self.render_event(event, state, beat_ql, only_event_on_beat=only_event)
+                if not fragments:
+                    continue
+                if group_fragments:
+                    group_fragments.append(Fragment(joiner, "sep" if joiner == IN_BEAT_SEPARATOR else ""))
+                group_fragments.extend(fragments)
+            if not group_fragments:
                 continue
             if rendered:
-                rendered.append(Fragment(TOGETHER))
-            rendered.extend(fragments)
+                rendered.append(Fragment(IN_BEAT_SEPARATOR, "sep"))
+            rendered.extend(group_fragments)
         return rendered
 
     # Events
@@ -365,7 +395,7 @@ class DescriptionBuilder:
         if kind == "dynamic":
             if not self.settings.dynamics:
                 return []
-            return [Fragment(self.vocabulary.dynamic(event))]
+            return [Fragment(self.vocabulary.dynamic(event), "change")]
         if kind == "chord_symbol":
             if not self.settings.chord_symbols:
                 return []
@@ -417,10 +447,12 @@ class DescriptionBuilder:
         else:
             words.extend(rhythm)
             words.extend(pitch)
+        words.extend(self._tuplet_fragments(event, opening=False))
         words.extend(self._tie_fragments(event))
         words.extend(self._beam_fragments(event))
         state.previous_pitch = event.pitch
-        state.previous_rhythm = event.rhythm_key
+        if not event.grace:
+            state.previous_rhythm = event.rhythm_key
         return self._join(words)
 
     def _render_chord(self, event, state, beat_ql):
@@ -446,26 +478,31 @@ class DescriptionBuilder:
         else:
             words.extend(rhythm)
             words.extend(pitch_words)
+        words.extend(self._tuplet_fragments(event, opening=False))
         words.extend(self._tie_fragments(event))
         words.extend(self._beam_fragments(event))
         if pitches:
             state.previous_pitch = pitches[-1]
-        state.previous_rhythm = event.rhythm_key
+        if not event.grace:
+            state.previous_rhythm = event.rhythm_key
         return self._join(words)
 
     def _rhythm_fragments(self, event, state, step, beat_ql):
+        """The note value; the tuplet's closing words follow the pitch, not the value."""
+        fragments = self._tuplet_fragments(event, opening=True)
+        if event.grace:
+            fragments.append(Fragment(self.vocabulary.grace()))
+            return fragments
         if self.settings.duration_names == "none":
-            return self._tuplet_fragments(event, opening=True) + self._tuplet_fragments(event, opening=False)
+            return fragments
         announce = (
             self.settings.duration_frequency == "every_note"
             or state.previous_rhythm != event.rhythm_key
             or event.tuplet_start is not None
         )
-        fragments = self._tuplet_fragments(event, opening=True)
         if announce:
             css = self.palette.rhythm_class(self.vocabulary.duration_slug(event), step) if step else ""
             fragments.append(Fragment(self.vocabulary.duration(event, beat_ql), css))
-        fragments.extend(self._tuplet_fragments(event, opening=False))
         return fragments
 
     def _tuplet_fragments(self, event, opening):
@@ -510,12 +547,12 @@ class DescriptionBuilder:
         if frequency == "first_note":
             return False
         if frequency == "braille_rules":
-            # Braille music: within a fourth no octave mark; a fifth to a seventh
-            # only when the octave changes; an octave or more always.
-            difference = abs(previous_pitch.pitch_number - pitch.pitch_number)
-            if difference <= 4:
+            # Braille music counts letter steps: within a fourth no octave mark; a
+            # fifth to a seventh only when the octave changes; an octave or more always.
+            steps = abs(previous_pitch.diatonic_number - pitch.diatonic_number)
+            if steps <= 3:
                 return False
-            if difference <= 7:
+            if steps <= 6:
                 return previous_pitch.octave != pitch.octave
             return True
         return previous_pitch.octave != pitch.octave
@@ -562,7 +599,8 @@ def segments_to_text(segments, facts=None, title="", one_beat_per_line=False):
             lines.append(change)
         lines.append("")
     for segment in segments:
-        lines.append(segment.label)
+        if segment.start_bar != segment.end_bar:
+            lines.append(segment.label)
         for instrument in segment.instruments:
             if len(segment.instruments) > 1:
                 lines.append(instrument.name)

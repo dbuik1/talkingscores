@@ -16,6 +16,7 @@ from jinja2 import Environment, FileSystemLoader
 from unittest.mock import patch, Mock
 from io import StringIO
 import tempfile
+import shutil
 import glob
 import os
 import time
@@ -1242,6 +1243,187 @@ class ReadingStyleTests(TestCase):
         long_rest.quarter_length = 2.0
         long_rest.start_offset = 2.0
         self.assertTrue(builder._rest_is_read(long_rest, 1.0, only_event_on_beat=False))
+
+
+class ReviewedEngineTests(TestCase):
+    """Musical rules the description engine must keep: accidentals, graces, beats, percussion, colours, braille."""
+
+    def _score_path(self, score_stream):
+        temp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        path = os.path.join(temp_dir, "score.musicxml")
+        score_stream.write("musicxml", fp=path)
+        return path
+
+    @staticmethod
+    def _score_of_bars(bars, time_signatures=None):
+        """A one-part score; bars is a list of lists of music21 notes."""
+        from music21 import stream, meter
+        part = stream.Part()
+        for index, items in enumerate(bars, start=1):
+            measure = stream.Measure(number=index)
+            signature = (time_signatures or {}).get(index, "4/4" if index == 1 else None)
+            if signature:
+                measure.append(meter.TimeSignature(signature))
+            for item in items:
+                measure.append(item)
+            part.append(measure)
+        score = stream.Score()
+        score.append(part)
+        return score
+
+    def _text(self, score_stream, options):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        formatter = HTMLTalkingScoreFormatter(Music21TalkingScore(self._score_path(score_stream)), options=options)
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            return formatter.render_text()
+
+    def test_a_named_style_keeps_its_wording_over_stored_form_choices(self):
+        from lib.render_settings import RenderSettings
+        stored = {
+            "style": "plain", "rhythm_description": "british", "include_rests": True,
+            "repetition_mode": "none", "octave_description": "name",
+            "figureNoteColours": {"C": "#ff0000"}, "bars_at_a_time": 4,
+        }
+        plain = RenderSettings.from_options(stored)
+        self.assertEqual(plain.duration_names, "plain")
+        self.assertEqual(plain.rests, "structural")
+        self.assertEqual(plain.repetition_mode, "learning")
+        self.assertEqual(plain.octave_naming, "plain")
+        self.assertEqual(plain.pitch_colours, {"C": "#ff0000"})
+        self.assertEqual(plain.bars_at_a_time, 4)
+        standard = RenderSettings.from_options({**stored, "style": "standard", "rhythm_description": "american"})
+        self.assertEqual(standard.duration_names, "american")
+        self.assertEqual(standard.repetition_mode, "none")
+
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_options_page_offers_every_reading_style(self, mock_logger_info, mock_data_path, mock_info):
+        mock_data_path.return_value = "/tmp/score.musicxml"
+        mock_info.return_value = {"title": "Score", "composer": "Composer", "instruments": ["Piano"],
+                                  "rhythm_range": [], "beat_division_options": []}
+        response = self.client.get(reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
+        self.assertContains(response, 'name="style"')
+        for name in ("Everyday words", "Musical terms", "Short", "Braille display", "Everything"):
+            self.assertContains(response, f">{name}<")
+
+    def test_unpitched_parts_are_described_instead_of_failing(self):
+        from music21 import note
+        drums = self._score_of_bars([[note.Unpitched(quarterLength=1.0) for _ in range(4)]])
+        text = self._text(drums, {"style": "standard"})
+        self.assertIn("Beat 1 crotchet unpitched", text)
+        self.assertNotIn("Rests for the whole bar", text)
+
+    def test_colour_map_keys_never_reach_the_stylesheet_unchecked(self):
+        from lib.description import clean_colour_map
+        from talkingscoreslib import PITCH_COLOUR_KEYS, Music21TalkingScore, HTMLTalkingScoreFormatter
+        cleaned = clean_colour_map({"C</style><script>alert(1)</script>": "#ff0000", "D": "#00ff00", "x": "#0000ff"}, PITCH_COLOUR_KEYS)
+        self.assertEqual(cleaned, {"d": "#00ff00"})
+        formatter = HTMLTalkingScoreFormatter(
+            Music21TalkingScore(os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml")),
+            options={"style": "standard", "colour_position": "text", "colour_pitch": True,
+                     "octave_colour_mode": "custom",
+                     "pitch_colours": {"C</style><script>alert(1)</script>": "#ff0000"},
+                     "octave_colours": {"high{}body{display:none}": "#ff0000"}})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            html = formatter.generateHTML(web_path="/midis/x/y")
+        self.assertNotIn("<script>alert(1)", html)
+        self.assertNotIn("body{display:none}", html)
+
+    def test_accidentals_are_forgotten_at_the_bar_line(self):
+        from music21 import note
+        score = self._score_of_bars([
+            [note.Note("F#4"), note.Note("F#4"), note.Note("G4"), note.Note("A4")],
+            [note.Note("F#4"), note.Note("F4"), note.Note("G4"), note.Note("A4")],
+        ])
+        text = self._text(score, {"style": "standard", "key_signature_accidentals": "on_change", "bars_at_a_time": 2})
+        bar_two = text.split("Bar 2")[1]
+        self.assertIn("F sharp", bar_two)
+
+    def test_grace_notes_are_read_before_the_note_they_decorate(self):
+        from music21 import note
+        grace = note.Note("D5").getGrace()
+        score = self._score_of_bars([[grace, note.Note("C5"), note.Note("B4"), note.Note("A4"), note.Note("G4")]])
+        text = self._text(score, {"style": "standard"})
+        self.assertIn("grace note", text)
+        self.assertNotIn("together with", text)
+        self.assertLess(text.index("grace note"), text.index("crotchet"))
+
+    def test_beats_follow_a_time_signature_change_inside_a_segment(self):
+        from music21 import note
+        score = self._score_of_bars(
+            [[note.Note("C4") for _ in range(4)], [note.Note("D4", quarterLength=0.5) for _ in range(6)]],
+            time_signatures={1: "4/4", 2: "6/8"})
+        text = self._text(score, {"style": "standard", "bars_at_a_time": 2})
+        bar_two = text.split("Bar 2")[1]
+        self.assertIn("Beat 2", bar_two)
+        self.assertNotIn("Beat 3", bar_two)
+
+    def test_folded_repeats_are_folded_in_the_text_download_too(self):
+        from lib.description import BarDescription, BeatDescription, Fragment
+        bar = BarDescription(number=2, label="Bar 2", repeat_note="Same as bar 1", collapsed=True,
+                             beats=[BeatDescription(1, "Beat 1", [Fragment("crotchet C")])])
+        self.assertEqual(bar.text_lines(), ["Bar 2", "Same as bar 1"])
+        bar.collapsed = False
+        self.assertEqual(bar.text_lines(), ["Bar 2", "Same as bar 1", "Beat 1 crotchet C"])
+
+    def test_tempo_is_stated_only_when_the_file_gives_one(self):
+        from music21 import note, tempo
+        from talkingscoreslib import Music21TalkingScore
+        from lib.render_settings import RenderSettings
+        silent = self._score_of_bars([[note.Note("C4") for _ in range(4)]])
+        self.assertEqual(Music21TalkingScore(self._score_path(silent)).get_initial_tempo(), "")
+        marked = self._score_of_bars([[tempo.MetronomeMark(number=96)] + [note.Note("C4") for _ in range(4)]])
+        score = Music21TalkingScore(self._score_path(marked), settings=RenderSettings.for_style("plain"))
+        self.assertEqual(score.get_initial_tempo(), "96 crotchet beats a minute")
+
+    def test_braille_octave_marks_count_letter_steps(self):
+        from lib.description import DescriptionBuilder
+        from lib.events import TSPitch
+        from lib.render_settings import RenderSettings
+        builder = DescriptionBuilder(RenderSettings.for_style("braille40"))
+        c4 = TSPitch("C", 4, 0, 60)
+        self.assertFalse(builder._octave_is_read(TSPitch("A", 4, 0, 69), c4))   # a sixth, same octave
+        self.assertFalse(builder._octave_is_read(TSPitch("C", 5, 0, 72), TSPitch("G", 4, 0, 67)))  # a fourth
+        self.assertTrue(builder._octave_is_read(TSPitch("D", 5, 0, 74), c4))    # a ninth
+
+    def test_braille_keeps_the_letters_of_accented_names(self):
+        from lib.braille import text_to_brf
+        self.assertTrue(text_to_brf("Fauré").startswith(",faure"))
+        self.assertIn("=", text_to_brf("Ø"))
+
+    def test_contrast_colour_reads_short_hex(self):
+        from lib.description import contrast_colour
+        self.assertEqual(contrast_colour("#ff0"), "black")
+        self.assertEqual(contrast_colour("#000"), "white")
+
+    def test_the_tuplet_close_follows_the_last_note(self):
+        from lib.description import DescriptionBuilder, PartState
+        from lib.events import TSNote, TSPitch
+        from lib.render_settings import RenderSettings
+        builder = DescriptionBuilder(RenderSettings.for_style("standard"))
+        last = TSNote()
+        last.pitch = TSPitch("C", 4, 0, 60)
+        last.duration_type, last.quarter_length, last.tuplet_stop = "eighth", 1 / 3, True
+        text = "".join(fragment.text for fragment in builder.render_event(last, PartState()))
+        self.assertEqual(text, "quaver mid C end tuplet")
+
+    def test_a_single_bar_segment_names_the_bar_once(self):
+        from lib.description import segments_to_text, SegmentDescription, InstrumentDescription, PartDescription, BarDescription
+        bar = BarDescription(number=1, label="Bar 1", whole_bar_rest=True, rest_text="Rests for the whole bar")
+        part = PartDescription(part_index=0, name="Flute", octave_reference="", bars=[bar])
+        segment = SegmentDescription(start_bar=1, end_bar=1, label="Bar 1", anchor="segment-1", is_pickup=False,
+                                     instruments=[InstrumentDescription(number=1, name="Flute", parts=[part])])
+        self.assertEqual(segments_to_text([segment]), "Bar 1\nRests for the whole bar\n")
+
+    def test_a_missing_export_is_reported_not_opened(self):
+        score = TSScore(id=VALID_ID, filename="score.musicxml")
+        with patch.object(score, "get_text_cache_file_path", return_value=None), \
+                patch.object(score, "get_data_file_path", return_value=None), \
+                patch.object(score, "html"):
+            with self.assertRaises(FileNotFoundError):
+                score.export_text()
 
 
 class ExportDownloadTests(TestCase):

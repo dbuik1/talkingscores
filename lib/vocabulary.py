@@ -136,6 +136,9 @@ class Vocabulary:
             return f'{base} {dots}'
         return f'{dots} {base}'
 
+    def grace(self):
+        return 'gr' if self.settings.abbreviations else 'grace note'
+
     def duration_slug(self, event):
         """Key used for rhythm colour classes, matching the options form."""
         name = BRITISH_DURATIONS.get(event.duration_type, event.duration_type or '')

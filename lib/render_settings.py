@@ -1,10 +1,12 @@
 """
 Settings that control how a talking score is worded.
 
-A reading style is a named preset. Any option stored with the score overrides
-the preset's value for that field, so a style is a starting point rather than a
-lock. Legacy option keys written by older versions of the options form are
-still honoured; each one maps onto a field here.
+A reading style is a named preset. The "Musical terms" style is the one the
+options form edits field by field, so stored wording options apply to it. Every
+other style fixes its own wording and ignores stored wording options; layout,
+playback and colour options apply to every style. Legacy option keys written by
+older versions of the options form are still honoured; each one maps onto a
+field here.
 """
 
 from dataclasses import dataclass, field, fields, replace
@@ -113,16 +115,23 @@ class RenderSettings:
         options = options or {}
         style = options.get("style", DEFAULT_STYLE)
         settings = cls.for_style(style)
+        wording_is_editable = settings.style == DEFAULT_STYLE
         overrides = {}
 
         for legacy_key, translate in LEGACY_OPTION_MAP.items():
-            if legacy_key in options:
-                overrides.update(translate(options[legacy_key]))
+            if legacy_key not in options:
+                continue
+            translated = translate(options[legacy_key])
+            if wording_is_editable or not set(translated) & WORDING_FIELDS:
+                overrides.update(translated)
 
         field_names = {f.name for f in fields(cls)}
         for key, value in options.items():
-            if key in field_names and key != "style":
-                overrides[key] = value
+            if key not in field_names or key == "style":
+                continue
+            if key in WORDING_FIELDS and not wording_is_editable:
+                continue
+            overrides[key] = value
 
         if "bars_at_a_time" in overrides:
             try:
@@ -143,6 +152,15 @@ class RenderSettings:
 
         return replace(settings, **overrides)
 
+
+# Fields a named style decides for itself. Only the "Musical terms" style takes
+# these from the stored options.
+WORDING_FIELDS = frozenset({
+    "beat_prefix", "duration_names", "duration_frequency", "dot_position",
+    "pitch_names", "word_order", "octave_naming", "octave_position", "octave_frequency",
+    "rests", "ties", "intervals", "chords", "chords_low_to_high", "chord_symbols",
+    "arpeggios", "dynamics", "beams", "abbreviations", "repetition_mode",
+})
 
 # Presets hold only the fields that differ from the dataclass defaults.
 STYLE_PRESETS = {

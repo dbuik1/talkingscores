@@ -24,6 +24,7 @@ class TSEvent:
         self.part = None
         self.start_offset = 0.0
         self.beat = 0.0
+        self.grace = False             # an ornament with no length of its own
 
     @property
     def rhythm_key(self):

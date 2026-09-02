@@ -635,6 +635,8 @@ class TSScore(object):
         data_path = self.get_data_file_path()
         if not cache_path or not self._is_html_cache_fresh(cache_path, data_path):
             self.html(force_refresh=True, raise_errors=True)
+        if not cache_path or not os.path.exists(cache_path):
+            raise FileNotFoundError(f"The {'braille' if braille else 'text'} export for score {self.id} was not written.")
         with open(cache_path, "r", encoding="utf-8", newline="") as cache_file:
             return cache_file.read()
 

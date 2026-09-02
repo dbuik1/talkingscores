@@ -217,7 +217,19 @@
                         </div>
                         <div class="section-content" id="style-section-content">
                             <p class="section-description">Customise how musical information is presented and organised.</p>
-                            
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="style" class="form-label">Reading style</label>
+                                    <select name="style" id="style" class="form-control" aria-describedby="style-help-text">
+                                        {% for style_id, style_name in style_choices %}
+                                            <option value="{{ style_id }}" {% if style_id == "standard" %}selected{% endif %}>{{ style_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <p id="style-help-text" class="help-text">Musical terms follows the wording choices below. The other styles set their own wording.</p>
+                                </div>
+                            </div>
+
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="bars_at_a_time" class="form-label">Bars per Section</label>

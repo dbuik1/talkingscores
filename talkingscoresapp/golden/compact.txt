@@ -2,13 +2,12 @@ Title: Untitled work
 Composer: Unknown composer
 Key: C major (no sharps or flats)
 Time signature: 3 4
-Tempo: animato (120 crotchet beats a minute)
-Bars: 25
+Bars: 24
 Instruments: (Inst0)
 
 Bars 1 to 4
 Bar 1
-mezzoforte together with minim G 5, quaver E, C
+mezzoforte, minim G 5, quaver E, C
 Bar 2
 crotchet F 5, D, B 4
 Bar 3
@@ -32,7 +31,7 @@ Bars 9 to 12
 Bar 9
 Rests for the whole bar
 Bar 10
-piano together with minim G 5, crotchet B 4
+piano, minim G 5, crotchet B 4
 Bar 11
 crotchet C 5, D, E
 Bar 12
@@ -48,11 +47,11 @@ Bar 15
 Same rhythm as bar 14
 crotchet F 5, F, E
 Bar 16
-crotchet E 5, quaver D, D together with crescendo starts, E together with crescendo ends, F
+crotchet E 5, quaver D, crescendo starts, D, E, F
 
 Bars 17 to 20
 Bar 17
-forte together with minim G 5, quaver E, C
+forte, minim G 5, quaver E, C
 Bar 18
 crotchet F 5, D, B 4
 Bar 19
