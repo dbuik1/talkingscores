@@ -741,7 +741,8 @@ class HTMLTalkingScoreFormatter:
             'firstBar': first_bar,
             'firstNumberedBar': first_numbered,
             'lastBar': last_bar,
-            'totalBars': self._get_preamble()['number_of_bars'],
+            # The total counts numbered bars only, so it agrees with the last bar number.
+            'totalBars': max(0, last_bar - first_numbered + 1) if self.segments else 0,
             'pickupBar': pickup,
             'barsPerGroup': bars_per_group,
             'groupSizes': sorted({1, 2, 4, 8, bars_per_group}),

@@ -388,7 +388,14 @@ html[data-size="xlarge"] .bar h3 { font-size: 80px; }
 
 .live { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 
-/* Colour from the set-up page: the palette rules land in a separate style block. */
+/* Colour from the set-up page lands in a separate style block. High contrast is one colour on one
+   ground, so it overrides those rules and the print block does the same. */
+html[data-theme="contrast"] .colour-text [class*="colour-"],
+html[data-theme="contrast"] .colour-background [class*="colour-"] {
+    color: inherit !important;
+    background-color: transparent !important;
+    padding: 0 !important;
+}
 
 /* Phone */
 @media (max-width: 640px) {

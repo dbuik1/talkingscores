@@ -1429,6 +1429,7 @@ class ReaderPageTests(TestCase):
         data = formatter._score_data("/midis/x/y.musicxml", export_mode=False)
         self.assertEqual(data["pickupBar"], data["firstBar"])
         self.assertEqual(data["firstNumberedBar"], data["firstBar"] + 1)
+        self.assertEqual(data["totalBars"], data["lastBar"] - data["firstNumberedBar"] + 1)
 
         # A score that is nothing but a pickup bar cannot ask for a bar after it.
         formatter.segments = formatter.segments[:1]
