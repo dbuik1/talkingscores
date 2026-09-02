@@ -72,16 +72,6 @@ def clean_export_theme(theme):
     return theme if theme in ("light", "dark") else None
 
 
-def clean_html_export(html):
-    """Drop any script that needs the server or the network, so the download works offline."""
-    return re.sub(
-        r"\s*<script[^>]+src=['\"][^'\"]*(?:midijs\.net|/player\.js)[^'\"]*['\"][^>]*>\s*</script>",
-        "",
-        html,
-        flags=re.IGNORECASE,
-    )
-
-
 def add_rhythm_colour_defaults(score_info):
     if not score_info.get('rhythm_range'):
         return score_info
@@ -355,10 +345,7 @@ def download_html(request, id, filename):
     try:
         export_theme = clean_export_theme(request.GET.get("theme"))
         html = score_obj.html(export_theme=export_theme, export_mode=True, raise_errors=True)
-        response = HttpResponse(
-            clean_html_export(html),
-            content_type="text/html; charset=utf-8",
-        )
+        response = HttpResponse(html, content_type="text/html; charset=utf-8")
         response['Content-Disposition'] = (
             f'attachment; filename="{safe_export_basename(filename)}-talking-score.html"'
         )

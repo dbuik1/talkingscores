@@ -8,7 +8,7 @@
     --rule: #d9d3c7;
     --accent: #1e6a73;
     --accent-ink: #ffffff;
-    --focus: #c77c00;
+    --focus: #9a5f00;
     --panel: #efeae0;
     --panel2: #e6e0d3;
     --link: #155e66;
@@ -93,7 +93,7 @@ h3 { font-size: 24px; line-height: 1.25; }
 p { margin: 0; }
 ul, ol { margin: 0; padding: 0; list-style: none; }
 
-:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 3px var(--paper); }
 
 .wrap {
     max-width: 880px;
@@ -183,7 +183,6 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
     text-decoration: none;
 }
 .btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-.btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 
 .input, select.input {
@@ -237,7 +236,7 @@ details[open] > summary .chev { transform: rotate(90deg); }
 
 .disc-row { display: flex; flex-wrap: wrap; gap: 8px 24px; }
 .disc-row > details { border: 0; }
-.disc-row > details > summary { min-height: 40px; font-size: 17px; font-weight: 400; }
+.disc-row > details > summary { min-height: 48px; font-size: 17px; font-weight: 400; }
 .disc-row > details[open] { flex-basis: 100%; }
 
 .panel {
@@ -262,14 +261,14 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr);
     gap: 6px 16px;
-    border: 2px solid var(--rule);
+    border: 2px solid var(--muted);
     border-radius: 8px;
     padding: 14px 18px;
     align-items: start;
     cursor: pointer;
     background: var(--paper);
 }
-.size:has(input:checked) { border-color: var(--accent); background: var(--panel2); }
+.size:has(input:checked), .size.checked { border-color: var(--accent); background: var(--panel2); }
 .size input { width: 28px; height: 28px; margin: 4px 0 0; accent-color: var(--accent); }
 .size .name { font-weight: 700; font-size: 20px; }
 .size .demo { grid-column: 2; line-height: 1.35; }
@@ -285,7 +284,7 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .facts dt { font-weight: 700; }
 .facts dd { margin: 0; }
 .about { display: flex; flex-direction: column; gap: 16px; }
-.about h3 { font-family: var(--font-body); font-size: 18px; font-weight: 700; margin-top: 8px; }
+.about h2 { font-family: var(--font-body); font-size: 18px; font-weight: 700; margin-top: 8px; }
 .links { display: flex; flex-wrap: wrap; gap: 12px; }
 
 /* The score */
@@ -311,6 +310,7 @@ html:not(.js) .group-toggle { cursor: default; }
 .group-toggle .chev { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex: none; transition: transform 0.15s; }
 html:not(.js) .group-toggle .chev { display: none; }
 .group-toggle[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.group h2:focus-visible { outline: none; }
 .group:not(.current) h2 { font-size: 24px; font-weight: 400; }
 .group h2 .prev { color: var(--muted); font-family: var(--font-body); font-size: 17px; margin-left: auto; font-weight: 400; }
 .group.current h2 .prev, html:not(.js) .prev { display: none; }
@@ -340,6 +340,7 @@ html.js .group:not(.current) > .body { display: none; }
 .part .change { font-style: italic; margin: 4px 0; }
 .part .same {
     background: var(--panel);
+    border: 1px solid var(--rule);
     padding: 8px 14px;
     border-radius: 4px;
     font-weight: 700;
@@ -348,7 +349,7 @@ html.js .group:not(.current) > .body { display: none; }
     margin-bottom: 8px;
 }
 .part details { border: 0; }
-.part details > summary { font-size: 18px; min-height: 40px; }
+.part details > summary { font-size: 18px; min-height: 48px; }
 
 .beats li {
     display: grid;
@@ -371,7 +372,7 @@ html.stack .beats li b { padding-top: 0; }
 html.stack .beats .sep::after { content: "\A"; white-space: pre; }
 html.stack .bar { grid-template-columns: minmax(0, 1fr); gap: 12px; }
 html.stack .bar h3 { display: flex; align-items: baseline; gap: 14px; font-size: 80px; }
-html.stack .bar h3 small { margin: 0; order: 2; font-size: 18px; }
+html.stack .bar h3 small { margin: 0; font-size: 18px; }
 html.stack .bar h3.words { font-size: 32px; }
 html[data-size="xlarge"] .bar h3 { font-size: 80px; }
 
@@ -398,7 +399,7 @@ html[data-size="xlarge"] .bar h3 { font-size: 80px; }
     .top nav { display: none; }
     .bar { grid-template-columns: minmax(0, 1fr); gap: 8px; }
     .bar h3 { display: flex; align-items: baseline; gap: 12px; font-size: 40px; }
-    .bar h3 small { margin: 0; order: 2; }
+    .bar h3 small { margin: 0; }
     .beats li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
     .beats li b { padding-top: 0; }
     .toolbar .btn { flex: 1 1 auto; }
@@ -411,19 +412,24 @@ html[data-size="xlarge"] .bar h3 { font-size: 80px; }
 
 @media (forced-colors: active) {
     .btn, .input, .size, .panel, .callout, .part .same { border-color: CanvasText; }
-    .btn[aria-pressed="true"] { background: Highlight; color: HighlightText; }
 }
 
 /* Print: every group on paper, no controls */
 @media print {
-    :root, html[data-theme] {
-        --paper: #ffffff;
-        --ink: #000000;
-        --muted: #333333;
-        --rule: #999999;
-        --panel: #eeeeee;
+    /* Overrides the dark and contrast palettes whichever way they were chosen: the toggle, the export attribute or the system setting. */
+    html, html[data-theme] {
+        --paper: #ffffff !important;
+        --ink: #000000 !important;
+        --muted: #333333 !important;
+        --rule: #999999 !important;
+        --panel: #eeeeee !important;
+        --panel2: #eeeeee !important;
+        --accent: #000000 !important;
+        --link: #000000 !important;
         --note: 20pt;
+        color-scheme: light !important;
     }
+    html, body { background: #ffffff; color: #000000; }
     body { font-size: 14pt; line-height: 1.45; }
     .wrap { max-width: none; padding: 0; gap: 20px; }
     .skip, .top nav, .toolbar, .disc-row, .endline, .noscript, .live, .footer a { display: none !important; }
@@ -439,5 +445,6 @@ html[data-size="xlarge"] .bar h3 { font-size: 80px; }
     .beats li { border-bottom: 1px solid #ddd; padding: 4px 0; }
     .part details > summary { display: none; }
     .part details > * { display: block; }
+    .part details::details-content { content-visibility: visible !important; display: block; }
     a { color: #000; text-decoration: none; }
 }

@@ -24,8 +24,8 @@
     {% else %}
     <script src="{{ static_js_url }}"></script>
     {% if score_data.midi %}
-    <script src="{{ static_player_url }}"></script>
-    <script src="//www.midijs.net/lib/midi.js"></script>
+    <script src="{{ static_player_url }}" defer></script>
+    <script src="//www.midijs.net/lib/midi.js" defer></script>
     {% endif %}
     {% endif %}
 </head>
@@ -41,25 +41,27 @@
         {% endif %}
     </header>
 
+    <main id="main">
     <div>
         <h1>{{ basic_information.title }}</h1>
         <p class="meta"><b>{{ basic_information.composer }}</b>{% for item in meta_line %} · {{ item }}{% endfor %}</p>
     </div>
 
-    <noscript><p class="callout noscript">Every bar is on this page. Use your browser's find (Ctrl+F) or the headings list to move between bars. Playback and the group controls need JavaScript.</p></noscript>
+    {% if music_segments %}
+    <noscript><p class="callout noscript">Every bar is on this page. Use your browser's find command or the headings list to move between bars. Playback and the group controls need JavaScript.</p></noscript>
 
     <div class="toolbar" id="toolbar" role="group" aria-label="Move around the score" hidden>
-        <label class="goto"><span>Go to bar</span><input class="input" type="number" id="goto-bar" min="{{ score_data.firstNumberedBar }}" max="{{ score_data.lastBar }}" value="{{ score_data.firstNumberedBar }}" aria-describedby="goto-error"></label>
-        <button class="btn" type="button" id="goto-go">Go</button>
-        <p class="error" id="goto-error" role="alert"></p>
-        <button class="btn" type="button" id="previous-group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Previous</button>
-        <button class="btn" type="button" id="next-group">Next<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+        <label class="goto"><span>Bar number</span><input class="input" type="number" id="goto-bar" min="{{ score_data.firstNumberedBar }}" max="{{ score_data.lastBar }}" value="{{ score_data.firstNumberedBar }}" aria-describedby="goto-error"></label>
+        <button class="btn" type="button" id="goto-go">Go to bar</button>
+        <p class="error" id="goto-error"></p>
+        <button class="btn" type="button" id="previous-group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Previous group</button>
+        <button class="btn" type="button" id="next-group">Next group<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
         <label class="goto"><span>Bars per group</span><select class="input" id="bars-per-group">{% for n in score_data.groupSizes %}<option value="{{ n }}"{% if n == score_data.barsPerGroup %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
         <p class="pos" id="position"></p>
         {% if score_data.midi %}
         <span class="sep"></span>
-        <button class="btn" type="button" id="play-group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"></path></svg>Play</button>
-        <button class="btn" type="button" id="stop-playback"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12"></rect></svg>Stop</button>
+        <button class="btn" type="button" id="play-group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"></path></svg>Play this group</button>
+        <button class="btn" type="button" id="stop-playback"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12"></rect></svg>Stop playback</button>
         <label class="goto"><span>Speed</span><select class="input" id="speed"><option value="50">50 %</option><option value="100" selected>100 %</option><option value="150">150 %</option></select></label>
         <p class="status" role="status" aria-live="polite"><b>Playback</b><span id="playback-status-text">Stopped.</span></p>
         {% endif %}
@@ -67,8 +69,10 @@
         <button class="btn" type="button" id="read-again"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7"></path><path d="M4 4v5h5"></path></svg>Read this group again</button>
     </div>
     <p class="live" id="reader-live" aria-live="polite"></p>
+    {% endif %}
 
     <div class="disc-row">
+        {% if music_segments %}
         <details>
             <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Contents</summary>
             <ol class="contents" id="contents-list">
@@ -77,6 +81,7 @@
                 {% endfor %}
             </ol>
         </details>
+        {% endif %}
         <details>
             <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>About this piece</summary>
             <div class="about">
@@ -84,12 +89,12 @@
                     {% for fact in facts.piece %}<dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd>{% endfor %}
                 </dl>
                 {% if facts.changes %}
-                <h3>Changes along the way</h3>
+                <h2>Changes along the way</h2>
                 <ul>{% for change in facts.changes %}<li>{{ change }}</li>{% endfor %}</ul>
                 {% endif %}
                 {% for part in facts.parts %}
                 {% if part.facts or part.octave_reference %}
-                <h3>{{ part.name }}</h3>
+                <h2>{{ part.name }}</h2>
                 {% if part.octave_reference %}<p>{{ part.octave_reference }}</p>{% endif %}
                 {% if part.facts %}<dl class="facts">{% for fact in part.facts %}<dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd>{% endfor %}</dl>{% endif %}
                 {% endif %}
@@ -116,6 +121,20 @@
                 <p class="small muted">Changes apply straight away and are kept on this device.{% if options_url %} The words themselves are set under <a href="{{ options_url }}">Choose how it reads</a>.{% endif %}</p>
             </form>
         </details>
+        {% if score_data.midi %}
+        <details>
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Playback settings</summary>
+            <form class="panel" id="playback-settings-form" onsubmit="return false">
+                <div class="row">
+                    {% if score_data.midi.voices|length > 1 %}
+                    <label class="goto"><span>Instruments to play</span><select class="input" id="setting-voice">{% for voice in score_data.midi.voices %}<option value="{{ voice.query }}">{{ voice.label }}</option>{% endfor %}</select></label>
+                    {% endif %}
+                    <label class="check"><input type="checkbox" id="setting-click">Metronome click</label>
+                </div>
+                <p class="small muted">Applies from the next press of Play this group.</p>
+            </form>
+        </details>
+        {% endif %}
         <details>
             <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>{% if export_mode %}Print{% else %}Download or print{% endif %}</summary>
             <div class="panel">
@@ -130,19 +149,23 @@
         </details>
     </div>
 
-    <main class="score" id="score">
+    <div class="score" id="score" tabindex="-1">
+        {% if not music_segments %}
+        <p class="callout">No bars could be read from this file. Check that it is a MusicXML file with at least one part that contains notes, then upload it again.</p>
+        {% endif %}
         {% for segment in music_segments %}
         <section class="group current" id="group-{{ segment.start_bar }}">
-            <h2><button type="button" class="group-toggle" aria-expanded="true" aria-controls="group-{{ segment.start_bar }}-body"><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>{{ segment.label }}</button></h2>
+            <h2>{{ segment.label }}</h2>
             <div class="body" id="group-{{ segment.start_bar }}-body">
             {% for bar in segment.bars %}
-                <section class="bar" id="bar-{{ bar.number }}" data-bar="{{ bar.number }}" aria-labelledby="bar-{{ bar.number }}-heading">
+                <div class="bar" id="bar-{{ bar.number }}" data-bar="{{ bar.number }}">
                     {% if bar.is_pickup %}
-                    <h3 class="words" id="bar-{{ bar.number }}-heading">Pickup bar</h3>
+                    <h3 class="words">Pickup bar</h3>
                     {% else %}
-                    <h3 id="bar-{{ bar.number }}-heading"><small>Bar</small>{{ bar.number }}</h3>
+                    <h3><small>Bar</small> {{ bar.number }}</h3>
                     {% endif %}
                     <div class="parts">
+                    {% if not bar.parts %}<p class="muted">Nothing is written for this bar.</p>{% endif %}
                     {% for part in bar.parts %}
                         <div class="part">
                             {% if part.label %}<p class="label">{{ part.label }}</p>{% endif %}
@@ -162,11 +185,12 @@
                         </div>
                     {% endfor %}
                     </div>
-                </section>
+                </div>
             {% endfor %}
             </div>
         </section>
         {% endfor %}
+    </div>
     </main>
 
     <footer class="footer">

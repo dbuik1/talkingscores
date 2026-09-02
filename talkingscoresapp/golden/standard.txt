@@ -3,7 +3,7 @@ Composer: Unknown composer
 Key: C major (no sharps or flats)
 Time signature: 3 4
 Bars: 24
-Instruments: (Inst0)
+Instruments: Instrument 1 (unnamed)
 
 Bars 1 to 4
 Bar 1

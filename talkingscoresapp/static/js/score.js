@@ -5,6 +5,7 @@
     "use strict";
 
     var STORAGE_KEY = "talkingscores.reader";
+    var REMEMBERED_SCORES = 40;
     var root = document.documentElement;
     var pageTheme = root.getAttribute("data-theme");
     var prefs = loadPrefs();
@@ -30,6 +31,19 @@
         }
     }
 
+    function stacked(settings) {
+        return Boolean(settings.stack) || settings.size === "xlarge";
+    }
+
+    // A saved choice wins; a downloaded page's own colours come next; otherwise the system setting.
+    function effectiveTheme(settings) {
+        var theme = settings.theme;
+        if (theme === "light" || theme === "dark" || theme === "contrast" || theme === "system") {
+            return theme;
+        }
+        return pageTheme || "system";
+    }
+
     function applyAppearance(settings) {
         var size = settings.size;
         if (size === "large" || size === "xlarge" || size === "browser") {
@@ -37,14 +51,12 @@
         } else {
             root.removeAttribute("data-size");
         }
-        root.classList.toggle("stack", Boolean(settings.stack) || size === "xlarge");
-        var theme = settings.theme;
-        if (theme === "light" || theme === "dark" || theme === "contrast") {
-            root.setAttribute("data-theme", theme);
-        } else if (pageTheme) {
-            root.setAttribute("data-theme", pageTheme);
-        } else {
+        root.classList.toggle("stack", stacked(settings));
+        var theme = effectiveTheme(settings);
+        if (theme === "system") {
             root.removeAttribute("data-theme");
+        } else {
+            root.setAttribute("data-theme", theme);
         }
     }
 
@@ -56,10 +68,7 @@
         var data = JSON.parse(dataNode.textContent);
         var scoreKey = data.key;
         var main = document.getElementById("score");
-        var bars = Array.prototype.slice.call(main.querySelectorAll(".bar"));
-        if (!bars.length) {
-            return;
-        }
+        var bars = main ? Array.prototype.slice.call(main.querySelectorAll(".bar")) : [];
         var toolbar = document.getElementById("toolbar");
         var gotoInput = document.getElementById("goto-bar");
         var gotoError = document.getElementById("goto-error");
@@ -70,6 +79,30 @@
         var groups = [];
         var current = 0;
         var barsPerGroup = data.barsPerGroup;
+        var player = null;
+
+        wireSettings();
+        var printButton = document.getElementById("print-score");
+        if (printButton) {
+            printButton.addEventListener("click", function () { window.print(); });
+        }
+        // Chrome prints a closed details as its summary alone, so every one opens for the printer.
+        window.addEventListener("beforeprint", function () {
+            Array.prototype.forEach.call(document.querySelectorAll(".part details:not([open])"), function (details) {
+                details.setAttribute("open", "");
+                details.setAttribute("data-opened-for-print", "");
+            });
+        });
+        window.addEventListener("afterprint", function () {
+            Array.prototype.forEach.call(document.querySelectorAll("[data-opened-for-print]"), function (details) {
+                details.removeAttribute("open");
+                details.removeAttribute("data-opened-for-print");
+            });
+        });
+
+        if (!bars.length) {
+            return;
+        }
 
         if (prefs.barsPerGroup && perGroup && hasOption(perGroup, String(prefs.barsPerGroup))) {
             barsPerGroup = prefs.barsPerGroup;
@@ -147,7 +180,7 @@
                 body.id = section.id + "-body";
                 members.forEach(function (bar) { body.appendChild(bar); });
                 section.appendChild(body);
-                return {section: section, body: body, toggle: toggle, start: start, end: end, members: members};
+                return {section: section, body: body, toggle: toggle, preview: preview, start: start, end: end, members: members};
             });
             groups.forEach(function (group, index) {
                 var endline = document.createElement("div");
@@ -160,7 +193,7 @@
                     var button = document.createElement("button");
                     button.type = "button";
                     button.className = "btn";
-                    button.innerHTML = 'Next<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>';
+                    button.innerHTML = 'Next group<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>';
                     button.addEventListener("click", function () { show(index + 1, true); });
                     endline.appendChild(button);
                 }
@@ -207,7 +240,7 @@
                 item.appendChild(link);
                 var preview = document.createElement("span");
                 preview.className = "prev";
-                preview.textContent = group.toggle.nextSibling ? group.section.querySelector(".prev").textContent : "";
+                preview.textContent = group.preview.textContent;
                 item.appendChild(preview);
                 contents.appendChild(item);
             });
@@ -231,14 +264,28 @@
                 group.section.scrollIntoView({block: "start", behavior: reducedMotion() ? "auto" : "smooth"});
                 group.toggle.focus({preventScroll: true});
             }
-            if (scoreKey) {
-                prefs.positions = prefs.positions || {};
-                prefs.positions[scoreKey] = group.start;
-                savePrefs();
+            if (window.history && window.history.replaceState && window.location.hash !== "#" + group.section.id) {
+                window.history.replaceState(null, "", "#" + group.section.id);
             }
+            rememberPosition(group.start);
             if (player) {
                 player.groupChanged(group);
             }
+        }
+
+        function rememberPosition(start) {
+            if (!scoreKey) {
+                return;
+            }
+            var positions = prefs.positions && typeof prefs.positions === "object" ? prefs.positions : {};
+            delete positions[scoreKey];
+            var keys = Object.keys(positions);
+            while (keys.length >= REMEMBERED_SCORES) {
+                delete positions[keys.shift()];
+            }
+            positions[scoreKey] = start;
+            prefs.positions = positions;
+            savePrefs();
         }
 
         function reducedMotion() {
@@ -258,11 +305,18 @@
             var number = parseInt(gotoInput.value, 10);
             var index = isNaN(number) ? -1 : groupIndexForBar(number);
             if (index < 0) {
-                gotoError.textContent = "Enter a bar number from " + data.firstNumberedBar + " to " + data.lastBar + ".";
-                gotoInput.focus();
+                var message = "Enter a bar number from " + data.firstNumberedBar + " to " + data.lastBar + ".";
+                gotoError.textContent = message;
+                gotoInput.setAttribute("aria-invalid", "true");
+                if (document.activeElement === gotoInput) {
+                    announce(message);
+                } else {
+                    gotoInput.focus();
+                }
                 return;
             }
             gotoError.textContent = "";
+            gotoInput.removeAttribute("aria-invalid");
             show(index, true);
         }
 
@@ -275,24 +329,53 @@
             savePrefs();
         }
 
+        // Text as a reader would meet it: closed details contribute their summary only.
+        function readableText(node) {
+            if (node.nodeType === 3) {
+                return node.textContent;
+            }
+            if (node.nodeType !== 1 || node.classList.contains("endline") || node.getAttribute("aria-hidden") === "true") {
+                return "";
+            }
+            if (node.tagName === "DETAILS" && !node.open) {
+                var summary = node.querySelector("summary");
+                return summary ? readableText(summary) + " " : "";
+            }
+            var text = "";
+            Array.prototype.forEach.call(node.childNodes, function (child) {
+                text += readableText(child);
+            });
+            return text + " ";
+        }
+
+        function wire(id, event, handler) {
+            var element = document.getElementById(id);
+            if (element) {
+                element.addEventListener(event, handler);
+            }
+            return element;
+        }
+
         // Toolbar
         if (toolbar) {
             toolbar.hidden = false;
-            document.getElementById("goto-go").addEventListener("click", goToTypedBar);
-            gotoInput.addEventListener("keydown", function (event) {
-                if (event.key === "Enter") {
-                    event.preventDefault();
-                    goToTypedBar();
-                }
-            });
-            document.getElementById("previous-group").addEventListener("click", function () {
+            wire("goto-go", "click", goToTypedBar);
+            if (gotoInput) {
+                gotoInput.addEventListener("keydown", function (event) {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        goToTypedBar();
+                    }
+                });
+            }
+            wire("previous-group", "click", function () {
                 if (current === 0) {
                     announce("This is the first group.");
                     return;
                 }
                 show(current - 1, true);
             });
-            document.getElementById("next-group").addEventListener("click", function () {
+            wire("next-group", "click", function () {
                 if (current === groups.length - 1) {
                     announce("This is the last group.");
                     return;
@@ -304,13 +387,10 @@
                     regroup(parseInt(perGroup.value, 10));
                 });
             }
-            var readAgain = document.getElementById("read-again");
-            if (readAgain) {
-                readAgain.addEventListener("click", function () {
-                    var group = groups[current];
-                    announce(rangeLabel(group.start, group.end, true) + ". " + group.body.textContent.replace(/\s+/g, " ").trim());
-                });
-            }
+            wire("read-again", "click", function () {
+                var group = groups[current];
+                announce(rangeLabel(group.start, group.end, true) + ". " + readableText(group.body).replace(/\s+/g, " ").trim());
+            });
         }
 
         function announce(text) {
@@ -321,62 +401,115 @@
             window.setTimeout(function () { live.textContent = text; }, 50);
         }
 
-        // Reading settings
-        var settingsForm = document.getElementById("reading-settings-form");
-        if (settingsForm) {
+        function wireSettings() {
+            var settingsForm = document.getElementById("reading-settings-form");
+            if (!settingsForm) {
+                return;
+            }
             var sizeInputs = settingsForm.querySelectorAll('input[name="size"]');
+            var stack = document.getElementById("setting-stack");
+            var theme = document.getElementById("setting-theme");
+
+            function reflect() {
+                Array.prototype.forEach.call(sizeInputs, function (input) {
+                    var card = input.closest(".size");
+                    if (card) {
+                        card.classList.toggle("checked", input.checked);
+                    }
+                });
+                if (stack) {
+                    // Extra large always stacks, so the box shows that and cannot be cleared.
+                    stack.checked = stacked(prefs);
+                    stack.disabled = prefs.size === "xlarge";
+                }
+            }
+
             Array.prototype.forEach.call(sizeInputs, function (input) {
                 input.checked = input.value === (prefs.size || "standard");
                 input.addEventListener("change", function () {
                     prefs.size = input.value === "standard" ? undefined : input.value;
                     applyAppearance(prefs);
+                    reflect();
                     savePrefs();
                 });
             });
-            var stack = document.getElementById("setting-stack");
-            stack.checked = Boolean(prefs.stack);
-            stack.addEventListener("change", function () {
-                prefs.stack = stack.checked || undefined;
-                applyAppearance(prefs);
-                savePrefs();
-            });
-            var theme = document.getElementById("setting-theme");
-            theme.value = prefs.theme || "system";
-            theme.addEventListener("change", function () {
-                prefs.theme = theme.value === "system" ? undefined : theme.value;
-                applyAppearance(prefs);
-                savePrefs();
-            });
-        }
-
-        var printButton = document.getElementById("print-score");
-        if (printButton) {
-            printButton.addEventListener("click", function () { window.print(); });
+            if (stack) {
+                stack.addEventListener("change", function () {
+                    prefs.stack = stack.checked || undefined;
+                    applyAppearance(prefs);
+                    savePrefs();
+                });
+            }
+            if (theme) {
+                theme.value = effectiveTheme(prefs);
+                theme.addEventListener("change", function () {
+                    prefs.theme = theme.value;
+                    applyAppearance(prefs);
+                    savePrefs();
+                });
+            }
+            reflect();
         }
 
         // Playback of the open group. The player is a separate script when audio is available.
-        var player = null;
+        var playButton = document.getElementById("play-group");
+        var stopButton = document.getElementById("stop-playback");
         if (data.midi && window.TalkingScoresPlayer) {
             player = window.TalkingScoresPlayer(data, {
                 status: document.getElementById("playback-status-text"),
-                play: document.getElementById("play-group"),
-                stop: document.getElementById("stop-playback"),
+                play: playButton,
+                stop: stopButton,
                 speed: document.getElementById("speed"),
+                voice: document.getElementById("setting-voice"),
+                click: document.getElementById("setting-click"),
                 rangeLabel: rangeLabel
             });
+        } else if (playButton) {
+            playButton.disabled = true;
+            if (stopButton) {
+                stopButton.disabled = true;
+            }
+            var statusText = document.getElementById("playback-status-text");
+            if (statusText) {
+                statusText.textContent = "Playback is not available on this page.";
+            }
         }
 
         buildGroups(barsPerGroup);
-        var startBar = data.firstBar;
-        if (window.location.hash) {
+
+        function barFromHash() {
             var match = /^#(?:group|bar)-(\d+)$/.exec(window.location.hash);
-            if (match) {
-                startBar = parseInt(match[1], 10);
-            }
+            return match ? parseInt(match[1], 10) : null;
+        }
+
+        var hashBar = barFromHash();
+        var startBar = data.firstBar;
+        if (hashBar !== null) {
+            startBar = hashBar;
         } else if (scoreKey && prefs.positions && typeof prefs.positions[scoreKey] === "number") {
             startBar = prefs.positions[scoreKey];
         }
         var startIndex = groupIndexForBar(startBar);
         show(startIndex < 0 ? 0 : startIndex, false);
+        if (hashBar !== null) {
+            // The browser's own jump to the fragment lands after this and clears focus, so wait for it.
+            var focusGroup = function () { show(current, true); };
+            if (document.readyState === "complete") {
+                window.setTimeout(focusGroup, 0);
+            } else {
+                window.addEventListener("load", function () { window.setTimeout(focusGroup, 0); });
+            }
+        }
+
+        window.addEventListener("hashchange", function () {
+            var number = barFromHash();
+            if (number === null) {
+                return;
+            }
+            var index = groupIndexForBar(number);
+            if (index >= 0 && index !== current) {
+                show(index, true);
+            }
+        });
     });
 })();

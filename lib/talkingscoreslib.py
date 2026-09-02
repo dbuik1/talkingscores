@@ -11,6 +11,7 @@ import json
 import logging
 import math
 import os
+import re
 from abc import ABCMeta, abstractmethod
 from types import SimpleNamespace
 
@@ -237,7 +238,10 @@ class Music21TalkingScore(TalkingScoreBase):
         for c, instrument in enumerate(self.score.flatten().getInstruments()):
             if (len(self.part_instruments) == 0 or
                     self.part_instruments[ins_count - 1][3] != instrument.partId):
-                part_name = instrument.partName or f"Instrument {ins_count} (unnamed)"
+                part_name = (instrument.partName or "").strip()
+                # Notation programs leave "(Inst3)" style names on parts nobody named.
+                if not part_name or re.fullmatch(r"\(Inst\d+\)", part_name):
+                    part_name = f"Instrument {ins_count} (unnamed)"
                 self.part_instruments[ins_count] = [part_name, c, 1, instrument.partId]
                 instrument_names.append(part_name)
                 ins_count += 1
@@ -677,16 +681,45 @@ class HTMLTalkingScoreFormatter:
             'colour_root_class': palette.root_class,
         })
 
+    META_LINE_INSTRUMENTS = 4
+
     def _meta_line(self):
-        """Key, time, tempo, instruments and length, shown under the title."""
+        """Key, time, tempo, the instruments being read and the length, shown under the title."""
         preamble = self._get_preamble()
         items = [preamble['key_signature'], preamble['time_signature']]
         if preamble['tempo']:
             items.append(preamble['tempo'])
-        items.extend(self.score.part_instruments[ins][0] for ins in self.score.part_instruments)
+        names = []
+        for ins in self.score.selected_instruments:
+            name = self.score.part_instruments[ins][0]
+            if name not in names:
+                names.append(name)
+        shown = names[:self.META_LINE_INSTRUMENTS]
+        if len(names) > len(shown):
+            shown.append(f"and {len(names) - len(shown)} more")
+        items.extend(shown)
         bars = preamble['number_of_bars']
         items.append("1 bar" if bars == 1 else f"{bars} bars")
         return [item for item in items if item]
+
+    def _playback_voices(self):
+        """What the player can be asked for, in the order the choice is offered."""
+        settings = self.settings
+        voices = []
+        if settings.play_all:
+            voices.append({'query': 'sel=all', 'label': 'Every instrument'})
+        if settings.play_selected:
+            voices.append({'query': 'sel=sel', 'label': 'The instruments being read'})
+        if settings.play_unselected:
+            voices.append({'query': 'sel=un', 'label': 'The other instruments'})
+        for ins in self.score.selected_instruments:
+            name, first_part, part_count, _ = self.score.part_instruments[ins]
+            voices.append({'query': f'ins={ins}', 'label': name})
+            if part_count > 1:
+                for part_index in range(first_part, first_part + part_count):
+                    voices.append({'query': f'part={part_index}',
+                                   'label': self.score.part_name(ins, part_index)})
+        return voices
 
     def _score_data(self, web_path, export_mode):
         """What the reader script needs: the bar range, the grouping and where the audio lives."""
@@ -699,11 +732,14 @@ class HTMLTalkingScoreFormatter:
             midi = {
                 'base': web_path,
                 'query': f"bsi={self.score.binary_selected_instruments}&bpi={self.score.binary_play_all}",
+                'voices': self._playback_voices(),
             }
+        # A score that is only a pickup bar keeps the go-to range inside the bars that exist.
+        first_numbered = min(first_bar + 1, last_bar) if pickup == first_bar else first_bar
         return {
             'key': web_path or self.score.get_title(),
             'firstBar': first_bar,
-            'firstNumberedBar': first_bar + 1 if pickup == first_bar else first_bar,
+            'firstNumberedBar': first_numbered,
             'lastBar': last_bar,
             'totalBars': self._get_preamble()['number_of_bars'],
             'pickupBar': pickup,

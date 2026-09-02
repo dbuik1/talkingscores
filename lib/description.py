@@ -136,9 +136,9 @@ class SegmentDescription:
                     if bar.number == number:
                         entries.append({"label": part.name if label_parts else "", "bar": bar})
                         break
-            if entries:
-                bars.append({"number": number, "label": entries[0]["bar"].label,
-                             "is_pickup": self.is_pickup, "parts": entries})
+            # A bar no part describes still takes its place, so the numbering never jumps.
+            bars.append({"number": number, "label": "Pickup bar" if self.is_pickup else f"Bar {number}",
+                         "is_pickup": self.is_pickup, "parts": entries})
         return bars
 
 

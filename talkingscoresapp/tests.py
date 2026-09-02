@@ -53,7 +53,8 @@ def reader_context(**overrides):
         "meta_line": ["C major", "4 4", "Piano", "8 bars"],
         "score_data": {"key": "/midis/abc123/score.musicxml", "firstBar": 1, "firstNumberedBar": 1, "lastBar": 8, "totalBars": 8,
                        "pickupBar": None, "barsPerGroup": 2, "groupSizes": [1, 2, 4, 8],
-                       "midi": {"base": "/midis/abc123/score.musicxml", "query": "bsi=1&bpi=1"}},
+                       "midi": {"base": "/midis/abc123/score.musicxml", "query": "bsi=1&bpi=1",
+                                "voices": [{"query": "ins=1", "label": "Piano"}]}},
         "music_segments": [],
         "settings": {},
         "style_name": "Musical terms",
@@ -404,31 +405,6 @@ class DownloadTests(TestCase):
         self.assertEqual(response.status_code, 200)
         mock_html.assert_called_once_with(export_theme=None, export_mode=True, raise_errors=True)
 
-    @patch("talkingscoresapp.views.TSScore.state")
-    @patch("talkingscoresapp.views.TSScore.html")
-    def test_html_download_strips_live_only_controls(self, mock_html, mock_state):
-        mock_state.return_value = "processed"
-        mock_html.return_value = """
-            <html>
-                <head>
-                    <script src="/static/js/score.js"></script>
-                    <script src="/static/js/player.js"></script>
-                    <script src="//www.midijs.net/lib/midi.js"></script>
-                </head>
-                <body><p>Readable score text</p></body>
-            </html>
-        """
-
-        response = self.client.get(
-            reverse("download-html", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
-        )
-        content = response.content.decode("utf-8")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertNotIn("midijs.net", content)
-        self.assertNotIn("player.js", content)
-        self.assertIn("score.js", content)
-        self.assertIn("Readable score text", content)
     def test_export_template_omits_download_and_midi_controls(self):
         env = Environment(loader=FileSystemLoader(os.path.join(os.getcwd(), "lib")))
         template = env.get_template("talkingscore.html")
@@ -1398,8 +1374,13 @@ class ReaderPageTests(TestCase):
             InstrumentDescription(1, "Flute", parts=[flute]), InstrumentDescription(2, "Oboe", parts=[oboe])])
         bars = segment.bars
         self.assertEqual([bar["number"] for bar in bars], [3, 4])
+        self.assertEqual([bar["label"] for bar in bars], ["Bar 3", "Bar 4"])
         self.assertEqual([part["label"] for part in bars[0]["parts"]], ["Flute", "Oboe"])
         self.assertIs(bars[1]["parts"][1]["bar"], oboe.bars[1])
+
+        gap = SegmentDescription(3, 5, "Bars 3 to 5", "segment-3", instruments=[
+            InstrumentDescription(1, "Flute", parts=[flute])])
+        self.assertEqual([(bar["number"], len(bar["parts"])) for bar in gap.bars], [(3, 1), (4, 1), (5, 0)])
 
         solo = SegmentDescription(3, 4, "Bars 3 to 4", "segment-3",
                                   instruments=[InstrumentDescription(1, "Flute", parts=[flute])])
@@ -1415,9 +1396,28 @@ class ReaderPageTests(TestCase):
         self.assertEqual(data["barsPerGroup"], 3)
         self.assertEqual(data["groupSizes"], [1, 2, 3, 4, 8])
         self.assertEqual(data["midi"]["base"], "/midis/x/y.musicxml")
-        self.assertIn('<section class="bar" id="bar-1" data-bar="1"', html)
+        self.assertEqual(data["midi"]["voices"], [{"query": "ins=1", "label": "Instrument 1 (unnamed)"}])
+        self.assertIn('<div class="bar" id="bar-1" data-bar="1"', html)
+        self.assertIn("<small>Bar</small> 1</h3>", html)
+        self.assertNotIn("group-toggle", html)           # the script builds the group buttons
         self.assertIn('href="/score_options/x/y.musicxml"', html)
-        self.assertIn('src="/static/js/player.js"', html)
+        self.assertIn('src="/static/js/player.js" defer', html)
+        self.assertIn("Metronome click", html)
+        self.assertNotIn('id="setting-voice"', html)     # one voice needs no choice
+
+    def test_the_meta_line_names_only_the_instruments_being_read(self):
+        formatter = self._formatter({"style": "standard"})
+        with patch.object(type(formatter), "_trigger_midi_generation"):
+            formatter.build("", "/midis/x/y.musicxml")
+        formatter.score.part_instruments = {
+            1: ["Flute", 0, 1, "P1"], 2: ["Flute", 1, 1, "P2"], 3: ["Flute", 2, 1, "P3"],
+            4: ["Oboe", 3, 1, "P4"], 5: ["Horn", 4, 1, "P5"], 6: ["Cello", 5, 1, "P6"], 7: ["Bass", 6, 1, "P7"],
+        }
+        formatter.score.selected_instruments = [1, 2, 3, 4, 5, 6, 7]
+        line = formatter._meta_line()
+        self.assertEqual(line[-6:], ["Flute", "Oboe", "Horn", "Cello", "and 1 more", "24 bars"])
+        formatter.score.selected_instruments = [4]
+        self.assertEqual(formatter._meta_line()[-2:], ["Oboe", "24 bars"])
 
     def test_a_pickup_bar_keeps_go_to_bar_on_numbered_bars(self):
         from talkingscoreslib import HTMLTalkingScoreFormatter
@@ -1429,6 +1429,19 @@ class ReaderPageTests(TestCase):
         data = formatter._score_data("/midis/x/y.musicxml", export_mode=False)
         self.assertEqual(data["pickupBar"], data["firstBar"])
         self.assertEqual(data["firstNumberedBar"], data["firstBar"] + 1)
+
+        # A score that is nothing but a pickup bar cannot ask for a bar after it.
+        formatter.segments = formatter.segments[:1]
+        data = formatter._score_data("/midis/x/y.musicxml", export_mode=False)
+        self.assertEqual(data["firstNumberedBar"], data["firstBar"])
+        self.assertEqual(data["lastBar"], data["firstBar"])
+
+    def test_a_score_with_no_bars_says_so(self):
+        env = Environment(loader=FileSystemLoader(os.path.join(os.getcwd(), "lib")), autoescape=True)
+        html = env.get_template("talkingscore.html").render(reader_context())
+        self.assertIn("No bars could be read from this file.", html)
+        self.assertNotIn('id="toolbar"', html)
+        self.assertEqual(html.count('id="score"'), 1)
 
     def test_the_downloaded_page_needs_no_server(self):
         html = self._render(self._formatter({"style": "standard"}), web_path="/midis/x/y.musicxml",

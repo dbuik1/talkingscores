@@ -18,7 +18,9 @@
 
         function midiUrl() {
             var speed = controls.speed ? controls.speed.value : "100";
-            return data.midi.base + "?" + data.midi.query + "&sel=all&start=" + group.start + "&end=" + group.end + "&t=" + speed + "&c=n";
+            var voice = controls.voice ? controls.voice.value : data.midi.voices[0].query;
+            var click = controls.click && controls.click.checked ? "be" : "n";
+            return data.midi.base + "?" + data.midi.query + "&" + voice + "&start=" + group.start + "&end=" + group.end + "&t=" + speed + "&c=" + click;
         }
 
         function stop() {
