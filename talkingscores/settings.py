@@ -71,16 +71,19 @@ CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(DEFAULT_CSRF_TRUSTED_ORIGINS + env_csr
 
 # Scripts and styles come only from this origin. The score player and the
 # theme toggle are still inline scripts, so 'unsafe-inline' stays on
-# script-src until they move to static files. Media covers the MIDI files the
-# player fetches from the same origin.
+# script-src until they move to static files. The MIDI player library fetches
+# its own soundfont and runs a worker, so its host is allowed on connect-src
+# and worker-src as well as script-src. Media covers the MIDI files the player
+# fetches from the same origin.
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' https://www.midijs.net; "
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
-    "font-src 'self' https://fonts.gstatic.com; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "font-src 'self'; "
     "img-src 'self' data:; "
-    "media-src 'self'; "
-    "connect-src 'self'; "
+    "media-src 'self' https://www.midijs.net; "
+    "connect-src 'self' https://www.midijs.net; "
+    "worker-src 'self' blob: https://www.midijs.net; "
     "object-src 'none'; "
     "base-uri 'self'; "
     "form-action 'self'; "
@@ -113,8 +116,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Sits above WhiteNoise so static responses carry the policy header too.
     'talkingscores.middleware.ProductionSecurityHeadersMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

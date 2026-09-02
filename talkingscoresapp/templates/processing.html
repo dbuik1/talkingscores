@@ -9,10 +9,10 @@
 
     <div class="col-md-11 mx-auto text-start">
 
-        <h4>Processing score... this may take a minute or two while all the files are generated. Please
-            be patient and don't close or refresh this page.</h4>
+        <h4>Generating the talking score. This can take a minute or two. Keep this page open.</h4>
 
-        <p id="processing-status" role="status" aria-live="polite">Starting score generation...</p>
+        <p id="processing-status" role="status" aria-live="polite">Starting score generation</p>
+        <p id="processing-next" hidden><a id="processing-next-link" href="{% url 'index' %}">Go to the home page</a></p>
 
         <div class="text-center" style="margin-top: 50px" aria-hidden="true">
         <img class="loading" src="{% static 'img/loading.png' %}"/>
@@ -22,6 +22,9 @@
 
     <script>
         const processingStatus = document.getElementById('processing-status');
+        const processingNext = document.getElementById('processing-next');
+        const processingNextLink = document.getElementById('processing-next-link');
+        const pollDeadline = Date.now() + 15 * 60 * 1000;
 
         function setProcessingStatus(message) {
             if (processingStatus && message) {
@@ -29,22 +32,44 @@
             }
         }
 
+        function stopWithNextStep(message, href, label) {
+            setProcessingStatus(message);
+            if (href) {
+                processingNextLink.href = href;
+            }
+            if (label) {
+                processingNextLink.textContent = label;
+            }
+            processingNext.hidden = false;
+            processingNextLink.focus();
+        }
+
         (function pollStatus() {
+            if (Date.now() > pollDeadline) {
+                stopWithNextStep(
+                    'The score is taking longer than expected. Reload this page to keep waiting, or start again from the home page.',
+                    "{% url 'index' %}",
+                    'Go to the home page'
+                );
+                return;
+            }
             fetch("{% url 'process-status' id filename %}", {headers: {'Accept': 'application/json'}})
                 .then(response => response.json())
                 .then(data => {
-                    setProcessingStatus(data.message || `Current status: ${data.status}`);
                     if (data.status === 'complete' && data.score_url) {
+                        setProcessingStatus('Score ready. Opening it now.');
                         window.location = data.score_url;
                     } else if (data.status === 'failed') {
-                        setProcessingStatus(data.message || 'Score generation failed.');
                         window.location = "{% url 'error' id filename %}";
+                    } else if (data.status === 'missing') {
+                        stopWithNextStep(data.message, data.next_url, 'Go to the home page');
                     } else {
+                        setProcessingStatus(data.message || 'Generating score');
                         setTimeout(pollStatus, 2000);
                     }
                 })
                 .catch(() => {
-                    setProcessingStatus('Waiting for the server to respond...');
+                    setProcessingStatus('Waiting for the server to respond');
                     setTimeout(pollStatus, 4000);
                 });
         })();

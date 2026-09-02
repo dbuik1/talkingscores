@@ -15,13 +15,17 @@ from urllib.parse import urlparse
 from talkingscores.settings import BASE_DIR
 from lib.midiHandler import MidiHandler
 
-from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress
+from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress, RemoteAddressNotAllowed
 from talkingscoresapp.models import remove_file_quietly
 
 logger = logging.getLogger("TSScore")
 
 ALLOWED_MUSICXML_EXTENSIONS = ('.xml', '.musicxml', '.mxl')
 MAX_UPLOADED_SCORE_BYTES = 10 * 1024 * 1024
+
+SCORE_MISSING_MESSAGE = "This score is no longer stored here. Upload the file again to make a new talking score."
+PRIVATE_ADDRESS_MESSAGE = "The link points at a private or local network address. Enter a link to a file on a public website."
+UNREADABLE_SCORE_MESSAGE = "The file could not be read as MusicXML. Check that it is a .musicxml, .xml or .mxl file exported from notation software."
 
 ACCESSIBLE_PALETTE = [
     '#E6194B',  # Red
@@ -285,7 +289,11 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
 
 def process(request, id, filename):
     score_obj = TSScore(id=id, filename=filename)
-    if score_obj.state() == TSScoreState.PROCESSED:
+    state = score_obj.state()
+    if state == TSScoreState.FETCHING:
+        messages.error(request, SCORE_MISSING_MESSAGE)
+        return redirect('index')
+    if state == TSScoreState.PROCESSED:
         score_obj.start_background_processing()
     template = loader.get_template('processing.html')
     context = {'id': id, 'filename': filename}
@@ -294,10 +302,18 @@ def process(request, id, filename):
 
 def process_status(request, id, filename):
     score_obj = TSScore(id=id, filename=filename)
+    state = score_obj.state()
+    if state == TSScoreState.FETCHING:
+        return JsonResponse({"status": "missing", "message": SCORE_MISSING_MESSAGE, "next_url": reverse('index')})
     status = score_obj.processing_status()
-    if status.get("status") == "complete":
+    current = status.get("status")
+    if current == "complete":
         status["score_url"] = reverse('score', args=[id, filename])
-    elif status.get("status") in ("pending", "unknown") and score_obj.state() == TSScoreState.PROCESSED:
+    elif state == TSScoreState.PROCESSED and (
+        current in ("pending", "unknown")
+        # A run that stopped refreshing its lock has died and is started again.
+        or (current == "processing" and not score_obj.generation_is_live())
+    ):
         score_obj.start_background_processing()
         status = score_obj.processing_status()
     return JsonResponse(status)
@@ -309,7 +325,7 @@ def score(request, id, filename):
     if score_obj.state() == TSScoreState.AWAITING_OPTIONS:
         return redirect('options', id, filename)
     elif score_obj.state() == TSScoreState.FETCHING:
-        messages.error(request, "The requested score could not be found. It may have expired.")
+        messages.error(request, SCORE_MISSING_MESSAGE)
         return redirect('index')
     else:
         try:
@@ -500,10 +516,13 @@ def index(request):
                 if score:
                     return redirect('score', id=score.id, filename=score.filename)
 
+            except RemoteAddressNotAllowed as ex:
+                logger.warning(f"Rejected a link to a non-public address: {ex}")
+                messages.error(request, PRIVATE_ADDRESS_MESSAGE)
+                return redirect('index')
             except Exception as ex:
-                error_message = "The MusicXML file could not be processed. Please ensure it is a valid MusicXML file and try again."
                 logger.error(f"File Processing Error: {ex}", exc_info=True)
-                messages.error(request, error_message)
+                messages.error(request, UNREADABLE_SCORE_MESSAGE)
                 return redirect('index')
         else:
             for field, error_list in form.errors.items():

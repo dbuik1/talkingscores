@@ -12,7 +12,7 @@
 
     {% if inline_css %}
     <style type="text/css">
-{{ inline_css }}
+{{ inline_css|safe }}
     </style>
     {% else %}
     <link href="{{ static_css_url|default('/static/css/talkingscores.css', true) }}" rel="stylesheet">

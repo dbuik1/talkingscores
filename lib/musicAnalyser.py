@@ -920,7 +920,7 @@ class AnalysePart:
             repetition += " and " + str(len(self.measure_intervals_analyse_indexes_list)) + " measures have unique intervals...  "
 
         if repetition != "":
-            repetition = "<br/>" + repetition[:1].upper() + repetition[1:]
+            repetition = repetition[:1].upper() + repetition[1:]
         return repetition
 
     # you get a KeyError if you do dict[key] += value if the key doesn't already exist...

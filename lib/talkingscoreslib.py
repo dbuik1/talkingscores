@@ -481,7 +481,6 @@ class Music21TalkingScore(TalkingScoreBase):
         """
         self.filepath = os.path.realpath(musicxml_filepath)
         self.score = converter.parse(musicxml_filepath)
-        self.last_tempo_inserted_index = 0
         self.music_analyser = None
         super().__init__()
 
@@ -1394,7 +1393,9 @@ class HTMLTalkingScoreFormatter:
     def _setup_template_environment(self, export_mode=False):
         """Set up Jinja2 template environment and load template."""
         from jinja2 import Environment, FileSystemLoader
-        env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)))
+        # Score titles, composers and part names come from the uploaded file,
+        # so every value is escaped unless the template marks it safe.
+        env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)), autoescape=True)
         template_name = 'talkingscore_export.html' if export_mode else 'talkingscore.html'
         return env.get_template(template_name)
 
