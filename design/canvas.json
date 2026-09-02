@@ -61,7 +61,7 @@
       "x": 1060,
       "y": 2100,
       "w": 390,
-      "h": 1900,
+      "h": 2260,
       "title": "Score reader, phone"
     },
     {
@@ -93,14 +93,14 @@
       "x": 4730,
       "y": 2100,
       "w": 794,
-      "h": 1123,
+      "h": 1600,
       "title": "Print, A4",
       "print": "flow"
     },
     {
       "file": "DirectionConsole.dc.html",
       "x": 0,
-      "y": 4200,
+      "y": 4500,
       "w": 620,
       "h": 420,
       "title": "Alternative: Console"
@@ -108,7 +108,7 @@
     {
       "file": "DirectionLedger.dc.html",
       "x": 720,
-      "y": 4200,
+      "y": 4500,
       "w": 620,
       "h": 420,
       "title": "Alternative: Ledger"

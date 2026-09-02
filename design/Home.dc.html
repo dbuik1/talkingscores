@@ -22,7 +22,7 @@
     .brand svg { width:28px; height:28px; }
     .top { display:flex; justify-content:space-between; align-items:center; gap:24px; border-bottom:1px solid #d9d3c7; padding-bottom:16px; }
     .top nav { display:flex; gap:24px; font-size:18px; }
-    .skip { position:absolute; left:40px; top:8px; background:#1c1a17; color:#f7f4ee; padding:8px 12px; text-decoration:none; }
+    .skip { align-self:flex-start; background:#1c1a17; color:#f7f4ee; padding:8px 12px; text-decoration:none; font-size:18px; margin-bottom:-16px; }
     .btn { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:48px; padding:0 20px; border-radius:6px; border:2px solid #1e6a73; background:#f7f4ee; color:#1c1a17; font:inherit; font-weight:700; cursor:pointer; text-decoration:none; }
     .btn.primary { background:#1e6a73; color:#ffffff; min-height:60px; padding:0 28px; font-size:22px; }
     .btn.big { min-height:60px; font-size:22px; }
@@ -45,7 +45,7 @@
     .toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:16px 0; border-top:1px solid #d9d3c7; border-bottom:1px solid #d9d3c7; }
     .toolbar .sep { width:1px; align-self:stretch; background:#d9d3c7; margin:0 4px; }
     .goto { display:flex; align-items:center; gap:8px; }
-    .goto .input { width:88px; }
+    .goto .input { width:88px; white-space:nowrap; } .goto .input.wide { width:112px; }
     .pos { font-weight:700; }
     .status { display:flex; flex-direction:column; gap:2px; font-size:17px; }
     .status b { font-weight:700; }
@@ -94,8 +94,8 @@
     .flag { display:inline-block; font-size:14px; letter-spacing:0.12em; text-transform:uppercase; padding:4px 8px; border:1px solid #5b5650; border-radius:4px; color:#5b5650; }
   </style>
 </helmet>
-<a class="skip" href="#open">Skip to open a score</a>
 <div class="wrap">
+  <a class="skip" href="#open">Skip to open a score</a>
   <header class="top"><a class="brand" href="#"><svg viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h20M4 13h20M4 18h20M4 23h20"></path><circle cx="17" cy="20.5" r="3" fill="currentColor" stroke="none"></circle><path d="M20 20.5V7l4 2"></path></svg><span>Talking Scores</span></a><nav aria-label="Site"><a href="#">Help</a><a href="#">Privacy</a></nav></header>
   <div>
     <h1>Sheet music, in words you can read bar by bar.</h1>
