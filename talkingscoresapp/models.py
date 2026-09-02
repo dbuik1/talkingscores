@@ -1,19 +1,103 @@
 import os
 import hashlib
+import ipaddress
+import re
 import requests
 import json
 import logging
+import socket
 from talkingscores.settings import MEDIA_ROOT
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 import tempfile
 from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
 from pathvalidate import sanitize_filename
+import xml.etree.ElementTree as ElementTree
 import zipfile
 import threading
 import time
 
 REMOTE_FETCH_TIMEOUT = 20
 MAX_REMOTE_SCORE_BYTES = 10 * 1024 * 1024
+MAX_REMOTE_REDIRECTS = 5
+
+# A score id is the SHA-256 of the file content, so it is always 64 lower-case hex digits.
+SCORE_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
+# A generation run that has not touched its status file for this long is
+# treated as dead and its lock is taken over.
+GENERATION_LOCK_STALE_SECONDS = 180
+GENERATION_HEARTBEAT_SECONDS = 15
+
+
+class ScoreGenerationInProgress(Exception):
+    """Another process or thread holds the generation lock for this score."""
+
+
+class RemoteAddressNotAllowed(ValueError):
+    """The URL points at a host that is not a public internet address."""
+
+
+def is_public_ip(address):
+    ip = ipaddress.ip_address(address)
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+        or getattr(ip, "is_site_local", False)
+    )
+
+
+def check_url_targets_public_host(url):
+    """Raise unless every address the URL's host resolves to is a public internet address."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("Only HTTP and HTTPS MusicXML URLs are supported.")
+    host = parsed.hostname
+    if not host:
+        raise RemoteAddressNotAllowed("The URL has no host name.")
+    try:
+        results = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        raise RemoteAddressNotAllowed(f"The host {host} could not be found.") from exc
+    addresses = {result[4][0] for result in results}
+    if not addresses:
+        raise RemoteAddressNotAllowed(f"The host {host} could not be found.")
+    for address in addresses:
+        if not is_public_ip(address):
+            raise RemoteAddressNotAllowed(f"The host {host} is not a public internet address.")
+    return parsed
+
+
+def fetch_remote_score(url):
+    """Download a score over HTTP, checking every redirect hop against the public-host rule."""
+    current_url = url
+    for _ in range(MAX_REMOTE_REDIRECTS + 1):
+        check_url_targets_public_host(current_url)
+        response = requests.get(current_url, timeout=REMOTE_FETCH_TIMEOUT, stream=True, allow_redirects=False)
+        if response.is_redirect or response.is_permanent_redirect:
+            location = response.headers.get("Location")
+            response.close()
+            if not location:
+                raise ValueError("The server redirected without saying where.")
+            current_url = urljoin(current_url, location)
+            continue
+        response.raise_for_status()
+        file_chunks = []
+        total_bytes = 0
+        for chunk in response.iter_content(chunk_size=65536):
+            if not chunk:
+                continue
+            total_bytes += len(chunk)
+            if total_bytes > MAX_REMOTE_SCORE_BYTES:
+                raise ValueError("Remote MusicXML file is too large.")
+            file_chunks.append(chunk)
+        return b"".join(file_chunks), current_url
+    raise ValueError("The URL redirected too many times.")
 
 
 def configure_score_logger():
@@ -56,6 +140,24 @@ def hashfile(afile, hasher, blocksize=65536):
     return hasher.hexdigest()
 
 
+def rootfile_from_container(zip_ref):
+    """Return the score path named by META-INF/container.xml, or None when the archive has no usable manifest."""
+    try:
+        container_xml = zip_ref.read("META-INF/container.xml")
+    except KeyError:
+        return None
+    try:
+        root = ElementTree.fromstring(container_xml)
+    except ElementTree.ParseError:
+        return None
+    for element in root.iter():
+        if element.tag.split("}")[-1] == "rootfile":
+            full_path = element.get("full-path")
+            if full_path and full_path in zip_ref.namelist():
+                return full_path
+    return None
+
+
 def extract_musicxml_from_mxl(mxl_path, output_path):
     """
     Extract MusicXML content from a .mxl file (compressed MusicXML).
@@ -66,12 +168,14 @@ def extract_musicxml_from_mxl(mxl_path, output_path):
             # List all files in the archive
             file_list = zip_ref.namelist()
             logger.info(f"Files in MXL archive: {file_list}")
-            
-            # Look for the main MusicXML file
-            # Common patterns: could be named *.xml, *.musicxml, or sometimes just the filename without extension
-            musicxml_candidates = []
+
+            # The manifest names the score; the name-based search is only a fallback for archives without one.
+            manifest_rootfile = rootfile_from_container(zip_ref)
+            musicxml_candidates = [manifest_rootfile] if manifest_rootfile else []
             
             for filename in file_list:
+                if musicxml_candidates:
+                    break
                 # Skip metadata folders and files
                 if filename.startswith('META-INF/') or filename.startswith('__MACOSX/'):
                     continue
@@ -191,10 +295,14 @@ class TSScore(object):
     def get_data_file_path(self, root=MEDIA_ROOT):
         if not self.id or not self.filename:
             return None
-        
-        # SECURITY FIX: Sanitize the filename to prevent path traversal
-        safe_filename = os.path.basename(self.filename)  # Removes any path components
-        safe_filename = sanitize_filename(safe_filename)  # Already imported, use it properly
+        if not SCORE_ID_PATTERN.match(self.id):
+            raise ValueError("Score id must be 64 lower-case hex digits.")
+
+        # The filename is user supplied, so path components are stripped before it is joined.
+        safe_filename = os.path.basename(self.filename)
+        safe_filename = sanitize_filename(safe_filename)
+        if not safe_filename:
+            raise ValueError("Score filename is empty after sanitising.")
         
         path = os.path.join(root, self.id, safe_filename)
         
@@ -216,6 +324,59 @@ class TSScore(object):
         data_path = self.get_data_file_path()
         return data_path + ".status" if data_path else None
 
+    def get_generation_lock_file_path(self):
+        data_path = self.get_data_file_path()
+        return data_path + ".lock" if data_path else None
+
+    def options_epoch(self):
+        """A digest of the current options file, so a run started under older options can tell they changed."""
+        data_path = self.get_data_file_path()
+        if not data_path:
+            return None
+        try:
+            with open(data_path + ".opts", "rb") as options_file:
+                return hashlib.sha256(options_file.read()).hexdigest()
+        except OSError:
+            return None
+
+    def _generation_lock_is_stale(self):
+        lock_path = self.get_generation_lock_file_path()
+        status = self.processing_status()
+        if status.get("status") != "processing":
+            return True
+        last_updated = status.get("updated")
+        if not isinstance(last_updated, (int, float)):
+            try:
+                last_updated = os.path.getmtime(lock_path)
+            except OSError:
+                return True
+        return time.time() - last_updated > GENERATION_LOCK_STALE_SECONDS
+
+    def acquire_generation_lock(self):
+        """Take the per-score lock. Returns False when a live run already holds it."""
+        lock_path = self.get_generation_lock_file_path()
+        if not lock_path:
+            return False
+        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+        for _ in range(2):
+            try:
+                fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                if not self._generation_lock_is_stale():
+                    return False
+                self.logger.warning(f"Taking over a stale generation lock for {self.id}/{self.filename}")
+                remove_file_quietly(lock_path)
+                continue
+            with os.fdopen(fd, "w", encoding="utf-8") as lock_file:
+                json.dump({"pid": os.getpid(), "started": time.time()}, lock_file)
+            return True
+        return False
+
+    def release_generation_lock(self):
+        lock_path = self.get_generation_lock_file_path()
+        if lock_path:
+            remove_file_quietly(lock_path)
+
     def _is_html_cache_fresh(self, html_path, data_path):
         if not html_path or not os.path.exists(html_path):
             return False
@@ -224,9 +385,12 @@ class TSScore(object):
         source_paths = [data_path, data_path + ".opts"]
         return all(not os.path.exists(path) or os.path.getmtime(path) <= html_mtime for path in source_paths)
 
-    def _write_processing_status(self, status, message=""):
+    def _write_processing_status(self, status, message="", epoch=None):
+        """Write the status file, unless the options changed since the run identified by epoch began."""
         status_path = self.get_processing_status_file_path()
         if not status_path:
+            return
+        if epoch is not None and self.options_epoch() != epoch:
             return
         os.makedirs(os.path.dirname(status_path), exist_ok=True)
         status_data = {
@@ -264,24 +428,35 @@ class TSScore(object):
                 os.remove(path)
 
     def start_background_processing(self):
-        current_status = self.processing_status().get("status")
-        if current_status == "processing":
-            return
+        """Generate the score on a background thread. Returns False when a run is already under way."""
+        if not self.acquire_generation_lock():
+            return False
 
-        self._write_processing_status("processing", "Generating score.")
+        epoch = self.options_epoch()
+        self._write_processing_status("processing", "Generating score.", epoch=epoch)
+        stop_heartbeat = threading.Event()
+
+        def heartbeat():
+            while not stop_heartbeat.wait(GENERATION_HEARTBEAT_SECONDS):
+                self._write_processing_status("processing", "Generating score.", epoch=epoch)
 
         def generate():
             try:
-                self.html(force_refresh=True, raise_errors=True)
-                self._write_processing_status("complete", "Score ready.")
+                self._generate_html(export_theme=None, export_mode=False, epoch=epoch)
+                self._write_processing_status("complete", "Score ready.", epoch=epoch)
             except Exception as exc:
                 self.logger.exception(f"Background score generation failed for {self.id}/{self.filename}")
-                self._write_processing_status("failed", str(exc))
+                self._write_processing_status("failed", str(exc), epoch=epoch)
+            finally:
+                stop_heartbeat.set()
+                self.release_generation_lock()
 
-        thread = threading.Thread(target=generate, daemon=True)
-        thread.start()
+        threading.Thread(target=heartbeat, daemon=True).start()
+        threading.Thread(target=generate, daemon=True).start()
+        return True
 
     def html(self, export_theme=None, export_mode=False, force_refresh=False, raise_errors=False):
+        """Return the score HTML, generating it under the per-score lock when the cache is missing or stale."""
         data_path = self.get_data_file_path()
         if not data_path:
             return "Error: Could not find score data file."
@@ -290,6 +465,22 @@ class TSScore(object):
         if not export_mode and not force_refresh and self._is_html_cache_fresh(html_cache_path, data_path):
             with open(html_cache_path, "r", encoding="utf-8") as html_file:
                 return html_file.read()
+
+        if not self.acquire_generation_lock():
+            raise ScoreGenerationInProgress(f"Score {self.id} is already being generated.")
+        try:
+            return self._generate_html(export_theme=export_theme, export_mode=export_mode, epoch=self.options_epoch())
+        except Exception as e:
+            if raise_errors:
+                raise
+            return f"<h1>Error Generating Score</h1><p>There was an error processing the MusicXML file: {e}</p>"
+        finally:
+            self.release_generation_lock()
+
+    def _generate_html(self, export_theme, export_mode, epoch):
+        """Render the score. The caller holds the generation lock."""
+        data_path = self.get_data_file_path()
+        html_cache_path = self.get_html_cache_file_path()
 
         web_path = f"/midis/{self.id}/{self.filename}"
         download_html_url = f"/download/html/{self.id}/{self.filename}"
@@ -307,15 +498,14 @@ class TSScore(object):
                 export_theme=export_theme,
                 export_mode=export_mode,
             )
-            if not export_mode and html_cache_path:
+            # Options that changed during the run belong to a newer run, which writes its own cache.
+            if not export_mode and html_cache_path and self.options_epoch() == epoch:
                 write_text_file_atomic(html_cache_path, html_content)
             return html_content
             
-        except Exception as e:
+        except Exception:
             self.logger.exception(f"Failed to generate HTML from score {data_path}")
-            if raise_errors:
-                raise
-            return f"<h1>Error Generating Score</h1><p>There was an error processing the MusicXML file: {e}</p>"
+            raise
     
     @classmethod
     def from_uploaded_file(cls, uploaded_file):
@@ -382,23 +572,9 @@ class TSScore(object):
     def from_url(cls, url):
         score = cls(url=url)
 
-        parsed_url = urlparse(url)
-        if parsed_url.scheme not in ("http", "https"):
-            raise ValueError("Only HTTP and HTTPS MusicXML URLs are supported.")
+        file_content, final_url = fetch_remote_score(url)
+        parsed_url = urlparse(final_url)
 
-        response = requests.get(url, timeout=REMOTE_FETCH_TIMEOUT, stream=True)
-        response.raise_for_status()
-        file_chunks = []
-        total_bytes = 0
-        for chunk in response.iter_content(chunk_size=65536):
-            if not chunk:
-                continue
-            total_bytes += len(chunk)
-            if total_bytes > MAX_REMOTE_SCORE_BYTES:
-                raise ValueError("Remote MusicXML file is too large.")
-            file_chunks.append(chunk)
-        file_content = b"".join(file_chunks)
-        
         score.id = hashlib.sha256(file_content).hexdigest()
         
         original_filename = os.path.basename(parsed_url.path)

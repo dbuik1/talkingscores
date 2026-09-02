@@ -44,7 +44,14 @@ Use `--dry-run` first to inspect what would be deleted.
 
 ## Environment settings
 
-For local development, defaults are provided. In production, set:
+`DJANGO_DEBUG` is off unless set, and with debug off the server refuses to start without `DJANGO_SECRET_KEY`. For local development and the test suite, turn debug on:
+
+```powershell
+$env:DJANGO_DEBUG = "true"
+python .\manage.py test
+```
+
+In production, set:
 
 ```powershell
 $env:DJANGO_SECRET_KEY = "replace-this"

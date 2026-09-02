@@ -17,31 +17,45 @@ import tempfile
 import os
 import time
 import json
+import runpy
+import socket
+import zipfile
+
+# Score ids are the SHA-256 of the file, so tests use a well-formed 64-digit id.
+VALID_ID = "a" * 64
+OTHER_ID = "b" * 64
+PUBLIC_ADDRINFO = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
 
 
 class SecurityTests(TestCase):
-    """Security-focused test cases."""
-    
-    def test_file_path_traversal_prevention(self):
-        """Test that file path traversal attacks are prevented."""
-        malicious_names = [
-            "../../../etc/passwd",
-            "..\\..\\windows\\system32\\config\\sam", 
-            "test/../../../secret.txt",
-            "/etc/passwd",
-            "\\windows\\system32\\config\\sam"
-        ]
-        
-        for malicious_name in malicious_names:
-            score = TSScore(id="test123", filename=malicious_name)
-            path = score.get_data_file_path()
-            
-            # Ensure the path is within the expected directory structure
-            self.assertIn("test123", path)
-            # Most importantly: ensure no path traversal characters remain
-            self.assertNotIn("..", path)
-            self.assertNotIn("/etc/", path)
-            self.assertNotIn("\\windows\\", path.lower())
+    """Score ids and filenames from the URL never reach the filesystem unchecked."""
+
+    def test_score_id_must_be_sha256_hex(self):
+        for bad_id in ("test123", "../../etc", "A" * 64, "a" * 63, "a" * 65, "z" * 64):
+            with self.assertRaises(ValueError):
+                TSScore(id=bad_id, filename="score.musicxml").get_data_file_path()
+
+    def test_score_urls_reject_malformed_ids(self):
+        client = Client()
+        for path in ("/score/abc123/score.musicxml", "/midis/../score.musicxml", "/process_status/%s/x.musicxml" % ("A" * 64)):
+            self.assertEqual(client.get(path).status_code, 404, path)
+
+    def test_filename_path_components_are_stripped(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for malicious_name in ("../../../etc/passwd", "test/../../../secret.txt", "/etc/passwd"):
+                path = TSScore(id=VALID_ID, filename=malicious_name).get_data_file_path(root=temp_dir)
+                self.assertEqual(os.path.dirname(path), os.path.join(temp_dir, VALID_ID))
+                self.assertNotIn("..", os.path.basename(path))
+
+    def test_secret_key_is_required_outside_debug(self):
+        settings_path = os.path.join(score_settings.BASE_DIR, "talkingscores", "settings.py")
+        with patch.dict(os.environ, {"DJANGO_DEBUG": "false", "DJANGO_SECRET_KEY": ""}):
+            with self.assertRaises(RuntimeError):
+                runpy.run_path(settings_path)
+        with patch.dict(os.environ, {"DJANGO_DEBUG": "true", "DJANGO_SECRET_KEY": ""}):
+            self.assertTrue(runpy.run_path(settings_path)["SECRET_KEY"])
+        with patch.dict(os.environ, {"DJANGO_DEBUG": "false", "DJANGO_SECRET_KEY": "x" * 50}):
+            self.assertFalse(runpy.run_path(settings_path)["DEBUG"])
 
 
 class BasicFunctionalityTests(TestCase):
@@ -86,7 +100,10 @@ class BasicFunctionalityTests(TestCase):
         response = self.client.get(reverse('index'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Security-Policy"], "upgrade-insecure-requests")
+        policy = response["Content-Security-Policy"]
+        self.assertIn("script-src 'self'", policy)
+        self.assertIn("frame-ancestors 'none'", policy)
+        self.assertIn("upgrade-insecure-requests", policy)
 
     def test_site_shell_does_not_load_external_active_scripts(self):
         response = self.client.get(reverse('index'))
@@ -130,7 +147,7 @@ class BasicFunctionalityTests(TestCase):
         mock_state.return_value = "fetching"
 
         response = self.client.get(
-            reverse("process", kwargs={"id": "abc123", "filename": "score.musicxml"})
+            reverse("process", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
         )
 
         self.assertEqual(response.status_code, 200)
@@ -138,68 +155,13 @@ class BasicFunctionalityTests(TestCase):
         self.assertContains(response, "Starting score generation")
 
 
-class ErrorNotificationTests(TestCase):
-    def setUp(self):
-        self.client = Client()
-
-    @patch.dict(os.environ, {}, clear=True)
-    @patch("talkingscoresapp.views.smtplib.SMTP")
-    def test_send_error_email_skips_without_password(self, mock_smtp):
-        from talkingscoresapp.views import send_error_email
-
-        self.assertFalse(send_error_email("error"))
-        mock_smtp.assert_not_called()
-
-    @patch.dict(os.environ, {"EMAIL_PASSWORD": "secret"})
-    @patch("talkingscoresapp.views.smtplib.SMTP")
-    def test_send_error_email_uses_tls_and_configured_port(self, mock_smtp):
-        from talkingscoresapp.views import send_error_email
-
-        server = Mock()
-        mock_smtp.return_value.__enter__.return_value = server
-
-        self.assertTrue(send_error_email("error details"))
-        mock_smtp.assert_called_once_with("smtp.gmail.com", 587, timeout=20)
-        server.starttls.assert_called_once()
-        server.login.assert_called_once_with("talkingscores@gmail.com", "secret")
-        server.sendmail.assert_called_once()
-
-    @patch.dict(os.environ, {"EMAIL_PASSWORD": "secret"})
-    @patch("talkingscoresapp.views.logger.exception")
-    @patch("talkingscoresapp.views.smtplib.SMTP")
-    def test_send_error_email_logs_failure(self, mock_smtp, mock_logger_exception):
-        from talkingscoresapp.views import send_error_email
-
-        mock_smtp.side_effect = OSError("network down")
-
-        self.assertFalse(send_error_email("error details"))
-        mock_logger_exception.assert_called_once()
-
-    @patch("talkingscoresapp.views.send_error_email")
-    @patch("talkingscoresapp.views.logger.error")
-    def test_error_page_accepts_valid_notification_email(self, mock_logger_error, mock_send_error_email):
-        response = self.client.post(
-            reverse("error", kwargs={"id": "abc123", "filename": "score.musicxml"}),
-            {"notify_email": "user@example.com"},
-        )
+class ErrorPageTests(TestCase):
+    def test_error_page_names_the_next_step(self):
+        response = Client().get(reverse("error", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Thank you")
-        mock_logger_error.assert_called_once()
-        mock_send_error_email.assert_called_once()
-
-    @patch("talkingscoresapp.views.send_error_email")
-    @patch("talkingscoresapp.views.logger.warning")
-    def test_error_page_rejects_invalid_notification_email(self, mock_logger_warning, mock_send_error_email):
-        response = self.client.post(
-            reverse("error", kwargs={"id": "abc123", "filename": "score.musicxml"}),
-            {"notify_email": "not-an-email"},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Invalid email address")
-        mock_logger_warning.assert_called_once()
-        mock_send_error_email.assert_not_called()
+        self.assertContains(response, "Try another score")
+        self.assertNotContains(response, "<form")
 
 
 class SubmissionFormTests(TestCase):
@@ -281,7 +243,7 @@ class DownloadTests(TestCase):
 
         try:
             response = self.client.get(
-                reverse("midi", kwargs={"id": "abc123", "filename": "score.musicxml"}) + "?bsi=3&bpi=7&t=100&c=n"
+                reverse("midi", kwargs={"id": VALID_ID, "filename": "score.musicxml"}) + "?bsi=3&bpi=7&t=100&c=n"
             )
         finally:
             if "response" in locals():
@@ -291,12 +253,12 @@ class DownloadTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("audio/midi", response["Content-Type"])
         self.assertIn(".mid", response["Content-Disposition"])
-        self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+        self.assertNotIn("Access-Control-Allow-Origin", response)
 
     @patch("talkingscoresapp.views.MidiHandler.get_or_make_midi_file")
     def test_midi_rejects_missing_required_query_params(self, mock_get_midi):
         response = self.client.get(
-            reverse("midi", kwargs={"id": "abc123", "filename": "score.musicxml"})
+            reverse("midi", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
         )
 
         self.assertEqual(response.status_code, 400)
@@ -315,7 +277,7 @@ class DownloadTests(TestCase):
 
         for query_string in invalid_urls:
             response = self.client.get(
-                reverse("midi", kwargs={"id": "abc123", "filename": "score.musicxml"}) + query_string
+                reverse("midi", kwargs={"id": VALID_ID, "filename": "score.musicxml"}) + query_string
             )
             self.assertEqual(response.status_code, 400)
 
@@ -328,14 +290,14 @@ class DownloadTests(TestCase):
         mock_html.return_value = "<html><body>Score</body></html>"
 
         response = self.client.get(
-            reverse("download-html", kwargs={"id": "abc123", "filename": "score.musicxml"})
+            reverse("download-html", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/html", response["Content-Type"])
         self.assertIn("score-talking-score.html", response["Content-Disposition"])
         self.assertContains(response, "Score")
-        mock_html.assert_called_once_with(export_theme=None, export_mode=True)
+        mock_html.assert_called_once_with(export_theme=None, export_mode=True, raise_errors=True)
 
     @patch("talkingscoresapp.views.TSScore.state")
     @patch("talkingscoresapp.views.TSScore.html")
@@ -344,11 +306,11 @@ class DownloadTests(TestCase):
         mock_html.return_value = "<html><body>Score</body></html>"
 
         response = self.client.get(
-            reverse("download-html", kwargs={"id": "abc123", "filename": "score.musicxml"}) + "?theme=dark"
+            reverse("download-html", kwargs={"id": VALID_ID, "filename": "score.musicxml"}) + "?theme=dark"
         )
 
         self.assertEqual(response.status_code, 200)
-        mock_html.assert_called_once_with(export_theme="dark", export_mode=True)
+        mock_html.assert_called_once_with(export_theme="dark", export_mode=True, raise_errors=True)
 
     @patch("talkingscoresapp.views.TSScore.state")
     @patch("talkingscoresapp.views.TSScore.html")
@@ -357,11 +319,11 @@ class DownloadTests(TestCase):
         mock_html.return_value = "<html><body>Score</body></html>"
 
         response = self.client.get(
-            reverse("download-html", kwargs={"id": "abc123", "filename": "score.musicxml"}) + "?theme=bad"
+            reverse("download-html", kwargs={"id": VALID_ID, "filename": "score.musicxml"}) + "?theme=bad"
         )
 
         self.assertEqual(response.status_code, 200)
-        mock_html.assert_called_once_with(export_theme=None, export_mode=True)
+        mock_html.assert_called_once_with(export_theme=None, export_mode=True, raise_errors=True)
 
     @patch("talkingscoresapp.views.TSScore.state")
     @patch("talkingscoresapp.views.TSScore.html")
@@ -383,7 +345,7 @@ class DownloadTests(TestCase):
         """
 
         response = self.client.get(
-            reverse("download-html", kwargs={"id": "abc123", "filename": "score.musicxml"})
+            reverse("download-html", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
         )
         content = response.content.decode("utf-8")
 
@@ -507,7 +469,7 @@ class DownloadTests(TestCase):
         mock_state.return_value = "processed"
 
         response = self.client.get(
-            reverse("process-status", kwargs={"id": "abc123", "filename": "score.musicxml"})
+            reverse("process-status", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
         )
 
         self.assertEqual(response.status_code, 200)
@@ -530,7 +492,7 @@ class DownloadTests(TestCase):
             }
 
             response = self.client.post(
-                reverse("options", kwargs={"id": "abc123", "filename": "score.musicxml"}),
+                reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}),
                 {
                     "instruments": ["1"],
                     "bars_at_a_time": "2",
@@ -539,7 +501,7 @@ class DownloadTests(TestCase):
             )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], reverse("process", kwargs={"id": "abc123", "filename": "score.musicxml"}))
+        self.assertEqual(response["Location"], reverse("process", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
         mock_clear.assert_called_once()
 
     @patch("talkingscoresapp.views.TSScore.info")
@@ -558,7 +520,7 @@ class DownloadTests(TestCase):
             }
 
             response = self.client.post(
-                reverse("options", kwargs={"id": "abc123", "filename": "score.musicxml"}),
+                reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}),
                 {
                     "instruments": ["99"],
                     "bars_at_a_time": "2",
@@ -586,7 +548,7 @@ class DownloadTests(TestCase):
             }
 
             response = self.client.post(
-                reverse("options", kwargs={"id": "abc123", "filename": "score.musicxml"}),
+                reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}),
                 {
                     "instruments": ["not-a-number"],
                     "bars_at_a_time": "2",
@@ -614,7 +576,7 @@ class DownloadTests(TestCase):
             }
 
             response = self.client.post(
-                reverse("options", kwargs={"id": "abc123", "filename": "score.musicxml"}),
+                reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}),
                 {
                     "instruments": ["1"],
                     "bars_at_a_time": "999",
@@ -637,7 +599,7 @@ class CacheAndMaintenanceTests(TestCase):
 
     def test_html_cache_is_reused_when_fresh(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            score = TSScore(id="abc123", filename="score.musicxml")
+            score = TSScore(id=VALID_ID, filename="score.musicxml")
             data_path = score.get_data_file_path(root=temp_dir)
             os.makedirs(os.path.dirname(data_path), exist_ok=True)
             with open(data_path, "w", encoding="utf-8") as data_file:
@@ -657,8 +619,8 @@ class CacheAndMaintenanceTests(TestCase):
 
     def test_clear_generated_html_state_removes_cache_and_status(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            score = TSScore(id="abc123", filename="score.musicxml")
-            data_path = os.path.join(temp_dir, "abc123", "score.musicxml")
+            score = TSScore(id=VALID_ID, filename="score.musicxml")
+            data_path = os.path.join(temp_dir, VALID_ID, "score.musicxml")
             os.makedirs(os.path.dirname(data_path), exist_ok=True)
             with patch.object(score, "get_data_file_path", return_value=data_path):
                 html_path = score.get_html_cache_file_path()
@@ -675,8 +637,8 @@ class CacheAndMaintenanceTests(TestCase):
 
     def test_processing_status_write_is_readable_json(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            score = TSScore(id="abc123", filename="score.musicxml")
-            data_path = os.path.join(temp_dir, "abc123", "score.musicxml")
+            score = TSScore(id=VALID_ID, filename="score.musicxml")
+            data_path = os.path.join(temp_dir, VALID_ID, "score.musicxml")
             os.makedirs(os.path.dirname(data_path), exist_ok=True)
             with patch.object(score, "get_data_file_path", return_value=data_path):
                 score._write_processing_status("processing", "Generating score.")
@@ -689,8 +651,8 @@ class CacheAndMaintenanceTests(TestCase):
     @patch("talkingscoresapp.models.os.replace", side_effect=OSError("replace failed"))
     def test_processing_status_write_removes_temp_file_on_replace_failure(self, mock_replace):
         with tempfile.TemporaryDirectory() as temp_dir:
-            score = TSScore(id="abc123", filename="score.musicxml")
-            data_path = os.path.join(temp_dir, "abc123", "score.musicxml")
+            score = TSScore(id=VALID_ID, filename="score.musicxml")
+            data_path = os.path.join(temp_dir, VALID_ID, "score.musicxml")
             os.makedirs(os.path.dirname(data_path), exist_ok=True)
             with patch.object(score, "get_data_file_path", return_value=data_path):
                 with self.assertRaises(OSError):
@@ -721,8 +683,8 @@ class CacheAndMaintenanceTests(TestCase):
 
     def test_html_can_raise_generation_errors_for_background_status(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            score = TSScore(id="abc123", filename="score.musicxml")
-            data_path = os.path.join(temp_dir, "abc123", "score.musicxml")
+            score = TSScore(id=VALID_ID, filename="score.musicxml")
+            data_path = os.path.join(temp_dir, VALID_ID, "score.musicxml")
             os.makedirs(os.path.dirname(data_path), exist_ok=True)
             with open(data_path, "w", encoding="utf-8") as data_file:
                 data_file.write("<score-partwise></score-partwise>")
@@ -735,10 +697,14 @@ class CacheAndMaintenanceTests(TestCase):
 
                         self.assertIn("Error Generating Score", score.html(force_refresh=True))
 
+    @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
     @patch("talkingscoresapp.models.Music21TalkingScore")
     @patch("talkingscoresapp.models.requests.get")
-    def test_from_url_streams_remote_file_with_timeout(self, mock_get, mock_music21):
+    def test_from_url_streams_remote_file_with_timeout(self, mock_get, mock_music21, mock_dns):
         class FakeResponse:
+            is_redirect = False
+            is_permanent_redirect = False
+
             def raise_for_status(self):
                 pass
 
@@ -757,13 +723,18 @@ class CacheAndMaintenanceTests(TestCase):
             "https://example.com/score.musicxml",
             timeout=score_models.REMOTE_FETCH_TIMEOUT,
             stream=True,
+            allow_redirects=False,
         )
         self.assertEqual(score.filename, "score.musicxml")
         mock_music21.assert_called()
 
+    @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
     @patch("talkingscoresapp.models.requests.get")
-    def test_from_url_rejects_oversized_remote_file(self, mock_get):
+    def test_from_url_rejects_oversized_remote_file(self, mock_get, mock_dns):
         class FakeResponse:
+            is_redirect = False
+            is_permanent_redirect = False
+
             def raise_for_status(self):
                 pass
 
@@ -779,6 +750,56 @@ class CacheAndMaintenanceTests(TestCase):
     def test_from_url_rejects_unsupported_scheme(self):
         with self.assertRaises(ValueError):
             TSScore.from_url("file:///C:/temp/score.musicxml")
+
+    @patch("talkingscoresapp.models.requests.get")
+    def test_from_url_rejects_hosts_on_private_networks(self, mock_get):
+        private_addresses = ["127.0.0.1", "10.1.2.3", "192.168.0.5", "169.254.169.254", "::1", "::ffff:10.0.0.1", "0.0.0.0"]
+        for address in private_addresses:
+            addrinfo = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 80))]
+            with patch("talkingscoresapp.models.socket.getaddrinfo", return_value=addrinfo):
+                with self.assertRaises(score_models.RemoteAddressNotAllowed, msg=address):
+                    TSScore.from_url("http://scores.example/score.musicxml")
+        mock_get.assert_not_called()
+
+    @patch("talkingscoresapp.models.requests.get")
+    def test_from_url_checks_every_redirect_hop(self, mock_get):
+        class Redirect:
+            is_redirect = True
+            is_permanent_redirect = False
+            headers = {"Location": "http://internal.example/score.musicxml"}
+
+            def close(self):
+                pass
+
+        mock_get.return_value = Redirect()
+
+        def resolve(host, *args, **kwargs):
+            address = "10.0.0.9" if host == "internal.example" else "93.184.216.34"
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 80))]
+
+        with patch("talkingscoresapp.models.socket.getaddrinfo", side_effect=resolve):
+            with self.assertRaises(score_models.RemoteAddressNotAllowed):
+                TSScore.from_url("http://scores.example/score.musicxml")
+        mock_get.assert_called_once()
+
+    def test_mxl_extraction_follows_the_container_manifest(self):
+        container = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<container><rootfiles><rootfile full-path="real/score.xml" media-type="application/vnd.recordare.musicxml+xml"/></rootfiles></container>'
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            mxl_path = os.path.join(temp_dir, "score.mxl")
+            with zipfile.ZipFile(mxl_path, "w") as archive:
+                archive.writestr("aaa-first.xml", "<not-the-score/>")
+                archive.writestr("META-INF/container.xml", container)
+                archive.writestr("real/score.xml", "<score-partwise/>")
+            output_path = os.path.join(temp_dir, "score.musicxml")
+
+            with patch.object(score_models.logger, "info"):
+                score_models.extract_musicxml_from_mxl(mxl_path, output_path)
+
+            with open(output_path, encoding="utf-8") as output:
+                self.assertEqual(output.read(), "<score-partwise/>")
 
     def test_cleanup_media_dry_run_and_delete(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -805,3 +826,93 @@ class CacheAndMaintenanceTests(TestCase):
 
             self.assertFalse(os.path.exists(old_dir))
             self.assertTrue(os.path.exists(new_dir))
+
+
+class GenerationLockTests(TestCase):
+    """One generation run per score at a time, and a dead run never blocks the next one."""
+
+    def _score_in(self, temp_dir):
+        score = TSScore(id=VALID_ID, filename="score.musicxml")
+        data_path = os.path.join(temp_dir, VALID_ID, "score.musicxml")
+        os.makedirs(os.path.dirname(data_path), exist_ok=True)
+        with open(data_path, "w", encoding="utf-8") as data_file:
+            data_file.write("<score-partwise></score-partwise>")
+        with open(data_path + ".opts", "w", encoding="utf-8") as opts_file:
+            opts_file.write("{}")
+        return score, data_path
+
+    def test_lock_is_exclusive_while_a_run_is_live(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            score, data_path = self._score_in(temp_dir)
+            with patch.object(score, "get_data_file_path", return_value=data_path):
+                self.assertTrue(score.acquire_generation_lock())
+                score._write_processing_status("processing", "Generating score.")
+
+                self.assertFalse(score.acquire_generation_lock())
+                with self.assertRaises(score_models.ScoreGenerationInProgress):
+                    score.html(force_refresh=True)
+                self.assertFalse(score.start_background_processing())
+
+                score.release_generation_lock()
+                self.assertTrue(score.acquire_generation_lock())
+                score.release_generation_lock()
+
+    def test_stale_lock_is_taken_over(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            score, data_path = self._score_in(temp_dir)
+            with patch.object(score, "get_data_file_path", return_value=data_path):
+                self.assertTrue(score.acquire_generation_lock())
+                score._write_processing_status("processing", "Generating score.")
+                with patch("talkingscoresapp.models.time.time", return_value=time.time() + score_models.GENERATION_LOCK_STALE_SECONDS + 1):
+                    with patch.object(score.logger, "warning"):
+                        self.assertTrue(score.acquire_generation_lock())
+                score.release_generation_lock()
+
+    def test_lock_left_by_a_finished_run_is_taken_over(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            score, data_path = self._score_in(temp_dir)
+            with patch.object(score, "get_data_file_path", return_value=data_path):
+                self.assertTrue(score.acquire_generation_lock())
+                score._write_processing_status("failed", "boom")
+                with patch.object(score.logger, "warning"):
+                    self.assertTrue(score.acquire_generation_lock())
+                score.release_generation_lock()
+
+    def test_status_and_cache_writes_are_skipped_after_options_change(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            score, data_path = self._score_in(temp_dir)
+            with patch.object(score, "get_data_file_path", return_value=data_path):
+                epoch = score.options_epoch()
+                with open(data_path + ".opts", "w", encoding="utf-8") as opts_file:
+                    opts_file.write('{"bars_at_a_time": 8}')
+
+                score._write_processing_status("complete", "Score ready.", epoch=epoch)
+                self.assertFalse(os.path.exists(score.get_processing_status_file_path()))
+
+                fake_formatter = Mock()
+                fake_formatter.generateHTML.return_value = "<html>old options</html>"
+                with patch("talkingscoresapp.models.Music21TalkingScore"), \
+                        patch("talkingscoresapp.models.HTMLTalkingScoreFormatter", return_value=fake_formatter), \
+                        patch.object(score.logger, "info"):
+                    score._generate_html(export_theme=None, export_mode=False, epoch=epoch)
+                self.assertFalse(os.path.exists(score.get_html_cache_file_path()))
+
+    def test_lock_is_released_after_generation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            score, data_path = self._score_in(temp_dir)
+            with patch.object(score, "get_data_file_path", return_value=data_path):
+                fake_formatter = Mock()
+                fake_formatter.generateHTML.return_value = "<html>fresh</html>"
+                with patch("talkingscoresapp.models.Music21TalkingScore"), \
+                        patch("talkingscoresapp.models.HTMLTalkingScoreFormatter", return_value=fake_formatter), \
+                        patch.object(score.logger, "info"):
+                    self.assertEqual(score.html(force_refresh=True), "<html>fresh</html>")
+                self.assertFalse(os.path.exists(score.get_generation_lock_file_path()))
+                self.assertTrue(os.path.exists(score.get_html_cache_file_path()))
+
+    @patch("talkingscoresapp.views.TSScore.state", return_value="processed")
+    @patch("talkingscoresapp.views.TSScore.html", side_effect=score_models.ScoreGenerationInProgress("busy"))
+    def test_score_page_waits_on_processing_page_while_locked(self, mock_html, mock_state):
+        response = Client().get(reverse("score", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
+
+        self.assertRedirects(response, reverse("process", kwargs={"id": VALID_ID, "filename": "score.musicxml"}), fetch_redirect_response=False)

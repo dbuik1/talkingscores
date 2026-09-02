@@ -44,16 +44,6 @@ class AnalyseIndex:
         self.rhythm_chord_index = [-1, -1]
         self.rhythm_rest_index = [-1, -1]
 
-    def print_info(self):
-        print("EventIndex..." + str(self.event_index) + " - type " + self.event_type)
-        if (self.event_type == 'n'):
-            print(self.pitch_name_index + self.pitch_number_index + self.interval_index)
-            print("rhythm " + str(self.rhythm_note_index))
-        elif (self.event_type == 'c'):
-            print(self.chord_pitches_index + self.chord_interval_index + self.chord_name_index)
-            print("rhythm " + str(self.rhythm_chord_index))
-        elif (self.event_type == 'r'):
-            print("rhythm " + str(self.rhythm_rest_index))
 
 
 class AnalyseSection:
@@ -61,19 +51,15 @@ class AnalyseSection:
         self.analyse_indexes = []  # all the notes etc in the section
         self.section_start_event_indexes = []  # the event indexes each time this section starts
 
-    def print_info(self):
-        print("section length = " + str(len(self.analyse_indexes)))
-        # for ai in self.analyse_indexes:
-        # ai.print_info
-
 
 class MusicAnalyser:
-    score = None
-    analyse_parts = []
-    summary = ""
-    repetition_parts = []
-    repetition_right_hand = ""
-    repetition_left_hand = ""
+    def __init__(self):
+        self.score = None
+        self.analyse_parts = []
+        self.summary = ""
+        self.repetition_parts = []
+        self.repetition_right_hand = ""
+        self.repetition_left_hand = ""
 
     def setScore(self, ts):
         self.ts = ts
@@ -126,7 +112,6 @@ class MusicAnalyser:
     # if there are only a couple of changes - list them out with their bar number.
     # if there are more - just say the number
     def summarise_key_and_time_changes(self, changes_dictionary: dict, changes_name: str):
-        print("summarise key and time changes")
 
         changes = ""
         numchanges = len(changes_dictionary) - 1  # the first one isn't a change!
@@ -560,7 +545,7 @@ class AnalysePart:
         elif percent > 50:
             return "over half"
         elif percent > 33:
-            return "over a thrid"
+            return "over a third"
         else:
             return ""
 
@@ -708,7 +693,7 @@ class AnalysePart:
                     description += "; plus " + str(remaining_count) + " other " + item_name
             else:
                 description = str(len(upto_percent)) + " " + item_name
-                description += ", the most common is " + enumerate(count_list)[0][0]
+                description += ", the most common is " + str(count_list[0][0])
         return description
 
     def describe_summary(self):
@@ -792,7 +777,8 @@ class AnalysePart:
             if not dist == "":
                 summary += " (" + dist + ")."
 
-        summary = self.replace_end_with(summary, ", ", ".  ").capitalize()
+        summary = self.replace_end_with(summary, ", ", ".  ")
+        summary = summary[:1].upper() + summary[1:]
         return summary
 
     def replace_end_with(self, original: str, remove: str, add: str):
@@ -905,8 +891,6 @@ class AnalysePart:
         repetition_lengths[1] = len(self.repeated_measures_not_in_groups_dictionary)
         rhythm_interval_repetition_lengths[1] = len(self.repeated_rhythm_measures_not_full_match_not_in_groups_dictionary)
         rhythm_interval_repetition_lengths[1] += len(self.repeated_intervals_measures_not_full_match_not_in_groups_dictionary)
-        print("repetition lengths = " + str(repetition_lengths))
-        print("rhythm and interval repetition lengths = " + str(rhythm_interval_repetition_lengths))
 
         for k, v in repetition_lengths.items():
             total_lengths += v
@@ -936,7 +920,7 @@ class AnalysePart:
             repetition += " and " + str(len(self.measure_intervals_analyse_indexes_list)) + " measures have unique intervals...  "
 
         if repetition != "":
-            repetition = "<br/>"+repetition.capitalize()
+            repetition = "<br/>" + repetition[:1].upper() + repetition[1:]
         return repetition
 
     # you get a KeyError if you do dict[key] += value if the key doesn't already exist...
@@ -1001,7 +985,6 @@ class AnalysePart:
     # measures 7 AND 8 are used first used at 1 and last used at bar 6
 
     def describe_repetition_in_context(self):
-        print("describe repetition in context...")
 
         repetition_in_context = {}  # key = measure number.  value = string
         # todo - could eg bar 4 could be full match for another bar - but only rhythm match for another bar.  The later rhythm match will say when it was first used - but the earlier full match won't treat it like the first rhythm match and say how many times it was used.
@@ -1314,8 +1297,6 @@ class AnalysePart:
                 if d == 0.0:
                     measure_gracenotes += 1
                     self.gracenote_count += 1
-                    print("I'm a grace note note...")
-                    print(n)
                 if d > 0.0:  # bigger than a grace note because they are counted separately
                     if self.rhythm_note_dictionary.get(d) == None:
                         self.rhythm_note_dictionary[d] = [event_index]
@@ -1384,10 +1365,7 @@ class AnalysePart:
                     self.measure_intervals_analyse_indexes_dictionary[index].append(current_measure)
                     self.measure_intervals_analyse_indexes_all[current_measure] = [index, len(self.measure_intervals_analyse_indexes_dictionary[index])-1]
 
-        print("\n Done set_part() - note count = " + str(self.note_count) + " chord count = " + str(self.chord_count) + " rest count = " + str(self.rest_count) + "...")
 
-        print("self.measure_analyse_indexes_all")
-        print(self.measure_analyse_indexes_all)
 
         self.repeated_measures_lists = self.calculate_repeated_measures_lists(self.measure_analyse_indexes_dictionary, False)
         self.measure_groups_list = self.calculate_measure_groups(self.measure_analyse_indexes_all, self.measure_analyse_indexes_dictionary)
@@ -1398,7 +1376,7 @@ class AnalysePart:
         self.repeated_rhythm_measures_not_full_match_not_in_groups_dictionary = self.calculate_repeated_measures_not_in_groups(self.repeated_measures_lists_rhythm, self.measure_rhythm_not_full_match_groups_list)
 
         self.repeated_measures_lists_intervals = self.calculate_repeated_measures_lists(self.measure_intervals_analyse_indexes_dictionary, True)
-        self.repeated_intervals_measures_not_full_match_not_in_groups_dictionary = self.calculate_repeated_measures_not_in_groups(self.repeated_measures_lists_intervals, self.measure_intervals_not_full_match_groups_list)
+        self.measure_intervals_not_full_match_groups_list = self.calculate_measure_groups(self.measure_intervals_analyse_indexes_all, self.measure_intervals_analyse_indexes_dictionary)
         self.repeated_intervals_measures_not_full_match_not_in_groups_dictionary = self.calculate_repeated_measures_not_in_groups(self.repeated_measures_lists_intervals, self.measure_intervals_not_full_match_groups_list)
 
         # make lists of index and totals then sort by totals for eg most common pitch / rhythm etc

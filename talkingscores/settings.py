@@ -21,11 +21,20 @@ sys.path.append(os.path.join(BASE_DIR, 'lib'))
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'dev-only-talkingscores-secret-key')
+# Debug is off unless DJANGO_DEBUG opts in, so a deployment that forgets the
+# variable is never left serving tracebacks.
+DEBUG = os.environ.get('DJANGO_DEBUG', 'false').lower() in ('1', 'true', 'yes')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
+# Without a real secret key sessions and CSRF tokens can be forged, so a
+# production process refuses to start rather than fall back to a known value.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'dev-only-talkingscores-secret-key'
+    else:
+        raise RuntimeError(
+            "DJANGO_SECRET_KEY is not set. Set it to a long random value before starting the server."
+        )
 
 DEFAULT_ALLOWED_HOSTS = [
     'www.talkingscores.co.uk',
@@ -59,6 +68,25 @@ env_csrf_trusted_origins = [
 ]
 
 CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(DEFAULT_CSRF_TRUSTED_ORIGINS + env_csrf_trusted_origins))
+
+# Scripts and styles come only from this origin. The score player and the
+# theme toggle are still inline scripts, so 'unsafe-inline' stays on
+# script-src until they move to static files. Media covers the MIDI files the
+# player fetches from the same origin.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://www.midijs.net; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "img-src 'self' data:; "
+    "media-src 'self'; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'; "
+    "upgrade-insecure-requests"
+)
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = not DEBUG

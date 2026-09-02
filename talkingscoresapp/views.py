@@ -15,12 +15,8 @@ from urllib.parse import urlparse
 from talkingscores.settings import BASE_DIR
 from lib.midiHandler import MidiHandler
 
-from talkingscoresapp.models import TSScore, TSScoreState
+from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress
 from talkingscoresapp.models import remove_file_quietly
-
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-import smtplib
 
 logger = logging.getLogger("TSScore")
 
@@ -281,37 +277,10 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     accidental_style = forms.CharField(widget=forms.Select, required=False)
     key_signature_accidentals = forms.CharField(widget=forms.Select, required=False)
 
-    colour_position = forms.CharField(widget=forms.Select, required=False)
+    colour_style = forms.CharField(widget=forms.Select, required=False)
     chk_colourPitch = forms.BooleanField(required=False)
     chk_colourRhythm = forms.BooleanField(required=False)
     chk_colourOctave = forms.BooleanField(required=False)
-
-
-class NotifyEmailForm(forms.Form):
-    notify_email = forms.EmailField()
-
-
-def send_error_email(error_message):
-    password = os.environ.get('EMAIL_PASSWORD')
-    if not password:
-        return False
-
-    msg = MIMEMultipart()
-    msg['From'] = "talkingscores@gmail.com"
-    msg['To'] = "talkingscores@gmail.com"
-    msg['Subject'] = "Talking Scores Error"
-    msg.attach(MIMEText(error_message, 'plain'))
-
-    try:
-        with smtplib.SMTP('smtp.gmail.com', 587, timeout=20) as server:
-            server.starttls()
-            server.login(msg['From'], password)
-            server.sendmail(msg['From'], msg['To'], msg.as_string())
-    except Exception:
-        logger.exception("Failed to send Talking Scores error notification email.")
-        return False
-
-    return True
 
 
 def process(request, id, filename):
@@ -344,8 +313,10 @@ def score(request, id, filename):
         return redirect('index')
     else:
         try:
-            html = score_obj.html()
+            html = score_obj.html(raise_errors=True)
             return HttpResponse(html)
+        except ScoreGenerationInProgress:
+            return redirect('process', id, filename)
         except Exception:
             logger.exception("Unable to process score: http://%s%s " % (request.get_host(), reverse('score', args=[id, filename])))
             return redirect('error', id, filename)
@@ -372,7 +343,6 @@ def midi(request, id, filename):
             as_attachment=False,
             filename=os.path.basename(midi_file_path),
         )
-        fr['Access-Control-Allow-Origin'] = '*'
         fr['X-Robots-Tag'] = "noindex"
         return fr
     else:
@@ -389,7 +359,7 @@ def download_html(request, id, filename):
 
     try:
         export_theme = clean_export_theme(request.GET.get("theme"))
-        html = score_obj.html(export_theme=export_theme, export_mode=True)
+        html = score_obj.html(export_theme=export_theme, export_mode=True, raise_errors=True)
         response = HttpResponse(
             clean_html_export(html),
             content_type="text/html; charset=utf-8",
@@ -399,26 +369,16 @@ def download_html(request, id, filename):
         )
         response['X-Robots-Tag'] = "noindex"
         return response
+    except ScoreGenerationInProgress:
+        return redirect('process', id, filename)
     except Exception:
         logger.exception("Unable to generate HTML download: http://%s%s" % (request.get_host(), request.get_full_path()))
         return redirect('error', id, filename)
 
 
 def error(request, id, filename):
-    if request.method == 'POST':
-        form = NotifyEmailForm(request.POST)
-        if form.is_valid():
-            notification_message = "Notifications about score http://%s%s should go to %s" % (
-                request.get_host(), reverse('score', args=[id, filename]), form.cleaned_data['notify_email'])
-            logger.error(notification_message)
-            send_error_email(notification_message)
-        else:
-            logger.warning(str(form.errors))
-    else:
-        form = NotifyEmailForm()
-
     template = loader.get_template('error.html')
-    context = {'id': id, 'filename': filename, 'form': form}
+    context = {'id': id, 'filename': filename}
     return HttpResponse(template.render(context, request))
 
 

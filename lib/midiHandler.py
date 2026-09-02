@@ -6,7 +6,6 @@ import math
 import logging
 import logging.handlers
 import logging.config
-from tracemalloc import BaseFilter
 from music21 import *
 from talkingscores.settings import BASE_DIR, MEDIA_ROOT, STATIC_ROOT, STATIC_URL
 from talkingscoreslib import Music21TalkingScore
@@ -15,13 +14,10 @@ logger = logging.getLogger("TSScore")
 
 
 class MidiHandler:
-    # Changed 'get' to 'request' for clarity, as the whole request object is passed in.
-    # lib/midiHandler.py
-
     def __init__(self, request, folder, filename):
         self.queryString = request
         self.folder = folder
-        self.filename = filename.replace(".mid", "")
+        self.filename = filename[:-4] if filename.lower().endswith(".mid") else filename
         # This will hold a pre-parsed music21 score object to avoid re-parsing
         self.score = None
 

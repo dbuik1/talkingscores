@@ -233,7 +233,7 @@
                                     <label for="beat_division" class="form-label">Beat Grouping</label>
                                     <select name="beat_division" id="beat_division" class="form-control">
                                         {% for option in score_info.beat_division_options %}
-                                            <option value="{{ option.value }}" {% if loop.index == 2 %}selected{% endif %}>{{ option.display }}</option>
+                                            <option value="{{ option.value }}" {% if forloop.counter == 2 %}selected{% endif %}>{{ option.display }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>

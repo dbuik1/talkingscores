@@ -1,14 +1,13 @@
 {% extends "base_site.html" %}
 {% load static %}
 
-{% block title %}Error producing Talking Score - Talking Scores{% endblock %}
+{% block title %}This score could not be generated - Talking Scores{% endblock %}
 {% block noindex %}<meta name="robots" content="noindex" />{% endblock %}
 
 {% block content %}
 <div class="error-page">
     <header class="page-header">
-        <h1>Talking Scores</h1>
-        <h2>Oops!</h2>
+        <h1>This score could not be generated</h1>
     </header>
 
     <div class="col-md-11 mx-auto text-start">
@@ -16,61 +15,12 @@
             <div class="alert alert-warning tsp" role="alert">
                 <span class="alert-icon" aria-hidden="true">⚠️</span>
                 <div class="alert-content">
-                    <p class="sr-only">Warning:</p>
-                    <p>I'm sorry to say that we had trouble processing this score. The development team has been notified and will look into how to fix this. Please do Contact Us by email or with the form below, if you would like to be notified when this is fixed. Or come back occasionally and check the Change Log Page - often an error will be fixed in the next update.</p>
+                    <p>The file was read, but turning it into a talking score failed part way through. The failure has been logged.</p>
+                    <p>Fixes are listed on the <a href="{% url 'change-log' %}">change log</a>. To report the score, use the <a href="{% url 'contact-us' %}">contact page</a> and include the file name: {{ filename }}.</p>
                 </div>
             </div>
         </section>
-
-        <section class="notification-section">
-            <h3>Get Notified When Fixed</h3>
-            <p class="tsp">If you'd like to be notified when this score is working, simply put your email address in the box below. We promise to only use your email address to notify you about this score.</p>
-
-            {% if form.is_bound %}
-                {% if form.is_valid %}
-                    <div class="alert alert-success tsp" role="alert">
-                        <span class="alert-icon" aria-hidden="true">✓</span>
-                        <div class="alert-content">
-                            <strong>Thank you!</strong>
-                            We have made a note of your email address and will let you know when we've investigated why this score isn't working.
-                        </div>
-                    </div>
-                {% else %}
-                    <div class="alert alert-danger tsp" role="alert">
-                        <span class="alert-icon" aria-hidden="true">✗</span>
-                        <div class="alert-content">
-                            {% if form.errors.notify_email.0 == 'This field is required.' %}
-                                <strong>Missing email address</strong>
-                            {% else %}
-                                <strong>Invalid email address</strong>
-                            {% endif %}
-                            <br>Please do enter a valid email address if you'd like to be notified about this score.
-                        </div>
-                    </div>
-                {% endif %}
-            {% endif %}
-
-            <form class="notification-form" action="{% url 'error' id filename %}" method="post" novalidate>
-                {% csrf_token %}
-                <div class="form-group tsp">
-                    <label for="id_notify_email" class="form-label">Email address</label>
-                    <input type="email" 
-                           class="form-control" 
-                           name="notify_email" 
-                           id="id_notify_email"
-                           placeholder="Email address"
-                           required
-                           aria-describedby="email-help">
-                    <div id="email-help" class="form-text">We'll only use this to notify you about this specific score.</div>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary btn-lg">
-                        <span class="btn-icon" aria-hidden="true">📧</span>
-                        Notify me
-                    </button>
-                </div>
-            </form>
-        </section>
+        <p class="tsp"><a class="btn btn-primary btn-lg" href="{% url 'index' %}">Try another score</a></p>
     </div>
 </div>
 {% endblock content %}
