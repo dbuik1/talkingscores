@@ -1,642 +1,184 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{% if export_theme %} data-theme="{{ export_theme }}"{% endif %}>
 <head>
-    <title>Talking score for {{ basic_information['title'] }}</title>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <meta name="robots" content="noindex" />
-    
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ basic_information.title }} - Talking Scores</title>
     {% if not export_mode %}
-    <script type='text/javascript' src='//www.midijs.net/lib/midi.js'></script> 
+    <meta name="robots" content="noindex">
     {% endif %}
-
-    {% if inline_css %}
-    <style type="text/css">
+    {% if export_mode %}
+    <style>
 {{ inline_css|safe }}
     </style>
     {% else %}
-    <link href="{{ static_css_url|default('/static/css/talkingscores.css', true) }}" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Atkinson+Hyperlegible+Next:wght@400;700&display=swap" rel="stylesheet">
+    <link href="{{ static_css_url }}" rel="stylesheet">
     {% endif %}
-
+    {% if palette_css %}<style>{{ palette_css|safe }}</style>{% endif %}
+    <script type="application/json" id="score-data">{{ score_data|tojson }}</script>
+    {% if export_mode %}
     <script>
-        (function() {
-            const exportedTheme = "{{ export_theme|default('', true) }}";
-            if (exportedTheme === 'light' || exportedTheme === 'dark') {
-                document.documentElement.setAttribute('data-theme', exportedTheme);
-                return;
-            }
-
-            const preference = localStorage.getItem('theme-preference');
-            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const theme = preference || (systemPrefersDark ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
+{{ inline_js|safe }}
     </script>
-    
-    <style type="text/css">
-        body{font-family: Georgia; font-size: 26pt}
-        
-        h4 {
-            margin-block-end:1rem;
-        }
-
-        /* Bar headings */
-        .bar-heading {
-            background: #5a2d91;
-            color: white;
-            padding: 0.4rem 1.2rem;
-            border-radius: 0.75rem;
-            margin: 2rem 0 1.5rem 0;
-            font-weight: bold;
-            font-size: 1.4em;
-            text-align: left;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border: 2px solid #4a2373;
-        }
-
-        html[data-theme="dark"] .bar-heading {
-            background: #7865b8;
-            border-color: #6a5aa6;
-        }
-
-        /* Musical badges */
-        .music-info-badge {
-            display: inline-block;
-            padding: 0.2rem 0.7rem;
-            margin: 0.10rem 0.10rem 0.10rem 0;
-            border-radius: 0.7rem;
-            font-weight: bold;
-            font-size: 0.75em;
-            border: 2px solid currentColor;
-            color: white;
-        }
-
-        .time-signature-badge {
-            background: #1e7e34;
-            border-color: #155724;
-        }
-
-        html[data-theme="dark"] .time-signature-badge {
-            background: #28a745;
-            border-color: #1e7e34;
-        }
-
-        .key-signature-badge {
-            background: #dc6502;
-            border-color: #bf5d02;
-        }
-
-        html[data-theme="dark"] .key-signature-badge {
-            background: #fd7e14;
-            border-color: #dc6502;
-        }
-
-        /* ALL PLAY BUTTONS - Use main stylesheet classes and theme colors */
-        .lnkPlay {
-            /* Use the exact same styling as main stylesheet buttons */
-            background-color: var(--btn-primary-bg) !important;
-            color: var(--btn-primary-color) !important;
-            border: 2px solid var(--btn-primary-bg) !important;
-            
-            /* Basic button styling */
-            display: inline-block;
-            text-decoration: none !important;
-            padding: 0.3rem 0.8rem;
-            margin: 0.3rem 0.5rem 0.3rem 0;
-            border-radius: 0.35rem;
-            font-weight: 600;
-            font-size: 0.8em;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-        }
-
-        .lnkPlay::before {
-            content: "▶";
-            margin-right: 0.5rem;
-            font-size: 0.8em;
-        }
-
-        .lnkPlay:hover,
-        .lnkPlay:focus {
-            background-color: var(--btn-primary-hover-bg) !important;
-            border-color: var(--btn-primary-hover-bg) !important;
-            color: var(--btn-primary-color) !important;
-            text-decoration: none !important;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
-        }
-
-        .lnkPlay:active {
-            transform: translateY(0);
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-        }
-
-        /* Remove ALL color overrides for part buttons */
-        .part-midi-list .lnkPlay {
-            /* Just make them slightly smaller, but keep same colors */
-            font-size: 0.75em !important;
-            padding: 0.18rem 0.6rem !important;
-            margin: 0.08rem 0.2rem 0.08rem 0;
-            /* Colors inherited from base .lnkPlay class above */
-        }
-
-        /* Remove ALL special styling for different button types */
-
-
-        /* Layout helpers only */
-        .global-controls-section {
-            background: var(--background-color);
-            border: 2px solid #dc6502;
-            border-radius: 1rem;
-            padding: 2rem;
-            margin: 2rem 0;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-        }
-
-        html[data-theme="dark"] .global-controls-section {
-            border-color: #fd7e14;
-        }
-
-        .global-controls-section h2 {
-            color: var(--text-color);
-            text-align: center;
-            margin-bottom: 1.5rem;
-            font-size: 1.6em;
-        }
-
-        .instrument-midi-section {
-            background: var(--form-control-bg);
-            border: 1px solid var(--form-control-border);
-            border-radius: 0.75rem;
-            padding: 1.5rem;
-            margin: 1.5rem 0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .instrument-midi-section h3 {
-            color: var(--text-color);
-            margin-bottom: 1rem;
-            font-size: 1.3em;
-            border-bottom: 2px solid var(--form-control-border);
-            padding-bottom: 0.5rem;
-        }
-
-        .play-buttons-container {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            margin: 1rem 0;
-            align-items: flex-start;
-        }
-
-        .main-play-buttons {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 2.5rem;
-            margin-bottom: 0.2rem;
-        }
-
-        .instrument-buttons-container {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            width: 100%;
-        }
-
-        .single-instrument-row {
-            display: flex;
-            flex-direction: column;
-            gap: 0.3rem;
-            margin-bottom: 1rem;
-        }
-
-        .part-midi-list {
-            margin-left: 2rem;
-            margin-top: 0.5rem;
-            display: flex;
-            flex-direction: row;
-            gap: 0.5rem;
-            align-items: flex-start;
-            flex-wrap: wrap;
-        }
-
-        .playback-controls {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .playback-controls label {
-            font-weight: bold;
-            color: var(--text-color);
-        }
-
-        .playback-controls select {
-            padding: 0.4rem;
-            border-radius: 0.25rem;
-            border: 1px solid var(--form-control-border);
-            background: var(--form-control-bg);
-            color: var(--form-control-color);
-        }
-
-        .download-controls {
-            display: flex;
-            gap: 0.8rem;
-            flex-wrap: wrap;
-            margin: 1rem 0 1.5rem 0;
-        }
-
-        .download-link {
-            display: inline-block;
-            text-decoration: none !important;
-            padding: 0.35rem 0.8rem;
-            border-radius: 0.35rem;
-            font-weight: 600;
-            font-size: 0.75em;
-            background-color: var(--btn-primary-bg);
-            color: var(--btn-primary-color) !important;
-            border: 2px solid var(--btn-primary-bg);
-        }
-
-        .download-link:hover,
-        .download-link:focus {
-            background-color: var(--btn-primary-hover-bg);
-            border-color: var(--btn-primary-hover-bg);
-            color: var(--btn-primary-color) !important;
-        }
-
-        .bar-info {
-            background: var(--form-control-bg);
-            border: 1px solid var(--form-control-border);
-            border-radius: 0.5rem;
-            padding: 0.3rem 0.7rem;
-            margin: 0.3rem 0;
-        }
-
-        .bar-number {
-            font-weight: bold;
-            color: var(--text-color);
-            font-size: 1.2em;
-            margin-bottom: 0.2rem;
-            padding-top: 0.08rem;
-            padding-bottom: 0.08rem;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .playback-controls {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .main-play-buttons {
-                flex-direction: column;
-            }
-            
-            .part-midi-list {
-                flex-direction: column;
-                margin-left: 1rem;
-            }
-        }
-    </style>
-{% if palette_css %}<style>{{ palette_css|safe }}</style>{% endif %}
-</head>
-<body class="score-page {{ colour_root_class }}">
-
-    <nav id="score-nav-ribbon" class="score-nav-ribbon" aria-label="Score navigation">
-        <a href="#" class="nav-link-top">Back to Top</a>
-        {% if not export_mode %}
-        <a href="#" id="stop-playback-btn" class="nav-link-stop">Stop Playback</a>
-        <hr>
-        {% endif %}
-        <ul>
-            {% for segment in music_segments %}
-                <li><a href="#{{ segment.anchor }}">{{ segment.label }}</a></li>
-            {% endfor %}
-        </ul>
-    </nav>
-    <div class="container">
-        <main id="score-main-content">
-        <h1>Info</h1>
-
-            <p>{{ basic_information['title']|default('Untitled work') }} by {{ basic_information['composer']|default('Unknown composer') }}.</p>
-
-            <p>Time signature of {{ preamble['time_signature'] }}, key signature of {{ preamble['key_signature'] }}, tempo of {{ preamble['tempo']|default('no tempo specified') }}</p>
-            <p>Music, both hands, a bar at a time, beat by beat</p>
-
-            {% if download_html_url and not export_mode %}
-            <div class="download-controls" aria-label="Download score">
-                <a class="download-link" href="{{ download_html_url }}" data-download-html>Download HTML</a>
-                {% if download_text_url %}<a class="download-link" href="{{ download_text_url }}">Download text</a>{% endif %}
-                {% if download_braille_url %}<a class="download-link" href="{{ download_braille_url }}">Download braille</a>{% endif %}
-            </div>
-            {% endif %}
-
-            {% if not export_mode %}
-            <div id="global-controls" class="global-controls-section">
-                <h2>Entire Score Playback</h2>
-                <div class="playback-controls">
-                    <label for="global-tempo">Tempo:</label>
-                    <select class="ddlTempo" name="tempo" id="global-tempo">
-                        <option value="50">50%</option>
-                        <option value="100" selected>100%</option>
-                        <option value="150">150%</option>
-                    </select>
-                    
-                    <label for="global-click">Click:</label>
-                    <select class="ddlClick" name="click" id="global-click">
-                        <option value="n">None</option>
-                        <option value="be">Bars / Beats</option>
-                    </select>
-                </div>
-            
-                    
-                    <div class="instrument-buttons-container">
-                        {% for index, ins in full_score_midis.selected_instruments_midis.items() %}
-                            <div class="single-instrument-row">
-                                {% if preamble.number_of_parts > 1 %}
-                                    <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">{{instruments[ins.ins][0]}}</a>
-                                {% else %}
-                                    <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play Score</a>
-                                {% endif %}
-                                
-                                {% if ins.midi_parts|length > 0 %}
-                                    <div class="part-midi-list">
-                                        {% for midipart in ins.midi_parts %}
-                                            <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1]}}</a>
-                                        {% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-        <section class="score-facts" aria-labelledby="score-facts-heading">
-        <h1 id="score-facts-heading">About this score</h1>
-        {% if facts %}
-        <dl class="fact-list">
-            {% for fact in facts.piece %}
-            <div class="fact"><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
-            {% endfor %}
-        </dl>
-        {% if facts.changes %}
-        <h2>Changes</h2>
-        <ul class="fact-changes">
-            {% for change in facts.changes %}<li>{{ change }}</li>{% endfor %}
-        </ul>
-        {% endif %}
-        {% for part in facts.parts %}
-            {% if part.facts %}
-            <h2>{{ part.name }}</h2>
-            <dl class="fact-list">
-                {% for fact in part.facts %}
-                <div class="fact"><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
-                {% endfor %}
-            </dl>
-            {% endif %}
-        {% endfor %}
-        {% endif %}
-        </section>
-        <br/>
-
-        {% if export_mode %}
-        <h1>Music segment descriptions</h1>
-        {% else %}
-        <h1>Music segment descriptions and playback</h1>
-        {% endif %}
-{% for segment in music_segments %}
-<div id="{{ segment.anchor }}">
-    <div class="bar-heading">{{ segment.label }}</div>
-
-    {% if not export_mode %}
-    <div class="playback-controls">
-        <label for="segment-tempo-{{ segment.start_bar }}">Tempo:</label>
-        <select class="ddlTempo" name="tempo" id="segment-tempo-{{ segment.start_bar }}">
-            <option value="50">50%</option>
-            <option value="100" selected>100%</option>
-            <option value="150">150%</option>
-        </select>
-        
-        <label for="segment-click-{{ segment.start_bar }}">Click:</label>
-        <select class="ddlClick" name="click" id="segment-click-{{ segment.start_bar }}">
-            <option value="n">None</option>
-            <option value="be">Bars / Beats</option>
-        </select>
-    </div>
-
-    {% set segment_label = segment.label %}
-    
-    <div class="play-buttons-container">
-        <div class="main-play-buttons">
-            {% if play_all %}
-                <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_all }}">Play All - {{ segment_label }}</a>
-            {% endif %}
-            {% if play_selected %}
-                <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_sel }}">Play Selected - {{ segment_label }}</a>
-            {% endif %}
-            {% if play_unselected %}
-                <a href="#" class="lnkPlay" data-base-url="{{ segment.midi_un }}">Play Unselected - {{ segment_label }}</a>
-            {% endif %}
-        </div>
-    </div>
-    
-    <div class="instrument-midi-section">
-        <h3>Instrument Playback</h3>
-        <div class="instrument-buttons-container">
-            {% for index, ins in segment.selected_instruments_midis.items() %}
-                <div class="single-instrument-row">
-                    {% if preamble.number_of_parts > 1 %}
-                         <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">{{instruments[ins.ins][0]}} - {{ segment_label }}</a>
-                    {% else %}
-                         <a href="#" class="lnkPlay" data-base-url="{{ ins.midi }}">Play Score - {{ segment_label }}</a>
-                    {% endif %}
-                    
-                    {% if ins.midi_parts|length > 0 %}
-                        <div class="part-midi-list">
-                            {% for midipart in ins.midi_parts %}
-                                <a href="#" class="lnkPlay" data-base-url="{{ midipart }}">{{part_names[instruments[ins.ins][1] + loop.index-1]}}</a>
-                            {% endfor %}
-                        </div>
-                    {% endif %}
-                </div>
-            {% endfor %}
-        </div>
-    </div>
+    {% else %}
+    <script src="{{ static_js_url }}"></script>
+    {% if score_data.midi %}
+    <script src="{{ static_player_url }}"></script>
+    <script src="//www.midijs.net/lib/midi.js"></script>
     {% endif %}
+    {% endif %}
+</head>
+<body class="reader {{ colour_root_class }}">
+<a class="skip" href="#score">Skip to the score</a>
+<div class="wrap">
+    <header class="top">
+        {% if export_mode %}
+        <span class="brand"><svg viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h20M4 13h20M4 18h20M4 23h20"></path><circle cx="17" cy="20.5" r="3" fill="currentColor" stroke="none"></circle><path d="M20 20.5V7l4 2"></path></svg><span>Talking Scores</span></span>
+        {% else %}
+        <a class="brand" href="/"><svg viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h20M4 13h20M4 18h20M4 23h20"></path><circle cx="17" cy="20.5" r="3" fill="currentColor" stroke="none"></circle><path d="M20 20.5V7l4 2"></path></svg><span>Talking Scores</span></a>
+        <nav aria-label="Site"><a href="/privacy-policy">Privacy</a></nav>
+        {% endif %}
+    </header>
 
-    {% for instrument in segment.instruments %}
-    {% if segment.instruments|length > 1 %}<h3>{{ instrument.name }}</h3>{% endif %}
-    {% for part in instrument.parts %}
-        {% if instrument.parts|length > 1 %}<h4>{{ part.name }}</h4>{% endif %}
-        {% for bar in part.bars %}
-            <div class="bar-info">
-                <div class="bar-number">{{ bar.label }}</div>
-                {% if bar.signatures %}
-                    <div class="music-info-badges">
-                        {% for signature in bar.signatures %}
-                            <span class="music-info-badge">{{ signature }}</span>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            </div>
-            {% if bar.repeat_note %}<div class="repetition-info">{{ bar.repeat_note }}</div>{% endif %}
-            {% if bar.repeat_detail %}<div class="repetition-info">{{ bar.repeat_detail }}</div>{% endif %}
-            {% if bar.whole_bar_rest %}
-                <p class="beat-group"><span class="beat-content">{{ bar.rest_text }}</span></p>
-            {% elif not bar.collapsed %}
-                {% for beat in bar.beats %}
-                <p class="beat-group">{% if beat.label %}<strong>{{ beat.label }}</strong> {% endif %}<span class="beat-content">{{ beat.html|safe }}</span></p>
+    <div>
+        <h1>{{ basic_information.title }}</h1>
+        <p class="meta"><b>{{ basic_information.composer }}</b>{% for item in meta_line %} · {{ item }}{% endfor %}</p>
+    </div>
+
+    <noscript><p class="callout noscript">Every bar is on this page. Use your browser's find (Ctrl+F) or the headings list to move between bars. Playback and the group controls need JavaScript.</p></noscript>
+
+    <div class="toolbar" id="toolbar" role="group" aria-label="Move around the score" hidden>
+        <label class="goto"><span>Go to bar</span><input class="input" type="number" id="goto-bar" min="{{ score_data.firstNumberedBar }}" max="{{ score_data.lastBar }}" value="{{ score_data.firstNumberedBar }}" aria-describedby="goto-error"></label>
+        <button class="btn" type="button" id="goto-go">Go</button>
+        <p class="error" id="goto-error" role="alert"></p>
+        <button class="btn" type="button" id="previous-group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Previous</button>
+        <button class="btn" type="button" id="next-group">Next<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+        <label class="goto"><span>Bars per group</span><select class="input" id="bars-per-group">{% for n in score_data.groupSizes %}<option value="{{ n }}"{% if n == score_data.barsPerGroup %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+        <p class="pos" id="position"></p>
+        {% if score_data.midi %}
+        <span class="sep"></span>
+        <button class="btn" type="button" id="play-group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"></path></svg>Play</button>
+        <button class="btn" type="button" id="stop-playback"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12"></rect></svg>Stop</button>
+        <label class="goto"><span>Speed</span><select class="input" id="speed"><option value="50">50 %</option><option value="100" selected>100 %</option><option value="150">150 %</option></select></label>
+        <p class="status" role="status" aria-live="polite"><b>Playback</b><span id="playback-status-text">Stopped.</span></p>
+        {% endif %}
+        <span class="sep"></span>
+        <button class="btn" type="button" id="read-again"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7"></path><path d="M4 4v5h5"></path></svg>Read this group again</button>
+    </div>
+    <p class="live" id="reader-live" aria-live="polite"></p>
+
+    <div class="disc-row">
+        <details>
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Contents</summary>
+            <ol class="contents" id="contents-list">
+                {% for segment in music_segments %}
+                <li><a href="#group-{{ segment.start_bar }}">{{ segment.label }}</a></li>
                 {% endfor %}
-            {% endif %}
-        {% endfor %}
-    {% endfor %}
-    {% endfor %}
-</div>
-{% endfor %}
+            </ol>
+        </details>
+        <details>
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>About this piece</summary>
+            <div class="about">
+                <dl class="facts">
+                    {% for fact in facts.piece %}<dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd>{% endfor %}
+                </dl>
+                {% if facts.changes %}
+                <h3>Changes along the way</h3>
+                <ul>{% for change in facts.changes %}<li>{{ change }}</li>{% endfor %}</ul>
+                {% endif %}
+                {% for part in facts.parts %}
+                {% if part.facts or part.octave_reference %}
+                <h3>{{ part.name }}</h3>
+                {% if part.octave_reference %}<p>{{ part.octave_reference }}</p>{% endif %}
+                {% if part.facts %}<dl class="facts">{% for fact in part.facts %}<dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd>{% endfor %}</dl>{% endif %}
+                {% endif %}
+                {% endfor %}
+                <p class="small muted">Words: {{ style_name }}.</p>
+            </div>
+        </details>
+        <details>
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Reading settings</summary>
+            <form class="panel" id="reading-settings-form" onsubmit="return false">
+                <fieldset class="field">
+                    <legend>Text size</legend>
+                    <div class="sizes">
+                        <label class="size"><input type="radio" name="size" value="standard" checked><span><span class="name">Standard</span> <span class="muted small">Fits two bars on a laptop screen.</span></span><span class="demo" style="font-size:28px">crotchet, C above middle C</span></label>
+                        <label class="size"><input type="radio" name="size" value="large"><span><span class="name">Large</span> <span class="muted small">About 30 letters a line.</span></span><span class="demo" style="font-size:40px">crotchet, C above middle C</span></label>
+                        <label class="size"><input type="radio" name="size" value="xlarge"><span><span class="name">Extra large</span> <span class="muted small">One note per line.</span></span><span class="demo" style="font-size:56px">crotchet, C above middle C</span></label>
+                        <label class="size"><input type="radio" name="size" value="browser"><span><span class="name">Follow my browser</span> <span class="muted small">Uses the size set in your browser or magnifier.</span></span></label>
+                    </div>
+                </fieldset>
+                <div class="row">
+                    <label class="check"><input type="checkbox" id="setting-stack">One note per line</label>
+                    <label class="goto"><span>Colours</span><select class="input" id="setting-theme"><option value="system">Match my system</option><option value="light">Light</option><option value="dark">Dark</option><option value="contrast">High contrast</option></select></label>
+                </div>
+                <p class="small muted">Changes apply straight away and are kept on this device.{% if options_url %} The words themselves are set under <a href="{{ options_url }}">Choose how it reads</a>.{% endif %}</p>
+            </form>
+        </details>
+        <details>
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>{% if export_mode %}Print{% else %}Download or print{% endif %}</summary>
+            <div class="panel">
+                <div class="links">
+                    {% if download_html_url %}<a class="btn" href="{{ download_html_url }}">Download as a web page</a>{% endif %}
+                    {% if download_text_url %}<a class="btn" href="{{ download_text_url }}">Download as text</a>{% endif %}
+                    {% if download_braille_url %}<a class="btn" href="{{ download_braille_url }}">Download as braille</a>{% endif %}
+                    <button class="btn" type="button" id="print-score">Print every bar</button>
+                </div>
+                {% if not export_mode %}<p class="small muted">The web page works offline and keeps these reading settings. The braille file is uncontracted text for a 40-cell display or embosser.</p>{% endif %}
+            </div>
+        </details>
+    </div>
 
-        <a href="#score-nav-ribbon" class="skip-link">Back to navigation</a>
+    <main class="score" id="score">
+        {% for segment in music_segments %}
+        <section class="group current" id="group-{{ segment.start_bar }}">
+            <h2><button type="button" class="group-toggle" aria-expanded="true" aria-controls="group-{{ segment.start_bar }}-body"><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>{{ segment.label }}</button></h2>
+            <div class="body" id="group-{{ segment.start_bar }}-body">
+            {% for bar in segment.bars %}
+                <section class="bar" id="bar-{{ bar.number }}" data-bar="{{ bar.number }}" aria-labelledby="bar-{{ bar.number }}-heading">
+                    {% if bar.is_pickup %}
+                    <h3 class="words" id="bar-{{ bar.number }}-heading">Pickup bar</h3>
+                    {% else %}
+                    <h3 id="bar-{{ bar.number }}-heading"><small>Bar</small>{{ bar.number }}</h3>
+                    {% endif %}
+                    <div class="parts">
+                    {% for part in bar.parts %}
+                        <div class="part">
+                            {% if part.label %}<p class="label">{{ part.label }}</p>{% endif %}
+                            {% for signature in part.bar.signatures %}<p class="change">{{ signature }}</p>{% endfor %}
+                            {% if part.bar.repeat_note %}<p class="same">{{ part.bar.repeat_note }}</p>{% endif %}
+                            {% if part.bar.repeat_detail %}<p class="change">{{ part.bar.repeat_detail }}</p>{% endif %}
+                            {% if part.bar.whole_bar_rest %}
+                            <ul class="beats"><li class="unlabelled"><span class="notes">{{ part.bar.rest_text }}</span></li></ul>
+                            {% elif part.bar.collapsed %}
+                            <details>
+                                <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Show the notes</summary>
+                                {% include 'beats.html' %}
+                            </details>
+                            {% else %}
+                            {% include 'beats.html' %}
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                    </div>
+                </section>
+            {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
     </main>
 
-    {% if not export_mode %}
-    <script>
-        document.addEventListener("DOMContentLoaded", (event) => {
-            function updateLink(link) {
-                const parentScope = link.closest('#global-controls, div[id^="segment-"]');
-                if (!parentScope) return;
-    
-                const tempo = parentScope.querySelector('.ddlTempo').value;
-                const click = parentScope.querySelector('.ddlClick').value;
-
-                if (link.dataset.midiFiles) {
-                    try {
-                        const midiFiles = JSON.parse(link.dataset.midiFiles);
-                        const localUrl = midiFiles[`${tempo}|${click}`];
-                        if (localUrl) {
-                            link.dataset.finalUrl = localUrl;
-                        }
-                    } catch (error) {
-                        console.error("Could not read local MIDI file map.", error);
-                    }
-                    return;
-                }
-
-                const baseUrl = link.dataset.baseUrl;
-                if (!baseUrl) return;
-    
-                const finalUrl = `${baseUrl}&t=${tempo}&c=${click}`;
-                link.dataset.finalUrl = finalUrl;
-            }
-    
-            document.body.addEventListener('click', function(e) {
-                if (e.target.matches('.lnkPlay')) {
-                    e.preventDefault();
-                    MIDIjs.stop(); // <-- Ensure previous MIDI is stopped before playing new one
-                    const urlToPlay = e.target.dataset.finalUrl;
-                    if (urlToPlay) {
-                        MIDIjs.play(urlToPlay);
-                    } else {
-                        console.error("No final URL found for this link.", e.target);
-                    }
-                }
-            });
-    
-            document.body.addEventListener('change', function(e) {
-                if (e.target.matches('.ddlTempo, .ddlClick')) {
-                    const changedElement = e.target;
-                    
-                    if (changedElement.closest('#global-controls')) {
-                        const isTempo = changedElement.matches('.ddlTempo');
-                        const value = changedElement.value;
-                        const selector = isTempo ? '.ddlTempo' : '.ddlClick';
-                        document.querySelectorAll(selector).forEach(ddl => { ddl.value = value; });
-                    }
-    
-                    document.querySelectorAll('.lnkPlay').forEach(updateLink);
-                }
-            });
-    
-            document.querySelectorAll('.lnkPlay').forEach(updateLink);
-
-            document.querySelectorAll('[data-download-html]').forEach(link => {
-                link.addEventListener('click', function() {
-                    const theme = document.documentElement.getAttribute('data-theme');
-                    if (theme !== 'light' && theme !== 'dark') return;
-
-                    const url = new URL(link.getAttribute('href'), window.location.href);
-                    url.searchParams.set('theme', theme);
-                    link.setAttribute('href', `${url.pathname}${url.search}`);
-                });
-            });
-        });
-    </script>
-    {% endif %}
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const navRibbon = document.querySelector('.score-nav-ribbon');
-            const ribbonLinks = document.querySelectorAll('.score-nav-ribbon li a');
-            const segments = document.querySelectorAll('div[id^="segment-"]');
-            {% if not export_mode %}
-            const stopBtn = document.getElementById('stop-playback-btn');
-            if (stopBtn) {
-                stopBtn.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    MIDIjs.stop();
-                });
-            }
-            {% endif %}
-
-            if (navRibbon) {
-                navRibbon.addEventListener('click', function(event) {
-                    const targetLink = event.target.closest('a');
-                    if (!targetLink) return;
-
-                    const href = targetLink.getAttribute('href');
-                    if (href === '#') {
-                        event.preventDefault();
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                        history.replaceState(null, null, ' ');
-                        return;
-                    }
-
-                    const targetElement = document.querySelector(href);
-                    if (targetElement) {
-                        event.preventDefault();
-                        targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        history.replaceState(null, null, href);
-                    }
-                });
-            }
-
-            if ('IntersectionObserver' in window && segments.length > 0 && ribbonLinks.length > 0) {
-                const observerOptions = {
-                    root: null, 
-                    rootMargin: '0px 0px -50% 0px',
-                    threshold: 0
-                };
-
-                const observer = new IntersectionObserver((entries, observer) => {
-                    entries.forEach(entry => {
-                        const segmentId = entry.target.getAttribute('id');
-                        const correspondingLink = document.querySelector(`.score-nav-ribbon li a[href="#${segmentId}"]`);
-                        
-                        if (entry.isIntersecting && correspondingLink) {
-                            ribbonLinks.forEach(link => link.classList.remove('active'));
-                            correspondingLink.classList.add('active');
-                        }
-                    });
-                }, observerOptions);
-
-                segments.forEach(segment => {
-                    observer.observe(segment);
-                });
-            }
-        });
-    </script>
+    <footer class="footer">
+        {% if export_mode %}
+        <span>Downloaded from Talking Scores. Words: {{ style_name }}.</span>
+        {% else %}
+        <span>Talking Scores</span>
+        <a href="/privacy-policy">What we keep and for how long</a>
+        <a href="/change-log">Change log</a>
+        <a href="/contact-us">Contact</a>
+        {% endif %}
+    </footer>
+</div>
 </body>
 </html>

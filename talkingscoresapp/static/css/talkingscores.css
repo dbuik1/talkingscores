@@ -105,15 +105,13 @@ body {
 
 
 
-.talking-scores a,
-.score-page a {
+.talking-scores a {
     color: var(--link-color);
     text-decoration: underline;
     outline-offset: 2px;
 }
 
-.talking-scores a:hover,
-.score-page a:hover {
+.talking-scores a:hover {
     text-decoration: var(--link-hover-decoration);
 }
 
@@ -251,20 +249,14 @@ html[data-theme="light"] #theme-toggle .moon-icon { color: var(--switch-icon-ina
 html[data-theme="dark"] #theme-toggle .sun-icon { color: var(--switch-icon-inactive); }
 html[data-theme="dark"] #theme-toggle .moon-icon { color: var(--switch-icon-active-dark); }
 
-.form-control,
-.score-page select {
+.form-control {
     background-color: var(--form-control-bg);
     color: var(--form-control-color);
     border: 1px solid var(--form-control-border);
 }
 
-.score-page select option {
-    background-color: var(--background-color);
-    color: var(--text-color);
-}
 
-.form-control:focus,
-.score-page select:focus {
+.form-control:focus {
     background-color: var(--form-control-bg);
     color: var(--form-control-color);
     border-color: var(--form-control-border);

@@ -73,57 +73,13 @@ def clean_export_theme(theme):
 
 
 def clean_html_export(html):
-    """Remove controls that only work on the Django-served score page."""
-    html = re.sub(
-        r"\s*<script[^>]+src=['\"][^'\"]*midijs\.net[^'\"]*['\"][^>]*>\s*</script>",
+    """Drop any script that needs the server or the network, so the download works offline."""
+    return re.sub(
+        r"\s*<script[^>]+src=['\"][^'\"]*(?:midijs\.net|/player\.js)[^'\"]*['\"][^>]*>\s*</script>",
         "",
         html,
         flags=re.IGNORECASE,
     )
-    html = re.sub(
-        r"\s*<a[^>]+id=['\"]stop-playback-btn['\"][^>]*>.*?</a>",
-        "",
-        html,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    html = re.sub(
-        r"\s*<div[^>]+class=['\"][^'\"]*\bdownload-controls\b[^'\"]*['\"][^>]*>.*?</div>",
-        "",
-        html,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    html = re.sub(
-        r"\s*<div[^>]+id=['\"]global-controls['\"][^>]*>.*?</div>\s*</div>",
-        "",
-        html,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    html = re.sub(
-        r"\s*<div[^>]+class=['\"][^'\"]*\bplayback-controls\b[^'\"]*['\"][^>]*>.*?</div>",
-        "",
-        html,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    html = re.sub(
-        r"\s*<div[^>]+class=['\"][^'\"]*\bplay-buttons-container\b[^'\"]*['\"][^>]*>.*?</div>\s*</div>",
-        "",
-        html,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    html = re.sub(
-        r"\s*<div[^>]+class=['\"][^'\"]*\binstrument-midi-section\b[^'\"]*['\"][^>]*>.*?</div>\s*</div>\s*</div>",
-        "",
-        html,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    html = re.sub(
-        r"\s*<a[^>]+class=['\"][^'\"]*\blnkPlay\b[^'\"]*['\"][^>]*>.*?</a>",
-        "",
-        html,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    html = html.replace("Music segment descriptions and playback", "Music segment descriptions")
-    return html
 
 
 def add_rhythm_colour_defaults(score_info):

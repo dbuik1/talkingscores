@@ -649,6 +649,7 @@ class TSScore(object):
         download_html_url = f"/download/html/{self.id}/{self.filename}"
         download_text_url = f"/download/text/{self.id}/{self.filename}"
         download_braille_url = f"/download/braille/{self.id}/{self.filename}"
+        options_url = f"/score_options/{self.id}/{self.filename}"
         midi_output_path = os.path.join(MEDIA_ROOT, self.id)
         os.makedirs(midi_output_path, exist_ok=True)
         
@@ -664,6 +665,7 @@ class TSScore(object):
                 export_mode=export_mode,
                 download_text_url=download_text_url,
                 download_braille_url=download_braille_url,
+                options_url=options_url,
             )
             # Options that changed during the run belong to a newer run, which writes its own cache.
             if not export_mode and html_cache_path and self.options_epoch() == epoch:

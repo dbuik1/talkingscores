@@ -1,0 +1,5 @@
+<ul class="beats">
+{% for beat in part.bar.beats %}
+    <li{% if not beat.label %} class="unlabelled"{% endif %}>{% if beat.label %}<b>{{ beat.label }}</b>{% endif %}<span class="notes">{{ beat.html|safe }}</span></li>
+{% endfor %}
+</ul>

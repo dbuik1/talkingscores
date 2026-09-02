@@ -647,40 +647,70 @@ class HTMLTalkingScoreFormatter:
         self.built = True
 
     def generateHTML(self, output_path="", web_path="", download_html_url="", export_theme=None,
-                     export_mode=False, download_text_url="", download_braille_url=""):
+                     export_mode=False, download_text_url="", download_braille_url="", options_url=""):
         template = self._setup_template_environment(export_mode=export_mode)
         self.build(output_path, web_path)
-        start_bar, end_bar = self._get_score_range()
-        full_score_midis = self._midi_urls(web_path, start_bar, end_bar)
         palette = self.builder.palette
+        # A downloaded page has no server behind it, so it carries no links back and no player.
+        if export_mode:
+            download_html_url = download_text_url = download_braille_url = options_url = ""
         return template.render({
             'settings': self.settings,
             'style_name': self.settings.style_name,
             'basic_information': self._get_basic_information(),
-            'preamble': self._get_preamble(),
             'facts': self.facts,
-            'full_score_midis': full_score_midis,
+            'meta_line': self._meta_line(),
+            'score_data': self._score_data(web_path, export_mode),
             'music_segments': self.segments,
-            'beat_division_options': self.score.get_beat_division_options(),
-            'instruments': self.score.part_instruments,
-            'part_names': self.score.part_names,
-            'binary_selected_instruments': self.score.binary_selected_instruments,
-            'binary_play_all': self.score.binary_play_all,
-            'play_all': self.settings.play_all,
-            'play_selected': self.settings.play_selected,
-            'play_unselected': self.settings.play_unselected,
             'download_html_url': download_html_url,
             'download_text_url': download_text_url,
             'download_braille_url': download_braille_url,
+            'options_url': options_url,
             'export_theme': export_theme,
             'export_mode': export_mode,
-            'inline_css': self._get_inline_css(export_mode),
-            'static_css_url': f"{django_settings.STATIC_URL}css/talkingscores.css",
+            'inline_css': self._read_static("css", "score.css") if export_mode else "",
+            'inline_js': self._read_static("js", "score.js") if export_mode else "",
+            'static_css_url': f"{django_settings.STATIC_URL}css/score.css",
+            'static_js_url': f"{django_settings.STATIC_URL}js/score.js",
+            'static_player_url': f"{django_settings.STATIC_URL}js/player.js",
             'palette_css': palette.css(),
             'colour_root_class': palette.root_class,
-            'time_and_keys': self.time_and_keys,
-            'selected_part_names': self.score.selected_part_names,
         })
+
+    def _meta_line(self):
+        """Key, time, tempo, instruments and length, shown under the title."""
+        preamble = self._get_preamble()
+        items = [preamble['key_signature'], preamble['time_signature']]
+        if preamble['tempo']:
+            items.append(preamble['tempo'])
+        items.extend(self.score.part_instruments[ins][0] for ins in self.score.part_instruments)
+        bars = preamble['number_of_bars']
+        items.append("1 bar" if bars == 1 else f"{bars} bars")
+        return [item for item in items if item]
+
+    def _score_data(self, web_path, export_mode):
+        """What the reader script needs: the bar range, the grouping and where the audio lives."""
+        pickup = next((segment.start_bar for segment in self.segments if segment.is_pickup), None)
+        first_bar = self.segments[0].start_bar if self.segments else 1
+        last_bar = self.segments[-1].end_bar if self.segments else first_bar
+        bars_per_group = max(1, int(self.settings.bars_at_a_time))
+        midi = None
+        if web_path and not export_mode:
+            midi = {
+                'base': web_path,
+                'query': f"bsi={self.score.binary_selected_instruments}&bpi={self.score.binary_play_all}",
+            }
+        return {
+            'key': web_path or self.score.get_title(),
+            'firstBar': first_bar,
+            'firstNumberedBar': first_bar + 1 if pickup == first_bar else first_bar,
+            'lastBar': last_bar,
+            'totalBars': self._get_preamble()['number_of_bars'],
+            'pickupBar': pickup,
+            'barsPerGroup': bars_per_group,
+            'groupSizes': sorted({1, 2, 4, 8, bars_per_group}),
+            'midi': midi,
+        }
 
     def render_text(self, output_path="", web_path=""):
         self.build(output_path, web_path)
@@ -696,19 +726,18 @@ class HTMLTalkingScoreFormatter:
         # Titles, composers and part names come from the uploaded file, so every
         # value is escaped unless the template marks it safe.
         env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)), autoescape=True)
-        template_name = 'talkingscore_export.html' if export_mode else 'talkingscore.html'
-        return env.get_template(template_name)
+        return env.get_template('talkingscore.html')
 
-    def _get_inline_css(self, export_mode):
-        if not export_mode:
-            return ""
-        css_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                                "talkingscoresapp", "static", "css", "talkingscores.css")
+    @staticmethod
+    def _read_static(kind, name):
+        """A static file's text, so a downloaded page can carry its own stylesheet and script."""
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                            "talkingscoresapp", "static", kind, name)
         try:
-            with open(css_path, "r", encoding="utf-8") as css_file:
-                return css_file.read()
+            with open(path, "r", encoding="utf-8") as static_file:
+                return static_file.read()
         except OSError:
-            logger.warning(f"Could not inline the export CSS from {css_path}.")
+            logger.warning(f"Could not inline {path} into the downloaded page.")
             return ""
 
     def _get_basic_information(self):

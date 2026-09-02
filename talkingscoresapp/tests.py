@@ -21,6 +21,7 @@ import glob
 import os
 import time
 import json
+import re
 import runpy
 import socket
 import threading
@@ -31,6 +32,37 @@ VALID_ID = "a" * 64
 OTHER_ID = "b" * 64
 REAL_THREAD = threading.Thread
 PUBLIC_ADDRINFO = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
+
+
+
+def reader_context(**overrides):
+    """The context the score template needs, with nothing to show."""
+    context = {
+        "export_mode": False,
+        "export_theme": None,
+        "inline_css": "",
+        "inline_js": "",
+        "static_css_url": "/static/css/score.css",
+        "static_js_url": "/static/js/score.js",
+        "static_player_url": "/static/js/player.js",
+        "download_html_url": "/download/html/abc123/score.musicxml",
+        "download_text_url": "/download/text/abc123/score.musicxml",
+        "download_braille_url": "/download/braille/abc123/score.musicxml",
+        "options_url": "/score_options/abc123/score.musicxml",
+        "basic_information": {"title": "Score", "composer": "Composer"},
+        "meta_line": ["C major", "4 4", "Piano", "8 bars"],
+        "score_data": {"key": "/midis/abc123/score.musicxml", "firstBar": 1, "firstNumberedBar": 1, "lastBar": 8, "totalBars": 8,
+                       "pickupBar": None, "barsPerGroup": 2, "groupSizes": [1, 2, 4, 8],
+                       "midi": {"base": "/midis/abc123/score.musicxml", "query": "bsi=1&bpi=1"}},
+        "music_segments": [],
+        "settings": {},
+        "style_name": "Musical terms",
+        "facts": None,
+        "palette_css": "",
+        "colour_root_class": "",
+    }
+    context.update(overrides)
+    return context
 
 
 class SecurityTests(TestCase):
@@ -378,16 +410,12 @@ class DownloadTests(TestCase):
         mock_state.return_value = "processed"
         mock_html.return_value = """
             <html>
-                <head><script src="//www.midijs.net/lib/midi.js"></script></head>
-                <body>
-                    <a href="#" id="stop-playback-btn">Stop Playback</a>
-                    <div class="download-controls"><a href="/download/html/abc123/score.musicxml">Download HTML</a></div>
-                    <div id="global-controls"><h2>Entire Score Playback</h2><div><a class="lnkPlay" data-base-url="/midis/abc123/score.musicxml?bsi=3">Play Score</a></div></div>
-                    <h1>Music segment descriptions and playback</h1>
-                    <div class="playback-controls"><select><option>100%</option></select></div>
-                    <a class="lnkPlay" data-base-url="/midis/abc123/score.musicxml?bsi=3">Play All</a>
-                    <p>Readable score text</p>
-                </body>
+                <head>
+                    <script src="/static/js/score.js"></script>
+                    <script src="/static/js/player.js"></script>
+                    <script src="//www.midijs.net/lib/midi.js"></script>
+                </head>
+                <body><p>Readable score text</p></body>
             </html>
         """
 
@@ -397,117 +425,50 @@ class DownloadTests(TestCase):
         content = response.content.decode("utf-8")
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotIn("Download HTML", content)
         self.assertNotIn("midijs.net", content)
-        self.assertNotIn("data-base-url", content)
-        self.assertNotIn('class="lnkPlay"', content)
-        self.assertNotIn("Entire Score Playback", content)
-        self.assertIn("Music segment descriptions", content)
+        self.assertNotIn("player.js", content)
+        self.assertIn("score.js", content)
         self.assertIn("Readable score text", content)
-
     def test_export_template_omits_download_and_midi_controls(self):
         env = Environment(loader=FileSystemLoader(os.path.join(os.getcwd(), "lib")))
         template = env.get_template("talkingscore.html")
 
-        html = template.render({
-            "export_mode": True,
-            "export_theme": "dark",
-            "inline_css": "",
-            "download_html_url": "/download/html/abc123/score.musicxml",
-            "basic_information": {"title": "Score", "composer": "Composer"},
-            "preamble": {
-                "time_signature": "4 4",
-                "key_signature": "C major",
-                "tempo": "100",
-                "number_of_parts": 1,
-            },
-            "full_score_midis": {"selected_instruments_midis": {}},
-            "music_segments": [],
-            "general_summary": "",
-            "parts_summary": [],
-            "selected_part_names": [],
-            "play_all": False,
-            "play_selected": False,
-            "play_unselected": False,
-            "instruments": {},
-            "part_names": [],
-            "time_and_keys": {},
-            "settings": {},
-            "facts": None,
-            "palette_css": "",
-            "colour_root_class": "",
-        })
+        html = template.render(reader_context(
+            export_mode=True, export_theme="dark", inline_js="/* reader */",
+            download_html_url="", download_text_url="", download_braille_url="", options_url="",
+            score_data={"key": "Score", "firstBar": 1, "firstNumberedBar": 1, "lastBar": 8, "totalBars": 8, "pickupBar": None,
+                        "barsPerGroup": 2, "groupSizes": [1, 2, 4, 8], "midi": None},
+        ))
 
-        self.assertNotIn("Download HTML", html)
         self.assertNotIn("midijs.net", html)
-        self.assertNotIn('class="lnkPlay"', html)
-        self.assertNotIn("data-base-url", html)
-        self.assertNotIn("Entire Score Playback", html)
-        self.assertIn("Music segment descriptions</h1>", html)
-
+        self.assertNotIn("<script src=", html)
+        self.assertNotIn("<link ", html)
+        self.assertNotIn("/download/", html)
+        self.assertNotIn("/score_options/", html)
+        self.assertNotIn('id="play-group"', html)
+        self.assertIn('<html lang="en" data-theme="dark">', html)
+        self.assertIn("/* reader */", html)
+        self.assertIn("Print every bar", html)
     def test_export_template_can_inline_css(self):
         env = Environment(loader=FileSystemLoader(os.path.join(os.getcwd(), "lib")))
         template = env.get_template("talkingscore.html")
 
-        html = template.render({
-            "export_mode": True,
-            "export_theme": "light",
-            "inline_css": "body { color: red; }",
-            "download_html_url": "",
-            "basic_information": {"title": "Score", "composer": "Composer"},
-            "preamble": {"time_signature": "4 4", "key_signature": "C major", "tempo": "100", "number_of_parts": 1},
-            "full_score_midis": {"selected_instruments_midis": {}},
-            "music_segments": [],
-            "general_summary": "",
-            "parts_summary": [],
-            "selected_part_names": [],
-            "play_all": False,
-            "play_selected": False,
-            "play_unselected": False,
-            "instruments": {},
-            "part_names": [],
-            "time_and_keys": {},
-            "settings": {},
-            "facts": None,
-            "palette_css": "",
-            "colour_root_class": "",
-        })
+        html = template.render(reader_context(
+            export_mode=True, export_theme="light", inline_css="body { color: red; }",
+        ))
 
         self.assertIn("body { color: red; }", html)
-        self.assertNotIn("127.0.0.1:8000/static/css/talkingscores.css", html)
-
+        self.assertNotIn("static/css/score.css", html)
     def test_live_template_uses_static_css_path(self):
         env = Environment(loader=FileSystemLoader(os.path.join(os.getcwd(), "lib")))
         template = env.get_template("talkingscore.html")
 
-        html = template.render({
-            "export_mode": False,
-            "export_theme": None,
-            "inline_css": "",
-            "static_css_url": "/static/css/talkingscores.css",
-            "download_html_url": "/download/html/abc123/score.musicxml",
-            "basic_information": {"title": "Score", "composer": "Composer"},
-            "preamble": {"time_signature": "4 4", "key_signature": "C major", "tempo": "100", "number_of_parts": 1},
-            "full_score_midis": {"selected_instruments_midis": {}},
-            "music_segments": [],
-            "general_summary": "",
-            "parts_summary": [],
-            "selected_part_names": [],
-            "play_all": False,
-            "play_selected": False,
-            "play_unselected": False,
-            "instruments": {},
-            "part_names": [],
-            "time_and_keys": {},
-            "settings": {},
-            "facts": None,
-            "palette_css": "",
-            "colour_root_class": "",
-        })
+        html = template.render(reader_context())
 
-        self.assertIn('href="/static/css/talkingscores.css"', html)
+        self.assertIn('href="/static/css/score.css"', html)
+        self.assertIn('src="/static/js/score.js"', html)
+        self.assertIn('src="/static/js/player.js"', html)
         self.assertNotIn("127.0.0.1", html)
-
     @patch("talkingscoresapp.views.TSScore.state")
     @patch("talkingscoresapp.views.TSScore.start_background_processing")
     @patch("talkingscoresapp.views.TSScore.processing_status")
@@ -903,34 +864,11 @@ class CacheAndMaintenanceTests(TestCase):
         from lib.talkingscoreslib import HTMLTalkingScoreFormatter
         template = HTMLTalkingScoreFormatter._setup_template_environment(Mock(), export_mode=False)
 
-        html = template.render({
-            "export_mode": True,
-            "export_theme": "light",
-            "inline_css": "body { color: red; }",
-            "download_html_url": "",
-            "basic_information": {"title": "<script>alert(1)</script>", "composer": "Composer"},
-            "preamble": {"time_signature": "4 4", "key_signature": "C major", "tempo": "100", "number_of_parts": 1},
-            "full_score_midis": {"selected_instruments_midis": {}},
-            "music_segments": [],
-            "general_summary": "",
-            "parts_summary": [],
-            "selected_part_names": [],
-            "play_all": False,
-            "play_selected": False,
-            "play_unselected": False,
-            "instruments": {},
-            "part_names": [],
-            "time_and_keys": {},
-            "settings": {},
-            "facts": None,
-            "palette_css": "",
-            "colour_root_class": "",
-        })
+        html = template.render(reader_context(
+            basic_information={"title": "<script>alert(1)</script>", "composer": "Composer"},
+        ))
 
         self.assertNotIn("<script>alert(1)</script>", html)
-        self.assertIn("&lt;script&gt;", html)
-        self.assertIn("body { color: red; }", html)
-
     def test_mxl_extraction_follows_the_container_manifest(self):
         container = (
             '<?xml version="1.0" encoding="UTF-8"?>'
@@ -1195,7 +1133,7 @@ class ReadingStyleTests(TestCase):
         })
         with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
             html = formatter.generateHTML(web_path="/midis/x/y")
-        self.assertIn('<body class="score-page colour-text">', html)
+        self.assertIn('<body class="reader colour-text">', html)
         self.assertIn(".colour-text .colour-pitch-c { color: #ff0000; }", html)
         self.assertNotIn("javascript:", html)
         self.assertNotIn("style='color", html)
@@ -1436,6 +1374,74 @@ class ReviewedEngineTests(TestCase):
             with self.assertRaises(FileNotFoundError):
                 score.export_text()
 
+
+class ReaderPageTests(TestCase):
+    """The score page is built bar by bar, and the downloaded copy stands on its own."""
+
+    FIXTURE = os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml")
+
+    def _formatter(self, options):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        return HTMLTalkingScoreFormatter(Music21TalkingScore(self.FIXTURE), options=options)
+
+    def _render(self, formatter, **kwargs):
+        from talkingscoreslib import HTMLTalkingScoreFormatter
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            return formatter.generateHTML(**kwargs)
+
+    def test_a_segment_is_read_bar_by_bar_with_parts_inside_each_bar(self):
+        from lib.description import (SegmentDescription, InstrumentDescription, PartDescription,
+                                     BarDescription)
+        flute = PartDescription(0, "Flute", bars=[BarDescription(3, "Bar 3"), BarDescription(4, "Bar 4")])
+        oboe = PartDescription(1, "Oboe", bars=[BarDescription(3, "Bar 3"), BarDescription(4, "Bar 4")])
+        segment = SegmentDescription(3, 4, "Bars 3 to 4", "segment-3", instruments=[
+            InstrumentDescription(1, "Flute", parts=[flute]), InstrumentDescription(2, "Oboe", parts=[oboe])])
+        bars = segment.bars
+        self.assertEqual([bar["number"] for bar in bars], [3, 4])
+        self.assertEqual([part["label"] for part in bars[0]["parts"]], ["Flute", "Oboe"])
+        self.assertIs(bars[1]["parts"][1]["bar"], oboe.bars[1])
+
+        solo = SegmentDescription(3, 4, "Bars 3 to 4", "segment-3",
+                                  instruments=[InstrumentDescription(1, "Flute", parts=[flute])])
+        self.assertEqual([part["label"] for part in solo.bars[0]["parts"]], [""])
+
+    def test_the_page_carries_what_the_reader_script_needs(self):
+        html = self._render(self._formatter({"style": "standard", "bars_at_a_time": 3}),
+                            web_path="/midis/x/y.musicxml", options_url="/score_options/x/y.musicxml")
+        data = json.loads(re.search(r'id="score-data">(.*?)</script>', html, re.S).group(1))
+        self.assertEqual((data["firstBar"], data["firstNumberedBar"], data["lastBar"], data["totalBars"]),
+                         (1, 1, 24, 24))
+        self.assertIsNone(data["pickupBar"])
+        self.assertEqual(data["barsPerGroup"], 3)
+        self.assertEqual(data["groupSizes"], [1, 2, 3, 4, 8])
+        self.assertEqual(data["midi"]["base"], "/midis/x/y.musicxml")
+        self.assertIn('<section class="bar" id="bar-1" data-bar="1"', html)
+        self.assertIn('href="/score_options/x/y.musicxml"', html)
+        self.assertIn('src="/static/js/player.js"', html)
+
+    def test_a_pickup_bar_keeps_go_to_bar_on_numbered_bars(self):
+        from talkingscoreslib import HTMLTalkingScoreFormatter
+        formatter = self._formatter({"style": "standard", "bars_at_a_time": 2})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            formatter.build("", "/midis/x/y.musicxml")
+        formatter.segments[0].is_pickup = True
+        formatter.segments[0].end_bar = formatter.segments[0].start_bar
+        data = formatter._score_data("/midis/x/y.musicxml", export_mode=False)
+        self.assertEqual(data["pickupBar"], data["firstBar"])
+        self.assertEqual(data["firstNumberedBar"], data["firstBar"] + 1)
+
+    def test_the_downloaded_page_needs_no_server(self):
+        html = self._render(self._formatter({"style": "standard"}), web_path="/midis/x/y.musicxml",
+                            download_html_url="/download/html/x/y", options_url="/score_options/x/y",
+                            export_mode=True, export_theme="dark")
+        self.assertIn('<html lang="en" data-theme="dark">', html)
+        self.assertNotIn("<link ", html)
+        self.assertNotIn("<script src=", html)
+        self.assertNotIn("/download/", html)
+        self.assertNotIn("/score_options/", html)
+        self.assertIn('"midi": null', html)
+        self.assertIn("talkingscores.reader", html)      # the reader script is inlined
+        self.assertIn("--note: 28px", html)              # so is the stylesheet
 
 class ExportDownloadTests(TestCase):
     """The text and braille downloads serve the cached exports as attachments."""

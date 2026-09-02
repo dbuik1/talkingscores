@@ -69,17 +69,18 @@ env_csrf_trusted_origins = [
 
 CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(DEFAULT_CSRF_TRUSTED_ORIGINS + env_csrf_trusted_origins))
 
-# Scripts and styles come only from this origin. The score player and the
-# theme toggle are still inline scripts, so 'unsafe-inline' stays on
-# script-src until they move to static files. The MIDI player library fetches
-# its own soundfont and runs a worker, so its host is allowed on connect-src
-# and worker-src as well as script-src. Media covers the MIDI files the player
-# fetches from the same origin.
+# Scripts come from this origin. The theme toggle on the site pages is still an
+# inline script, so 'unsafe-inline' stays on script-src until it moves to a
+# static file. The score page carries its colour palette as an inline style
+# block and loads its typefaces from Google Fonts. The MIDI player library
+# fetches its own soundfont and runs a worker, so its host is allowed on
+# connect-src and worker-src as well as script-src. Media covers the MIDI files
+# the player fetches from the same origin.
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' https://www.midijs.net; "
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-    "font-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
     "img-src 'self' data:; "
     "media-src 'self' https://www.midijs.net; "
     "connect-src 'self' https://www.midijs.net; "

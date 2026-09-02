@@ -119,6 +119,28 @@ class SegmentDescription:
     midi_un: str = ""
     selected_instruments_midis: dict = field(default_factory=dict)
 
+    @property
+    def bars(self):
+        """The segment bar by bar, each bar carrying every part that plays in it.
+
+        Parts are labelled only when the score has more than one, so a solo
+        score reads without a part name on every bar.
+        """
+        parts = [(instrument, part) for instrument in self.instruments for part in instrument.parts]
+        label_parts = len(parts) > 1
+        bars = []
+        for number in range(self.start_bar, self.end_bar + 1):
+            entries = []
+            for instrument, part in parts:
+                for bar in part.bars:
+                    if bar.number == number:
+                        entries.append({"label": part.name if label_parts else "", "bar": bar})
+                        break
+            if entries:
+                bars.append({"number": number, "label": entries[0]["bar"].label,
+                             "is_pickup": self.is_pickup, "parts": entries})
+        return bars
+
 
 @dataclass
 class Fact:
