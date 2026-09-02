@@ -1,0 +1,120 @@
+{
+  "artboards": [
+    {
+      "file": "Home.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 960,
+      "h": 1180,
+      "title": "Home, first visit"
+    },
+    {
+      "file": "HomeReturning.dc.html",
+      "x": 1060,
+      "y": 0,
+      "w": 960,
+      "h": 1180,
+      "title": "Home, returning"
+    },
+    {
+      "file": "SetUp.dc.html",
+      "x": 2120,
+      "y": 0,
+      "w": 960,
+      "h": 1900,
+      "title": "Set up"
+    },
+    {
+      "file": "Processing.dc.html",
+      "x": 3180,
+      "y": 0,
+      "w": 960,
+      "h": 760,
+      "title": "Processing"
+    },
+    {
+      "file": "ProcessingReady.dc.html",
+      "x": 3180,
+      "y": 900,
+      "w": 960,
+      "h": 820,
+      "title": "Ready"
+    },
+    {
+      "file": "Error.dc.html",
+      "x": 4240,
+      "y": 0,
+      "w": 960,
+      "h": 640,
+      "title": "Error"
+    },
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 2100,
+      "w": 960,
+      "h": 1900,
+      "title": "Score reader"
+    },
+    {
+      "file": "ScoreReaderPhone.dc.html",
+      "x": 1060,
+      "y": 2100,
+      "w": 390,
+      "h": 1900,
+      "title": "Score reader, phone"
+    },
+    {
+      "file": "ScoreReaderDark.dc.html",
+      "x": 1550,
+      "y": 2100,
+      "w": 960,
+      "h": 1900,
+      "title": "Score reader, dark"
+    },
+    {
+      "file": "ScoreReaderHighContrast.dc.html",
+      "x": 2610,
+      "y": 2100,
+      "w": 960,
+      "h": 1900,
+      "title": "Score reader, Windows high contrast"
+    },
+    {
+      "file": "ScoreReaderNoScript.dc.html",
+      "x": 3670,
+      "y": 2100,
+      "w": 960,
+      "h": 1500,
+      "title": "Score reader, no JavaScript"
+    },
+    {
+      "file": "Print.dc.html",
+      "x": 4730,
+      "y": 2100,
+      "w": 794,
+      "h": 1123,
+      "title": "Print, A4",
+      "print": "flow"
+    },
+    {
+      "file": "DirectionConsole.dc.html",
+      "x": 0,
+      "y": 4200,
+      "w": 620,
+      "h": 420,
+      "title": "Alternative: Console"
+    },
+    {
+      "file": "DirectionLedger.dc.html",
+      "x": 720,
+      "y": 4200,
+      "w": 620,
+      "h": 420,
+      "title": "Alternative: Ledger"
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
