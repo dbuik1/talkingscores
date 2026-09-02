@@ -12,7 +12,10 @@
         <h4>Generating the talking score. This can take a minute or two. Keep this page open.</h4>
 
         <p id="processing-status" role="status" aria-live="polite">Starting score generation</p>
-        <p id="processing-next" hidden><a id="processing-next-link" href="{% url 'index' %}">Go to the home page</a></p>
+        <div id="processing-next" tabindex="-1" hidden>
+            <p id="processing-next-message"></p>
+            <p><a id="processing-next-link" href="{% url 'index' %}">Go to the home page</a></p>
+        </div>
 
         <div class="text-center" style="margin-top: 50px" aria-hidden="true">
         <img class="loading" src="{% static 'img/loading.png' %}"/>
@@ -24,6 +27,7 @@
         const processingStatus = document.getElementById('processing-status');
         const processingNext = document.getElementById('processing-next');
         const processingNextLink = document.getElementById('processing-next-link');
+        const processingNextMessage = document.getElementById('processing-next-message');
         const pollDeadline = Date.now() + 15 * 60 * 1000;
 
         function setProcessingStatus(message) {
@@ -33,7 +37,11 @@
         }
 
         function stopWithNextStep(message, href, label) {
-            setProcessingStatus(message);
+            // Focus lands on the block holding both the message and the link, so
+            // the message is read out in full before the link rather than being
+            // cut off by a focus move to the link alone.
+            processingStatus.hidden = true;
+            processingNextMessage.textContent = message;
             if (href) {
                 processingNextLink.href = href;
             }
@@ -41,7 +49,7 @@
                 processingNextLink.textContent = label;
             }
             processingNext.hidden = false;
-            processingNextLink.focus();
+            processingNext.focus();
         }
 
         (function pollStatus() {
@@ -63,6 +71,8 @@
                         window.location = "{% url 'error' id filename %}";
                     } else if (data.status === 'missing') {
                         stopWithNextStep(data.message, data.next_url, 'Go to the home page');
+                    } else if (data.status === 'options_required' && data.next_url) {
+                        window.location = data.next_url;
                     } else {
                         setProcessingStatus(data.message || 'Generating score');
                         setTimeout(pollStatus, 2000);

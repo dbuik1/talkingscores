@@ -53,11 +53,23 @@ class RemoteAddressNotAllowed(ValueError):
     """The URL points at a host that is not a public internet address."""
 
 
+class RemoteHostNotFound(ValueError):
+    """The URL's host name has no DNS record."""
+
+
+class RemoteFetchRefused(ValueError):
+    """The URL cannot be fetched for a reason the person can act on; the message is shown to them."""
+
+
 def is_public_ip(address):
     ip = ipaddress.ip_address(address)
     if isinstance(ip, ipaddress.IPv6Address):
         if ip.ipv4_mapped is not None:
             ip = ip.ipv4_mapped
+        elif ip.sixtofour is not None:
+            ip = ip.sixtofour
+        elif ip.teredo is not None:
+            ip = ip.teredo[1]
         elif any(ip in network for network in NAT64_NETWORKS):
             return False
     # is_global also excludes the shared address space 100.64.0.0/10 and the
@@ -80,17 +92,17 @@ def check_url_targets_public_host(url):
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
-        raise ValueError("Only HTTP and HTTPS MusicXML URLs are supported.")
+        raise RemoteFetchRefused("The link must start with http:// or https://.")
     host = parsed.hostname
     if not host:
         raise RemoteAddressNotAllowed("The URL has no host name.")
     try:
         results = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
     except socket.gaierror as exc:
-        raise RemoteAddressNotAllowed(f"The host {host} could not be found.") from exc
+        raise RemoteHostNotFound(f"The host {host} could not be found.") from exc
     addresses = {result[4][0] for result in results}
     if not addresses:
-        raise RemoteAddressNotAllowed(f"The host {host} could not be found.")
+        raise RemoteHostNotFound(f"The host {host} could not be found.")
     for address in addresses:
         if not is_public_ip(address):
             raise RemoteAddressNotAllowed(f"The host {host} is not a public internet address.")
@@ -113,7 +125,7 @@ def fetch_remote_score(url):
             location = response.headers.get("Location")
             response.close()
             if not location:
-                raise ValueError("The server redirected without saying where.")
+                raise RemoteFetchRefused("The link redirected without saying where to.")
             current_url = urljoin(current_url, location)
             continue
         response.raise_for_status()
@@ -124,10 +136,10 @@ def fetch_remote_score(url):
                 continue
             total_bytes += len(chunk)
             if total_bytes > MAX_REMOTE_SCORE_BYTES:
-                raise ValueError("Remote MusicXML file is too large.")
+                raise RemoteFetchRefused("The file at that link is larger than 10 MB.")
             file_chunks.append(chunk)
         return b"".join(file_chunks), current_url
-    raise ValueError("The URL redirected too many times.")
+    raise RemoteFetchRefused("The link redirected too many times.")
 
 
 def configure_score_logger():
@@ -180,8 +192,11 @@ def rootfile_from_container(zip_ref):
         return None
     container_xml = zip_ref.read(manifest_info)
     # Entity declarations can expand to far more than the manifest's size.
-    if b"<!ENTITY" in container_xml or b"<!DOCTYPE" in container_xml:
-        return None
+    # The manifest may be UTF-16, so the markers are checked in that encoding too.
+    for marker in ("<!ENTITY", "<!DOCTYPE"):
+        for encoding in ("utf-8", "utf-16-le", "utf-16-be"):
+            if marker.encode(encoding) in container_xml:
+                return None
     try:
         root = ElementTree.fromstring(container_xml)
     except ElementTree.ParseError:
@@ -228,7 +243,7 @@ def extract_musicxml_from_mxl(mxl_path, output_path):
                     musicxml_candidates = [non_meta_files[0]]
             
             if not musicxml_candidates:
-                raise Exception("No MusicXML content found in .mxl file")
+                raise Exception("No MusicXML content found in the .mxl file.")
             
             # Use the first candidate (or the one that looks most like a main file)
             musicxml_file = musicxml_candidates[0]
@@ -240,7 +255,7 @@ def extract_musicxml_from_mxl(mxl_path, output_path):
             with zip_ref.open(musicxml_file) as source:
                 content = source.read(MAX_EXTRACTED_SCORE_BYTES + 1)
             if len(content) > MAX_EXTRACTED_SCORE_BYTES:
-                raise Exception("The MusicXML inside the .mxl file is too large")
+                raise Exception("The MusicXML inside the .mxl file is too large.")
             
             # Write to output path
             with open(output_path, 'wb') as target:
@@ -250,7 +265,7 @@ def extract_musicxml_from_mxl(mxl_path, output_path):
             return output_path
             
     except zipfile.BadZipFile:
-        raise Exception("Invalid .mxl file: not a valid ZIP archive")
+        raise Exception("The .mxl file is not a valid zip archive.")
     except Exception as e:
         logger.error(f"Error extracting MXL file: {e}")
         raise Exception(f"Failed to extract MusicXML from .mxl file: {e}")
@@ -294,9 +309,15 @@ class TSScore(object):
         self.filename = filename
 
     def state(self):
-        data_filepath = self.get_data_file_path()
+        try:
+            data_filepath = self.get_data_file_path()
+        except ValueError:
+            # A filename that sanitises to nothing can never have a stored file.
+            return TSScoreState.FETCHING
+        if not data_filepath:
+            return TSScoreState.FETCHING
         opts_filepath = data_filepath + '.opts'
-        
+
         if not os.path.exists(data_filepath):
             return TSScoreState.FETCHING
         elif not os.path.exists(opts_filepath):
@@ -397,14 +418,13 @@ class TSScore(object):
         return data if isinstance(data, dict) else None
 
     def _generation_lock_is_stale(self):
+        # Every refresh replaces the file, so its modification time is the
+        # last heartbeat regardless of what the writer's clock said.
         lock_path = self.get_generation_lock_file_path()
-        lock = self._read_generation_lock() or {}
-        last_updated = lock.get("updated")
-        if not isinstance(last_updated, (int, float)):
-            try:
-                last_updated = os.path.getmtime(lock_path)
-            except OSError:
-                return True
+        try:
+            last_updated = os.path.getmtime(lock_path)
+        except OSError:
+            return True
         return time.time() - last_updated > GENERATION_LOCK_STALE_SECONDS
 
     def generation_is_live(self):
@@ -414,13 +434,21 @@ class TSScore(object):
             return False
         return not self._generation_lock_is_stale()
 
-    def _write_generation_lock_file(self, lock_path, token, exclusive):
-        flags = os.O_CREAT | os.O_WRONLY | os.O_TRUNC
-        if exclusive:
-            flags |= os.O_EXCL
-        fd = os.open(lock_path, flags)
+    def _write_generation_lock_file(self, lock_path, token):
+        fd = os.open(lock_path, os.O_CREAT | os.O_WRONLY | os.O_EXCL)
         with os.fdopen(fd, "w", encoding="utf-8") as lock_file:
             json.dump({"token": token, "pid": os.getpid(), "updated": time.time()}, lock_file)
+
+    def _replace_generation_lock_file(self, lock_path, token):
+        """Swap the lock file for one holding token in a single rename, then confirm the token stuck."""
+        temp_path = f"{lock_path}.{uuid.uuid4().hex}.tmp"
+        try:
+            self._write_generation_lock_file(temp_path, token)
+            os.replace(temp_path, lock_path)
+        finally:
+            remove_file_quietly(temp_path)
+        lock = self._read_generation_lock()
+        return bool(lock) and lock.get("token") == token
 
     def acquire_generation_lock(self):
         """Take the per-score lock. Returns False when a live run already holds it."""
@@ -429,18 +457,18 @@ class TSScore(object):
             return False
         os.makedirs(os.path.dirname(lock_path), exist_ok=True)
         token = uuid.uuid4().hex
-        for _ in range(2):
-            try:
-                self._write_generation_lock_file(lock_path, token, exclusive=True)
-            except FileExistsError:
-                if not self._generation_lock_is_stale():
-                    return False
-                self.logger.warning(f"Taking over a stale generation lock for {self.id}/{self.filename}")
-                remove_file_quietly(lock_path)
-                continue
-            self._lock_token = token
-            return True
-        return False
+        try:
+            self._write_generation_lock_file(lock_path, token)
+        except FileExistsError:
+            if not self._generation_lock_is_stale():
+                return False
+            self.logger.warning(f"Taking over a stale generation lock for {self.id}/{self.filename}")
+            # Two takeovers racing each rename their own file into place; the
+            # re-read after the rename tells the loser it did not win.
+            if not self._replace_generation_lock_file(lock_path, token):
+                return False
+        self._lock_token = token
+        return True
 
     def _owns_generation_lock(self):
         if not self._lock_token:
@@ -449,18 +477,14 @@ class TSScore(object):
         return bool(lock) and lock.get("token") == self._lock_token
 
     def refresh_generation_lock(self):
-        """Mark the lock as live. Does nothing once another run has taken it over."""
+        """Mark the lock as live. Returns False once another run has taken it over.
+
+        A failure to write the file raises OSError so the caller can tell a
+        disk problem from a lost lock.
+        """
         if not self._owns_generation_lock():
             return False
-        lock_path = self.get_generation_lock_file_path()
-        temp_path = f"{lock_path}.{uuid.uuid4().hex}.tmp"
-        try:
-            self._write_generation_lock_file(temp_path, self._lock_token, exclusive=True)
-            os.replace(temp_path, lock_path)
-        except OSError:
-            remove_file_quietly(temp_path)
-            return False
-        return True
+        return self._replace_generation_lock_file(self.get_generation_lock_file_path(), self._lock_token)
 
     def release_generation_lock(self):
         """Remove the lock, but only when this object holds it."""
@@ -475,10 +499,15 @@ class TSScore(object):
 
         def beat():
             while not stop.wait(GENERATION_HEARTBEAT_SECONDS):
-                if not self.refresh_generation_lock():
-                    return
-                if with_status:
-                    self._write_processing_status("processing", "Generating score.", epoch=epoch)
+                try:
+                    if not self.refresh_generation_lock():
+                        return
+                    if with_status:
+                        self._write_processing_status("processing", "Generating score.", epoch=epoch)
+                except OSError:
+                    # A passing disk error is retried on the next beat; the lock
+                    # only goes stale if the errors last the whole stale window.
+                    self.logger.warning(f"Could not refresh the generation lock for {self.id}/{self.filename}", exc_info=True)
 
         thread = threading.Thread(target=beat, daemon=True)
         thread.start()
@@ -562,10 +591,14 @@ class TSScore(object):
                 except Exception:
                     self.logger.exception(f"Background score generation failed for {self.id}/{self.filename}")
                     status, message = "failed", GENERATION_FAILED_MESSAGE
-                # A run that lost its lock to a takeover must not report over the newer run.
-                if self._owns_generation_lock():
-                    self._write_processing_status(status, message, epoch=epoch)
-                self.release_generation_lock()
+                try:
+                    # A run that lost its lock to a takeover must not report over the newer run.
+                    if self._owns_generation_lock():
+                        self._write_processing_status(status, message, epoch=epoch)
+                except Exception:
+                    self.logger.exception(f"Could not record the result for {self.id}/{self.filename}")
+                finally:
+                    self.release_generation_lock()
 
             threading.Thread(target=generate, daemon=True).start()
         except Exception:
@@ -592,7 +625,7 @@ class TSScore(object):
         except Exception:
             if raise_errors:
                 raise
-            return f"<h1>Error Generating Score</h1><p>{GENERATION_FAILED_MESSAGE}</p>"
+            return f"<h1>Error generating score</h1><p>{GENERATION_FAILED_MESSAGE}</p>"
         finally:
             self.release_generation_lock()
 

@@ -15,13 +15,23 @@ from urllib.parse import urlparse
 from talkingscores.settings import BASE_DIR
 from lib.midiHandler import MidiHandler
 
-from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress, RemoteAddressNotAllowed
+import requests
+from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress
+from talkingscoresapp.models import RemoteAddressNotAllowed, RemoteHostNotFound, RemoteFetchRefused
 from talkingscoresapp.models import remove_file_quietly
 from lib.render_settings import DEFAULT_STYLE, STYLE_IDS
 
 
 def clean_style(value):
     return value if value in STYLE_IDS else DEFAULT_STYLE
+
+
+HEX_COLOUR_PATTERN = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
+
+
+def clean_colours(colours):
+    """Keep only entries whose value is a hex colour; the options file must never carry markup or CSS."""
+    return {key: value for key, value in colours.items() if isinstance(value, str) and HEX_COLOUR_PATTERN.match(value)}
 
 logger = logging.getLogger("TSScore")
 
@@ -30,6 +40,8 @@ MAX_UPLOADED_SCORE_BYTES = 10 * 1024 * 1024
 
 SCORE_MISSING_MESSAGE = "This score is no longer stored here. Upload the file again to make a new talking score."
 PRIVATE_ADDRESS_MESSAGE = "The link points at a private or local network address. Enter a link to a file on a public website."
+HOST_NOT_FOUND_MESSAGE = "That web address could not be found. Check the link and try again."
+DOWNLOAD_FAILED_MESSAGE = "The file could not be downloaded from that link. Check the link and try again."
 UNREADABLE_SCORE_MESSAGE = "The file could not be read as MusicXML. Check that it is a .musicxml, .xml or .mxl file exported from notation software."
 
 ACCESSIBLE_PALETTE = [
@@ -298,8 +310,9 @@ def process(request, id, filename):
     if state == TSScoreState.FETCHING:
         messages.error(request, SCORE_MISSING_MESSAGE)
         return redirect('index')
-    if state == TSScoreState.PROCESSED:
-        score_obj.start_background_processing()
+    if state == TSScoreState.AWAITING_OPTIONS:
+        return redirect('options', id, filename)
+    score_obj.start_background_processing()
     template = loader.get_template('processing.html')
     context = {'id': id, 'filename': filename}
     return HttpResponse(template.render(context, request))
@@ -310,6 +323,8 @@ def process_status(request, id, filename):
     state = score_obj.state()
     if state == TSScoreState.FETCHING:
         return JsonResponse({"status": "missing", "message": SCORE_MISSING_MESSAGE, "next_url": reverse('index')})
+    if state == TSScoreState.AWAITING_OPTIONS:
+        return JsonResponse({"status": "options_required", "next_url": reverse('options', args=[id, filename])})
     status = score_obj.processing_status()
     current = status.get("status")
     if current == "complete":
@@ -460,7 +475,7 @@ def options(request, id, filename):
         logger.info("Reading score %s" % data_path)
         score_info = score_obj.info()
     except Exception:
-        logger.exception("Unable to process score (before options screen!): http://%s%s " % (request.get_host(), reverse('score', args=[id, filename])))
+        logger.exception("Unable to process score before the options screen: http://%s%s " % (request.get_host(), reverse('score', args=[id, filename])))
         return redirect('error', id, filename)
 
     if request.method == 'POST':
@@ -516,9 +531,9 @@ def options(request, id, filename):
             "rhythm_colour_mode": request.POST.get("rhythm_colour_mode", "none"),
             "octave_colour_mode": request.POST.get("octave_colour_mode", "none"),
             "key_signature_accidentals": request.POST.get("key_signature_accidentals", "applied"),
-            "advanced_rhythm_colours": {slugify(key.replace('color_rhythm_', '')): value for key, value in request.POST.items() if key.startswith('color_rhythm_')},
-            "advanced_octave_colours": {key.replace('color_octave_', ''): value for key, value in request.POST.items() if key.startswith('color_octave_')},
-            "figureNoteColours": figure_note_colours
+            "advanced_rhythm_colours": clean_colours({slugify(key.replace('color_rhythm_', '')): value for key, value in request.POST.items() if key.startswith('color_rhythm_')}),
+            "advanced_octave_colours": clean_colours({key.replace('color_octave_', ''): value for key, value in request.POST.items() if key.startswith('color_octave_')}),
+            "figureNoteColours": clean_colours(figure_note_colours)
         }
 
         write_json_file_atomic(options_path, options_data)
@@ -556,6 +571,18 @@ def index(request):
             except RemoteAddressNotAllowed as ex:
                 logger.warning(f"Rejected a link to a non-public address: {ex}")
                 messages.error(request, PRIVATE_ADDRESS_MESSAGE)
+                return redirect('index')
+            except RemoteHostNotFound as ex:
+                logger.warning(f"Link host not found: {ex}")
+                messages.error(request, HOST_NOT_FOUND_MESSAGE)
+                return redirect('index')
+            except RemoteFetchRefused as ex:
+                logger.warning(f"Link refused: {ex}")
+                messages.error(request, str(ex))
+                return redirect('index')
+            except requests.RequestException as ex:
+                logger.warning(f"Link download failed: {ex}")
+                messages.error(request, DOWNLOAD_FAILED_MESSAGE)
                 return redirect('index')
             except Exception as ex:
                 logger.error(f"File Processing Error: {ex}", exc_info=True)
