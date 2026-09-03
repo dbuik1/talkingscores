@@ -1567,6 +1567,22 @@ class ReviewedEngineTests(TestCase):
         self.assertIn("crescendo starts, crotchet mid C", text)
         self.assertIn("E, crescendo ends", text)
 
+    def test_a_gap_in_the_bar_numbers_does_not_end_the_reading(self):
+        from music21 import note, stream, meter
+        part = stream.Part()
+        for number in (1, 2, 7, 8):
+            measure = stream.Measure(number=number)
+            if number == 1:
+                measure.append(meter.TimeSignature("4/4"))
+            for _ in range(4):
+                measure.append(note.Note("C4"))
+            part.append(measure)
+        score = stream.Score()
+        score.append(part)
+        text = self._text(score, {"style": "standard", "bars_at_a_time": 2})
+        self.assertIn("Bar 7", text)
+        self.assertIn("Bar 8", text)
+
     def test_grace_notes_are_read_before_the_note_they_decorate(self):
         from music21 import note
         grace = note.Note("D5").getGrace()

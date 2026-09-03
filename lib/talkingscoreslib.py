@@ -913,14 +913,17 @@ class HTMLTalkingScoreFormatter:
 
     def _generate_main_segments(self, start_bar_for_loop, music_segments):
         part = self.score.score.parts[0]
-        total_measures = part.getElementsByClass('Measure')[-1].number
+        # Grouped from the bar numbers the file actually uses: numbering can skip a
+        # number or repeat one, and counting up from the first would then stop early
+        # or ask for a bar that is not there.
+        numbers = list(dict.fromkeys(
+            measure.number for measure in part.getElementsByClass('Measure')
+            if measure.number is not None and measure.number >= start_bar_for_loop))
         step = max(1, int(self.settings.bars_at_a_time))
-        for bar_index in range(start_bar_for_loop, total_measures + 1, step):
-            end_bar_index = min(bar_index + step - 1, total_measures)
-            if part.measure(bar_index) is None:
-                break
+        for index in range(0, len(numbers), step):
+            group = numbers[index:index + step]
             music_segments.append(self._create_music_segment(
-                start_bar=bar_index, end_bar=end_bar_index))
+                start_bar=group[0], end_bar=group[-1]))
 
     # Facts
 
