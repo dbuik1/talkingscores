@@ -233,14 +233,19 @@ class Music21TalkingScore(TalkingScoreBase):
         self.part_names = {}
         instrument_names = []
         ins_count = 1
-        for c, instrument in enumerate(self.score.flatten().getInstruments()):
+        # One entry per part, taken from the part itself: an instrument change part
+        # way through a part would otherwise count as another part, and the numbers
+        # here are read as positions in the score's parts.
+        for c, part in enumerate(self.score.parts):
+            instrument = part.getInstrument()
+            part_id = instrument.partId or part.id
             if (len(self.part_instruments) == 0 or
-                    self.part_instruments[ins_count - 1][3] != instrument.partId):
+                    self.part_instruments[ins_count - 1][3] != part_id):
                 part_name = (instrument.partName or "").strip()
                 # Notation programs leave "(Inst3)" style names on parts nobody named.
                 if not part_name or re.fullmatch(r"\(Inst\d+\)", part_name):
                     part_name = f"Instrument {ins_count} (unnamed)"
-                self.part_instruments[ins_count] = [part_name, c, 1, instrument.partId]
+                self.part_instruments[ins_count] = [part_name, c, 1, part_id]
                 instrument_names.append(part_name)
                 ins_count += 1
             else:

@@ -59,12 +59,10 @@
         <p class="pos" id="position"></p>
         {% if score_data.midi %}
         <span class="sep"></span>
-        <span class="group" role="group" aria-label="Playback">
         <button class="btn" type="button" id="play-group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"></path></svg>Play this group</button>
         <button class="btn" type="button" id="stop-playback"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12"></rect></svg>Stop playback</button>
         <label class="goto"><span>Speed</span><select class="input" id="speed"><option value="25">25 %</option><option value="50">50 %</option><option value="75">75 %</option><option value="100" selected>100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
         <p class="status"><b>Playback</b><span id="playback-status-text">Nothing is playing.</span></p>
-        </span>
         {% endif %}
         <span class="sep"></span>
         <button class="btn" type="button" id="read-again"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7"></path><path d="M4 4v5h5"></path></svg>Read this group again</button>
@@ -151,10 +149,10 @@
                     {% if download_html_url %}<a class="btn" href="{{ download_html_url }}">Download as a web page</a>{% endif %}
                     {% if download_text_url %}<a class="btn" href="{{ download_text_url }}">Download as text</a>{% endif %}
                     {% if download_braille_url %}<a class="btn" href="{{ download_braille_url }}">Download as braille</a>{% endif %}
-                    {% if score_data.midi %}<a class="btn" id="download-midi" href="{{ score_data.midi.base }}?start={{ score_data.firstBar }}&amp;end={{ score_data.firstBar }}" download>Download this group as MIDI</a>{% endif %}
+                    {% if score_data.midi %}<a class="btn" id="download-midi" href="{{ score_data.midi.base }}?start={{ score_data.firstBar }}&amp;end={{ score_data.firstBar }}" download>Download as MIDI</a>{% endif %}
                     <button class="btn" type="button" id="print-score">Print every bar</button>
                 </div>
-                {% if not export_mode %}<p class="small muted">The web page works offline and keeps these reading settings. The braille file is uncontracted text for a 40-cell display or embosser.</p>{% endif %}
+                {% if not export_mode %}<p class="small muted">The web page works offline and keeps these reading settings. The braille file is uncontracted text for a 40-cell display or embosser.{% if score_data.midi %} The MIDI file holds the group on screen, not the whole score.{% endif %}</p>{% endif %}
             </div>
         </details>
     </div>

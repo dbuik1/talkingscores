@@ -51,6 +51,9 @@ python .\manage.py cleanup_midi --dry-run
 python .\manage.py cleanup_midi
 ```
 
+It is safe to run while the site is up: a half-written file is left alone until
+an hour has passed, by which time no request can still be writing it.
+
 ## Environment settings
 
 `DJANGO_DEBUG` is off unless set, and with debug off the server refuses to start without `DJANGO_SECRET_KEY`. For local development and the test suite, turn debug on:

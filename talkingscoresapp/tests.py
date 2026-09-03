@@ -322,9 +322,12 @@ class DownloadTests(TestCase):
 
     @patch("talkingscoresapp.views.MidiHandler.get_or_make_midi_file")
     def test_midi_response_headers(self, mock_get_midi):
-        with tempfile.NamedTemporaryFile(suffix=".mid", delete=False) as midi_file:
+        # The saved name is read off the file that was written, so the stand-in is
+        # named the way the handler names one.
+        midi_dir = tempfile.mkdtemp()
+        midi_path = os.path.join(midi_dir, "score.musicxmls3e7.mid")
+        with open(midi_path, "wb") as midi_file:
             midi_file.write(b"MThd")
-            midi_path = midi_file.name
 
         mock_get_midi.return_value = midi_path
 
@@ -335,7 +338,7 @@ class DownloadTests(TestCase):
         finally:
             if "response" in locals():
                 response.close()
-            os.unlink(midi_path)
+            shutil.rmtree(midi_dir, ignore_errors=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("audio/midi", response["Content-Type"])
@@ -343,12 +346,20 @@ class DownloadTests(TestCase):
         self.assertNotIn("Access-Control-Allow-Origin", response)
 
     def test_saved_midi_files_are_named_for_the_bars_they_hold(self):
-        self.assertEqual(views_module.saved_midi_name("bach.musicxml", {"start": "1", "end": "2"}),
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls1e2.mid"),
                          "bach bars 1 to 2.mid")
-        self.assertEqual(views_module.saved_midi_name("bach.musicxml", {"start": "4", "end": "4"}),
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls4e4.mid"),
                          "bach bar 4.mid")
-        self.assertEqual(views_module.saved_midi_name("bach.musicxml", {"start": "0", "end": "0"}),
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls0e0.mid"),
                          "bach pickup bar.mid")
+
+    def test_a_saved_midi_file_is_named_for_the_bars_written_not_the_bars_asked_for(self):
+        # A request reaching past the score is written as the bars that exist, and the
+        # name follows the file so it never claims bars it does not hold.
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls5e9.mid"),
+                         "bach bars 5 to 9.mid")
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/unreadable"),
+                         "bach.mid")
 
     @patch("talkingscoresapp.views.MidiHandler.get_or_make_midi_file")
     def test_midi_rejects_missing_required_query_params(self, mock_get_midi):
@@ -1855,13 +1866,15 @@ class StaleMidiCleanupTests(TestCase):
                 "score.musicxmls1e2.mid",          # a range the page still asks for
                 "score.musicxmls1e2c0t100.mid",    # a speed and a click the browser now applies
                 "score.musicxmlsel-1s1e2.mid",     # a selection of instruments
-                "score.musicxmls0e0_upfront.generated",
-                "score.musicxmls3e4.mid.abc.partial",
+                "s0e0_upfront.generated",          # a flag file nothing reads now
+                "tmpabc.partial",                  # a write that was abandoned
                 "other.mid",                       # names no score in its folder
             ]
             for name in names:
                 with open(os.path.join(folder, name), "w", encoding="utf-8") as handle:
                     handle.write("x")
+            old = time.time() - 7200
+            os.utime(os.path.join(folder, "tmpabc.partial"), (old, old))
 
             output = StringIO()
             with patch("talkingscoresapp.management.commands.cleanup_midi.MEDIA_ROOT", temp_dir):
@@ -1869,6 +1882,20 @@ class StaleMidiCleanupTests(TestCase):
 
             self.assertEqual(sorted(os.listdir(folder)), ["score.musicxml", "score.musicxmls1e2.mid"])
             self.assertIn("Removed 5 file(s); kept 1.", output.getvalue())
+
+    def test_a_write_still_in_progress_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = os.path.join(temp_dir, VALID_ID)
+            os.makedirs(folder)
+            for name in ("score.musicxml", "tmpnow.partial"):
+                with open(os.path.join(folder, name), "w", encoding="utf-8") as handle:
+                    handle.write("x")
+
+            output = StringIO()
+            with patch("talkingscoresapp.management.commands.cleanup_midi.MEDIA_ROOT", temp_dir):
+                call_command("cleanup_midi", stdout=output)
+
+            self.assertIn("tmpnow.partial", os.listdir(folder))
 
     def test_a_dry_run_removes_nothing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1898,6 +1925,43 @@ class PlayerScriptTests(TestCase):
         self.assertTrue(test_files)
         result = subprocess.run([node, "--test"] + test_files, capture_output=True, text=True, timeout=120)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_the_player_lines_up_the_parts_of_a_file_music21_wrote(self):
+        """A file built by hand cannot stand in for one the score engine produced."""
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("node is not installed")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                from lib.midiHandler import MidiHandler
+
+                folder = os.path.join(temp_dir, VALID_ID)
+                os.makedirs(folder)
+                shutil.copy(os.path.join(settings.BASE_DIR, "talkingscoresapp", "fixtures",
+                                         "instrument-change.musicxml"),
+                            os.path.join(folder, "score.musicxml"))
+                request = Mock()
+                request.GET = {}
+                path = MidiHandler(request, VALID_ID, "score.musicxml").make_midi_file(1, 2)
+
+            from lib.talkingscoreslib import Music21TalkingScore
+
+            score = Music21TalkingScore(os.path.join(folder, "score.musicxml"))
+            names = score.get_instruments()
+            # The flute takes up the piccolo part way through, which is one part playing
+            # two instruments rather than a third part.
+            self.assertEqual(len(names), 2)
+
+            reader = os.path.join(settings.BASE_DIR, "talkingscoresapp", "static", "js",
+                                  "tests", "read-midi.mjs")
+            result = subprocess.run([node, reader, path, str(len(names))],
+                                    capture_output=True, text=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            music = json.loads(result.stdout)
+            self.assertEqual(len(music["parts"]), 2)
+            # The top part plays C then A, the lower one C two octaves down twice.
+            self.assertEqual(music["parts"][0], [72, 69])
+            self.assertEqual(music["parts"][1], [48, 48])
 
 
 def _raise_or_return(outcome):

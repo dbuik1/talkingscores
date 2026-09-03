@@ -120,11 +120,46 @@ test("percussion keeps its rhythm and its place among the parts", () => {
     assert.ok(music.duration > 0);
 });
 
+test("a note still sounding at the end of the track is held to the end", () => {
+    const events = noteOn(0, 60).concat(variable(DIVISION), [0xff, 0x2f, 0x00]);
+    const music = collect(parseMidi(Uint8Array.from(
+        header({ tracks: 1 }).concat(chunk("MTrk", events))).buffer), 1);
+    assert.equal(music.parts[0].length, 1);
+    assert.equal(Math.round(music.parts[0][0].end * 1000), 500);
+});
+
+test("a range finishing in rests keeps its full length", () => {
+    // The notes stop a beat before the track does, which is where the bar ends.
+    const events = tempo(500000).concat(noteOn(0, 60), noteOff(DIVISION, 60),
+        variable(DIVISION * 3), [0xff, 0x2f, 0x00]);
+    const music = collect(parseMidi(Uint8Array.from(
+        header({ tracks: 1 }).concat(chunk("MTrk", events))).buffer), 1);
+    assert.equal(Math.round(music.duration * 1000), 2000);
+    assert.equal(music.clicks.length, 4);
+});
+
+test("a file whose tracks do not match the score keeps them in the order written", () => {
+    const conductor = tempo(500000);
+    const first = noteOn(0, 60).concat(noteOff(DIVISION, 60));
+    const second = noteOn(0, 48).concat(noteOff(DIVISION, 48));
+    const music = collect(parseMidi(file([conductor, first, second])), 1);
+    assert.equal(music.parts.length, 3);
+    assert.deepEqual(music.parts.map(notes => notes.length), [0, 1, 1]);
+});
+
+test("a system message does not lose the rest of the track", () => {
+    const events = noteOn(0, 60).concat(variable(0), [0xf2, 0x00, 0x01],
+        variable(0), [0xf8], noteOff(DIVISION, 60));
+    const music = collect(parseMidi(file([events])), 1);
+    assert.equal(music.parts[0].length, 1);
+    assert.equal(Math.round(music.parts[0][0].end * 1000), 500);
+});
+
 test("a chunk longer than the file stops at the end of the file", () => {
     const bytes = new Uint8Array(file([noteOn(0, 60).concat(noteOff(DIVISION, 60))]));
     bytes[headerSize() + 5] = 0x7f;    // a length far past the last byte
     const music = collect(parseMidi(bytes.buffer), 1);
-    assert.ok(music.parts[0].length <= 1);
+    assert.equal(music.parts[0].length, 1);
 });
 
 function headerSize() {

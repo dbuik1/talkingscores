@@ -98,10 +98,17 @@
                 }
                 reader.at = after;
                 if (type === 0x2f) {
+                    // The end of the track falls at the end of the last bar, which is
+                    // how a range finishing in rests keeps its full length.
+                    events.push({ ticks: ticks, kind: "end" });
                     break;
                 }
             } else if (status === 0xf0 || status === 0xf7) {
                 reader.at += reader.variable();
+            } else if (status > 0xf0) {
+                // System messages carry no music. Their length is fixed by the status
+                // byte, and reading the wrong number of bytes would lose the track.
+                reader.at += status === 0xf2 ? 2 : (status === 0xf1 || status === 0xf3 ? 1 : 0);
             } else {
                 var command = status & 0xf0;
                 var channel = status & 0x0f;
@@ -233,34 +240,47 @@
         midi.tracks.forEach(function (track) {
             var notes = [];
             var sounding = {};
+            var trackEnd = 0;
             track.forEach(function (event) {
+                trackEnd = Math.max(trackEnd, event.ticks);
                 var key = event.channel + ":" + event.note;
                 if (event.kind === "on") {
                     // Two voices in one part can hold the same pitch at once.
                     (sounding[key] = sounding[key] || []).push(event);
                 } else if (event.kind === "off" && sounding[key] && sounding[key].length) {
-                    var started = sounding[key].shift();
-                    notes.push({
-                        start: seconds(started.ticks),
-                        end: seconds(event.ticks),
-                        note: started.note,
-                        velocity: started.velocity,
-                        percussion: event.channel === 9
-                    });
-                    lastTick = Math.max(lastTick, event.ticks);
+                    notes.push(held(sounding[key].shift(), event.ticks));
                 }
             });
+            // A note left sounding at the end of the track is held to the end of the
+            // range rather than dropped, so a tie out of the last bar is still heard.
+            Object.keys(sounding).forEach(function (key) {
+                sounding[key].forEach(function (started) {
+                    notes.push(held(started, trackEnd));
+                });
+            });
+            lastTick = Math.max(lastTick, trackEnd);
             notes.sort(function (a, b) { return a.start - b.start; });
             tracks.push(notes);
         });
 
-        // The file carries a conductor track before the parts, so a leading track
-        // with no notes belongs to no part. Every other track keeps its place, even
-        // when the part rests through the whole range.
-        while (tracks.length > expectedParts && tracks.length && !tracks[0].length) {
+        function held(started, endTicks) {
+            return {
+                start: seconds(started.ticks),
+                end: seconds(Math.max(endTicks, started.ticks)),
+                note: started.note,
+                velocity: started.velocity,
+                percussion: started.channel === 9
+            };
+        }
+
+        // The file carries a conductor track holding the tempo and the time signature
+        // before the parts, so a file with one track more than the score has parts
+        // starts with a track belonging to no part. Any other count means the file
+        // does not match the score, and lining the tracks up by guesswork would sound
+        // the wrong instrument, so they are left in the order they were written.
+        if (tracks.length === expectedParts + 1 && !tracks[0].length) {
             tracks.shift();
         }
-        tracks.length = Math.min(tracks.length, expectedParts);
         while (tracks.length < expectedParts) {
             tracks.push([]);
         }
@@ -396,7 +416,7 @@
         }
 
         // Only a part being played can be brought forward, so the rest are closed off.
-        function reflectBalance() {
+        function reflectBalance(spoken) {
             if (!controls.forward) {
                 return;
             }
@@ -407,7 +427,15 @@
                 }
             });
             if (controls.forward.selectedOptions[0] && controls.forward.selectedOptions[0].disabled) {
+                // Clearing the control in script raises no change event, so the choice
+                // is written down and said here rather than reappearing on the next visit.
                 controls.forward.value = "";
+                if (controls.remember) {
+                    controls.remember("forward", "");
+                }
+                if (spoken && controls.announce) {
+                    controls.announce("Balance set to every part level.");
+                }
             }
         }
 
@@ -561,8 +589,10 @@
             pending = false;
             playing = false;
             silence();
-            if (wasSounding && spoken) {
-                report("Stopped. " + capital(label(group)) + " ready to play.");
+            // Stop answers every press, so a reader who cannot see the button knows
+            // it reached the player whether or not anything was sounding.
+            if (spoken) {
+                report((wasSounding ? "Playback stopped. " : "") + capital(label(group)) + " ready to play.");
             }
         }
 
@@ -592,11 +622,13 @@
                 }
                 pending = false;
                 if (context.state !== "running") {
-                    report("This browser is holding the sound back. Press Play this group again.");
+                    report("The audio has not started. Press Play this group again.");
                     return;
                 }
-                if (!results[0].parts.some(function (notes) { return notes.length; })) {
-                    report("Nothing is written to play in " + label(group) + ".");
+                // A range of rests still has a length, so it plays as silence with the
+                // click and only a range holding nothing at all is refused.
+                if (!results[0].duration && !results[0].parts.some(function (notes) { return notes.length; })) {
+                    report("There is nothing to play in " + label(group) + ".");
                     return;
                 }
                 start(results[0]);
@@ -613,7 +645,7 @@
         }
 
         function replayIfPlaying() {
-            reflectBalance();
+            reflectBalance(true);
             if (playing || pending) {
                 play();
             }
@@ -640,9 +672,10 @@
                 var wasSounding = playing || pending;
                 stop(false);
                 group = next;
-                waiting();
-                if (wasSounding && controls.announce) {
-                    controls.announce("Playback stopped.");
+                if (wasSounding) {
+                    report("Playback stopped. " + capital(label(group)) + " ready to play.");
+                } else {
+                    waiting();
                 }
             }
         };

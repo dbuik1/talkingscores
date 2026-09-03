@@ -454,6 +454,54 @@
             reflect();
         }
 
+        // Playback choices are kept alongside the reading settings, so a reader who
+        // needs half speed or the click sets them once. The speed, the click and the
+        // repeat mean the same in any score. The instruments and the balance name
+        // positions in one score's part list, so they are kept against that score.
+        var SHARED_PLAYBACK = ["speed", "click", "repeat"];
+        var SCORE_PLAYBACK = ["voice", "forward"];
+
+        function rememberPlayback(name, value) {
+            if (SCORE_PLAYBACK.indexOf(name) === -1) {
+                prefs.playback = prefs.playback || {};
+                prefs.playback[name] = value;
+            } else if (scoreKey) {
+                prefs.playbackByScore = prefs.playbackByScore || {};
+                prefs.playbackByScore[scoreKey] = prefs.playbackByScore[scoreKey] || {};
+                prefs.playbackByScore[scoreKey][name] = value;
+            }
+            savePrefs();
+        }
+
+        function restorePlayback(playbackControls) {
+            var shared = prefs.playback || {};
+            var perScore = (scoreKey && prefs.playbackByScore && prefs.playbackByScore[scoreKey]) || {};
+            SHARED_PLAYBACK.concat(SCORE_PLAYBACK).forEach(function (name) {
+                var control = playbackControls[name];
+                if (!control) {
+                    return;
+                }
+                var saved = SCORE_PLAYBACK.indexOf(name) === -1 ? shared[name] : perScore[name];
+                if (saved !== undefined) {
+                    if (control.type === "checkbox") {
+                        control.checked = Boolean(saved);
+                    } else {
+                        // A saved choice from a score with different parts, or from an
+                        // earlier list of speeds, leaves the control on what the page
+                        // was written with rather than on its first option.
+                        var written = control.value;
+                        control.value = saved;
+                        if (control.selectedIndex === -1) {
+                            control.value = written;
+                        }
+                    }
+                }
+                control.addEventListener("change", function () {
+                    rememberPlayback(name, control.type === "checkbox" ? control.checked : control.value);
+                });
+            });
+        }
+
         // The saved file follows the open group, so it holds the bars on screen.
         var midiLink = data.midi ? document.getElementById("download-midi") : null;
 
@@ -471,7 +519,8 @@
                 click: document.getElementById("setting-click"),
                 forward: document.getElementById("setting-forward"),
                 repeat: document.getElementById("setting-repeat"),
-                rangeLabel: rangeLabel
+                rangeLabel: rangeLabel,
+                remember: rememberPlayback
             };
             restorePlayback(playbackControls);
             player = window.TalkingScoresPlayer(data, playbackControls);
@@ -484,38 +533,6 @@
             if (statusText) {
                 statusText.textContent = "A downloaded page cannot play the score. Open it on the Talking Scores website to hear these bars.";
             }
-        }
-
-        // Playback choices are kept alongside the reading settings, so a reader who
-        // needs half speed or the click sets them once.
-        function restorePlayback(playbackControls) {
-            var saved = prefs.playback || {};
-            [["speed", "speed"], ["voice", "voice"], ["forward", "forward"]].forEach(function (pair) {
-                var control = playbackControls[pair[0]];
-                if (control && saved[pair[1]] !== undefined) {
-                    control.value = saved[pair[1]];
-                    if (control.selectedIndex === -1) {
-                        control.selectedIndex = 0;
-                    }
-                }
-            });
-            [["click", "click"], ["repeat", "repeat"]].forEach(function (pair) {
-                var control = playbackControls[pair[0]];
-                if (control && saved[pair[1]] !== undefined) {
-                    control.checked = Boolean(saved[pair[1]]);
-                }
-            });
-            ["speed", "voice", "forward", "click", "repeat"].forEach(function (name) {
-                var control = playbackControls[name];
-                if (!control) {
-                    return;
-                }
-                control.addEventListener("change", function () {
-                    prefs.playback = prefs.playback || {};
-                    prefs.playback[name] = control.type === "checkbox" ? control.checked : control.value;
-                    savePrefs();
-                });
-            });
         }
 
         buildGroups(barsPerGroup);

@@ -200,7 +200,6 @@ select.input { padding-right: 10px; }
 
 .goto { display: flex; align-items: center; gap: 8px; }
 
-.toolbar .group { display: contents; }
 .toolbar {
     display: flex;
     flex-wrap: wrap;
