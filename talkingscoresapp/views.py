@@ -104,6 +104,12 @@ def parse_selected_instruments(post_data, instrument_count):
     return instrument_ids
 
 
+# A range beyond this is more than a page of music and more than the reading page
+# ever asks for, so writing one is a sign of a caller that is not the reading page.
+MAX_MIDI_BARS = 256
+MAX_MIDI_BAR_NUMBER = 100000
+
+
 def validate_midi_query_params(query_params):
     for required_param in ("start", "end"):
         if query_params.get(required_param) is None:
@@ -115,11 +121,14 @@ def validate_midi_query_params(query_params):
             bars[param] = int(query_params[param])
         except (TypeError, ValueError):
             raise forms.ValidationError(f"Invalid MIDI parameter: {param}.")
-        if bars[param] < 0:
+        if not 0 <= bars[param] <= MAX_MIDI_BAR_NUMBER:
             raise forms.ValidationError(f"Invalid MIDI parameter: {param}.")
 
     if bars["start"] > bars["end"]:
         raise forms.ValidationError("MIDI start parameter cannot be after end.")
+
+    if bars["end"] - bars["start"] >= MAX_MIDI_BARS:
+        raise forms.ValidationError(f"MIDI range cannot be longer than {MAX_MIDI_BARS} bars.")
 
 
 def get_example_scores():
@@ -298,6 +307,10 @@ def midi(request, id, filename):
 
     try:
         midi_file_path = mh.get_or_make_midi_file()
+    except (FileNotFoundError, ValueError) as exc:
+        # A range or a file name that names nothing is the caller's to correct.
+        logger.info("No MIDI for http://%s%s: %s" % (request.get_host(), request.get_full_path(), exc))
+        return HttpResponse("There is nothing to play for that range.", status=404)
     except Exception:
         logger.exception("Unable to generate MIDI: http://%s%s" % (request.get_host(), request.get_full_path()))
         return HttpResponse("MIDI generation failed.", status=500)

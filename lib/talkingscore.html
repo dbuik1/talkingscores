@@ -59,10 +59,12 @@
         <p class="pos" id="position"></p>
         {% if score_data.midi %}
         <span class="sep"></span>
+        <span class="group" role="group" aria-label="Playback">
         <button class="btn" type="button" id="play-group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"></path></svg>Play this group</button>
         <button class="btn" type="button" id="stop-playback"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12"></rect></svg>Stop playback</button>
         <label class="goto"><span>Speed</span><select class="input" id="speed"><option value="25">25 %</option><option value="50">50 %</option><option value="75">75 %</option><option value="100" selected>100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
-        <p class="status" role="status" aria-live="polite"><b>Playback</b><span id="playback-status-text">Stopped.</span></p>
+        <p class="status"><b>Playback</b><span id="playback-status-text">Nothing is playing.</span></p>
+        </span>
         {% endif %}
         <span class="sep"></span>
         <button class="btn" type="button" id="read-again"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7"></path><path d="M4 4v5h5"></path></svg>Read this group again</button>
@@ -124,6 +126,7 @@
         <details>
             <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Playback settings</summary>
             <form class="panel" id="playback-settings-form" onsubmit="return false">
+                {% if score_data.midi.voices|length > 1 or score_data.midi.parts|length > 1 %}
                 <div class="row">
                     {% if score_data.midi.voices|length > 1 %}
                     <label class="goto"><span>Instruments to play</span><select class="input" id="setting-voice">{% for voice in score_data.midi.voices %}<option value="{{ loop.index0 }}">{{ voice.label }}</option>{% endfor %}</select></label>
@@ -132,11 +135,12 @@
                     <label class="goto"><span>Balance</span><select class="input" id="setting-forward"><option value="">Every part level</option>{% for part in score_data.midi.parts %}<option value="{{ part.index }}">{{ part.label }} louder</option>{% endfor %}</select></label>
                     {% endif %}
                 </div>
+                {% endif %}
                 <div class="row">
                     <label class="check"><input type="checkbox" id="setting-click">Metronome click</label>
                     <label class="check"><input type="checkbox" id="setting-repeat">Repeat this group</label>
                 </div>
-                <p class="small muted">A change while a group is playing restarts it.</p>
+                <p class="small muted">These choices and the speed are kept on this device. Changing the instruments, the balance or the click while a group is playing starts it again.</p>
             </form>
         </details>
         {% endif %}

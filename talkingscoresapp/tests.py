@@ -2,6 +2,7 @@
 Essential tests for Talking Scores - focused on critical issues.
 """
 
+from django.conf import settings
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.core.management import call_command
@@ -17,6 +18,7 @@ from unittest.mock import patch, Mock
 from io import StringIO
 import tempfile
 import shutil
+import subprocess
 import glob
 import os
 import time
@@ -144,6 +146,10 @@ class BasicFunctionalityTests(TestCase):
         self.assertIn("script-src 'self'", policy)
         self.assertIn("frame-ancestors 'none'", policy)
         self.assertIn("upgrade-insecure-requests", policy)
+        # The page sounds its own MIDI, so it needs no other host, no worker and no media element.
+        self.assertNotIn("midijs.net", policy)
+        self.assertIn("worker-src 'none'", policy)
+        self.assertIn("media-src 'none'", policy)
 
     def test_site_shell_does_not_load_external_active_scripts(self):
         response = self.client.get(reverse('index'))
@@ -353,6 +359,10 @@ class DownloadTests(TestCase):
             "?start=8&end=4",
             "?start=-1&end=7",
             "?start=3&end=",
+            "?end=7",                    # start is missing
+            "?start=3",                  # end is missing
+            "?start=1&end=999999999",    # past the largest bar number a score can hold
+            "?start=1&end=1000",         # more bars than one press of play ever asks for
         ]
 
         for query_string in invalid_urls:
@@ -1409,6 +1419,29 @@ class ReaderPageTests(TestCase):
         self.assertNotIn('id="setting-forward"', html)   # one part cannot be brought forward
         self.assertNotIn("midijs.net", html)             # the page sounds the MIDI itself
 
+    def test_the_page_offers_a_way_to_play_each_group_of_instruments(self):
+        formatter = self._formatter({"style": "standard", "play_all": True, "play_selected": True,
+                                     "play_unselected": True})
+        with patch.object(type(formatter), "_trigger_midi_generation"):
+            formatter.build("", "/midis/x/y.musicxml")
+        formatter.score.part_instruments = {
+            1: ["Flute", 0, 1, "P1"], 2: ["Oboe", 1, 1, "P2"], 3: ["Cello", 2, 1, "P3"]}
+        formatter.score.selected_instruments = [1, 2]
+        formatter.score.unselected_instruments = [3]
+        formatter.settings.play_all = True
+        formatter.settings.play_selected = True
+        formatter.settings.play_unselected = True
+        parts = formatter._playback_parts()
+        self.assertEqual([(part["index"], part["label"], part["read"]) for part in parts],
+                         [(0, "Flute", True), (1, "Oboe", True), (2, "Cello", False)])
+        voices = formatter._playback_voices(parts)
+        self.assertEqual([voice["label"] for voice in voices][:3],
+                         ["Every instrument", "The instruments being read", "The other instruments"])
+        self.assertEqual(voices[0]["parts"], [0, 1, 2])
+        self.assertEqual(voices[1]["parts"], [0, 1])
+        self.assertEqual(voices[2]["parts"], [2])
+        self.assertIn(["Flute", [0]], [[voice["label"], voice["parts"]] for voice in voices])
+
     def test_the_meta_line_names_only_the_instruments_being_read(self):
         formatter = self._formatter({"style": "standard"})
         with patch.object(type(formatter), "_trigger_midi_generation"):
@@ -1758,6 +1791,61 @@ class MidiFileTests(TestCase):
             with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
                 handler = self._handler_in(temp_dir)
                 self.assertTrue(handler.make_midi_file().endswith("s1e3.mid"))
+
+    def test_a_written_range_is_served_without_reading_the_score_again(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                self._handler_in(temp_dir).make_midi_file(1, 2)
+                second = self._handler_in(temp_dir)
+                with patch("lib.midiHandler.converter.parse") as mock_parse:
+                    self.assertTrue(second.make_midi_file(1, 2).endswith("s1e2.mid"))
+                mock_parse.assert_not_called()
+
+    def test_a_range_past_the_last_bar_writes_the_range_that_fits(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                handler = self._handler_in(temp_dir)
+                self.assertTrue(handler.make_midi_file(2, 900).endswith("s2e3.mid"))
+                self.assertTrue(handler.make_midi_file(900, 950).endswith("s3e3.mid"))
+                written = sorted(os.path.basename(path) for path in glob.glob(os.path.join(temp_dir, VALID_ID, "*.mid")))
+                self.assertEqual(written, ["score.musicxmls2e3.mid", "score.musicxmls3e3.mid"])
+
+    def test_a_failed_write_leaves_nothing_behind(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                handler = self._handler_in(temp_dir)
+                with patch("lib.midiHandler.stream.Score.write", side_effect=OSError("disk full")):
+                    with self.assertRaises(OSError):
+                        handler.make_midi_file(1, 2)
+                self.assertEqual(glob.glob(os.path.join(temp_dir, VALID_ID, "*.partial")), [])
+                self.assertEqual(glob.glob(os.path.join(temp_dir, VALID_ID, "*.mid")), [])
+
+    def test_writing_an_excerpt_leaves_the_repeats_in_the_score(self):
+        """The descriptions are built from the same parsed score the excerpt comes from."""
+        from music21 import bar, converter, stream as m21_stream
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                handler = self._handler_in(temp_dir)
+                handler.score = converter.parse(os.path.join(temp_dir, VALID_ID, "score.musicxml"))
+                measure = handler.score.parts[0].getElementsByClass(m21_stream.Measure)[1]
+                measure.rightBarline = bar.Repeat(direction="end")
+                handler.make_midi_file(1, 2)
+                self.assertIsInstance(measure.rightBarline, bar.Repeat)
+
+
+class PlayerScriptTests(TestCase):
+    """The reading of a MIDI file in the browser, checked with node when it is present."""
+
+    def test_the_player_reads_midi_files_correctly(self):
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("node is not installed")
+        tests_dir = os.path.join(settings.BASE_DIR, "talkingscoresapp", "static", "js", "tests")
+        test_files = sorted(glob.glob(os.path.join(tests_dir, "*.test.mjs")))
+        self.assertTrue(test_files)
+        result = subprocess.run([node, "--test"] + test_files, capture_output=True, text=True, timeout=120)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 def _raise_or_return(outcome):

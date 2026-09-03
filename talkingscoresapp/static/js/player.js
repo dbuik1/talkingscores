@@ -7,13 +7,20 @@
 (function () {
     "use strict";
 
-    var TICKS_PER_QUARTER = 480;
     var DEFAULT_TEMPO = 500000;
-    var LOOKAHEAD_SECONDS = 0.4;
-    var SCHEDULER_MS = 100;
+    var LOOKAHEAD_SECONDS = 1.2;
+    var SCHEDULER_MS = 200;
     var GAP_BEFORE_REPEAT = 0.6;
+    var REMEMBERED_RANGES = 4;
+    var LATE_TOLERANCE = 0.02;
 
     /* Reading a standard MIDI file. */
+
+    function unreadable(reason) {
+        var error = new Error(reason);
+        error.arrived = true;
+        return error;
+    }
 
     function Reader(bytes) {
         this.bytes = bytes;
@@ -27,19 +34,27 @@
     Reader.prototype.word = function (length) {
         var value = 0;
         for (var i = 0; i < length; i++) {
-            value = (value << 8) | this.bytes[this.at++];
+            value = value * 256 + (this.bytes[this.at++] || 0);
         }
-        return value >>> 0;
+        return value;
     };
 
     Reader.prototype.variable = function () {
         var value = 0;
         var byte;
-        do {
+        // Four bytes is the most the format allows, and stopping there keeps a
+        // corrupt file from producing a negative delta.
+        for (var read = 0; read < 4; read++) {
             byte = this.bytes[this.at++];
-            value = (value << 7) | (byte & 0x7f);
-        } while (byte & 0x80);
-        return value;
+            if (byte === undefined) {
+                throw unreadable("the file ends inside an event");
+            }
+            value = value * 128 + (byte & 0x7f);
+            if (!(byte & 0x80)) {
+                return value;
+            }
+        }
+        throw unreadable("a delta time is too long");
     };
 
     Reader.prototype.text = function (length) {
@@ -59,25 +74,29 @@
             var status = reader.bytes[reader.at];
             if (status & 0x80) {
                 reader.at++;
-                if (status < 0xf0) {
-                    running = status;
-                }
+                // Meta and system events cancel running status.
+                running = status < 0xf0 ? status : 0;
             } else {
+                if (!running) {
+                    throw unreadable("an event has no status byte");
+                }
                 status = running;
             }
             if (status === 0xff) {
                 var type = reader.byte();
                 var length = reader.variable();
-                if (type === 0x51) {
-                    events.push({ ticks: ticks, kind: "tempo", value: reader.word(length) });
-                } else if (type === 0x58) {
-                    var numerator = reader.byte();
-                    var denominator = Math.pow(2, reader.byte());
-                    reader.at += length - 2;
-                    events.push({ ticks: ticks, kind: "time", beats: numerator, unit: denominator });
-                } else {
-                    reader.at += length;
+                var after = reader.at + length;
+                if (type === 0x51 && length >= 3) {
+                    events.push({ ticks: ticks, kind: "tempo", value: reader.word(3) });
+                } else if (type === 0x58 && length >= 2) {
+                    events.push({
+                        ticks: ticks,
+                        kind: "time",
+                        beats: reader.byte(),
+                        unit: Math.pow(2, reader.byte())
+                    });
                 }
+                reader.at = after;
                 if (type === 0x2f) {
                     break;
                 }
@@ -109,24 +128,35 @@
 
     function parseMidi(buffer) {
         var reader = new Reader(new Uint8Array(buffer));
-        if (reader.text(4) !== "MThd") {
-            throw new Error("not a MIDI file");
+        if (reader.bytes.length < 14 || reader.text(4) !== "MThd") {
+            throw unreadable("the file does not start with a MIDI header");
         }
-        reader.at += 4 + 2;
+        var headerLength = reader.word(4);
+        var headerEnd = reader.at + headerLength;
+        var format = reader.word(2);
         var trackCount = reader.word(2);
         var division = reader.word(2);
-        if (division & 0x8000) {
-            division = TICKS_PER_QUARTER;
+        if (format === 2) {
+            // Format 2 tracks are separate pieces, not parts sounding together.
+            throw unreadable("the file holds independent sequences");
         }
+        if (division & 0x8000 || division === 0) {
+            // Frame timing carries no relation to the metronome marks this player follows.
+            throw unreadable("the file is timed in frames");
+        }
+        reader.at = headerEnd;
         var tracks = [];
-        for (var i = 0; i < trackCount && reader.at < reader.bytes.length; i++) {
+        for (var i = 0; i < trackCount && reader.at + 8 <= reader.bytes.length; i++) {
             if (reader.text(4) !== "MTrk") {
                 break;
             }
             var length = reader.word(4);
-            tracks.push(readTrack(reader, reader.at + length));
+            tracks.push(readTrack(reader, Math.min(reader.at + length, reader.bytes.length)));
         }
-        return { division: division || TICKS_PER_QUARTER, tracks: tracks };
+        if (!tracks.length) {
+            throw unreadable("the file holds no tracks");
+        }
+        return { division: division, tracks: tracks };
     }
 
     /* Turning ticks into seconds, following the metronome marks in the file. */
@@ -144,7 +174,7 @@
         var points = [{ ticks: 0, seconds: 0, value: DEFAULT_TEMPO }];
         changes.forEach(function (change) {
             var last = points[points.length - 1];
-            if (change.ticks === last.ticks) {
+            if (change.ticks <= last.ticks) {
                 last.value = change.value;
                 return;
             }
@@ -163,78 +193,102 @@
         };
     }
 
-    function beatTicks(midi) {
-        var signature = { beats: 4, unit: 4 };
+    /* The beat the metronome counts, which follows every change of time signature.
+       A compound meter is counted in dotted beats, the way players count it. */
+    function beatGrid(midi, lastTick) {
+        var changes = [];
         midi.tracks.forEach(function (track) {
             track.forEach(function (event) {
-                if (event.kind === "time" && event.ticks === 0) {
-                    signature = { beats: event.beats, unit: event.unit };
+                if (event.kind === "time" && event.beats > 0 && event.unit > 0) {
+                    changes.push(event);
                 }
             });
         });
-        return { step: midi.division * 4 / signature.unit, beats: signature.beats };
+        changes.sort(function (a, b) { return a.ticks - b.ticks; });
+        if (!changes.length || changes[0].ticks > 0) {
+            changes.unshift({ ticks: 0, beats: 4, unit: 4 });
+        }
+        var beats = [];
+        changes.forEach(function (change, index) {
+            var compound = change.unit >= 8 && change.beats % 3 === 0 && change.beats > 3;
+            var step = midi.division * 4 / change.unit * (compound ? 3 : 1);
+            var perBar = compound ? change.beats / 3 : change.beats;
+            var until = index + 1 < changes.length ? changes[index + 1].ticks : lastTick;
+            var counted = 0;
+            for (var ticks = change.ticks; ticks < until; ticks += step) {
+                beats.push({ ticks: ticks, strong: counted % perBar === 0 });
+                counted++;
+            }
+        });
+        return beats;
     }
 
-    /* The notes of every part, in score order, with the click track alongside. */
+    /* The notes of every part, in the order the reading page names them, with the
+       click track alongside. */
 
-    function collect(midi) {
+    function collect(midi, expectedParts) {
         var seconds = tempoMap(midi);
-        var parts = [];
+        var tracks = [];
         var lastTick = 0;
         midi.tracks.forEach(function (track) {
             var notes = [];
             var sounding = {};
             track.forEach(function (event) {
+                var key = event.channel + ":" + event.note;
                 if (event.kind === "on") {
-                    sounding[event.channel + ":" + event.note] = event;
-                } else if (event.kind === "off") {
-                    var started = sounding[event.channel + ":" + event.note];
-                    if (started) {
-                        delete sounding[event.channel + ":" + event.note];
-                        if (event.channel === 9) {
-                            return;
-                        }
-                        notes.push({
-                            start: seconds(started.ticks),
-                            end: seconds(event.ticks),
-                            note: started.note,
-                            velocity: started.velocity
-                        });
-                        lastTick = Math.max(lastTick, event.ticks);
-                    }
+                    // Two voices in one part can hold the same pitch at once.
+                    (sounding[key] = sounding[key] || []).push(event);
+                } else if (event.kind === "off" && sounding[key] && sounding[key].length) {
+                    var started = sounding[key].shift();
+                    notes.push({
+                        start: seconds(started.ticks),
+                        end: seconds(event.ticks),
+                        note: started.note,
+                        velocity: started.velocity,
+                        percussion: event.channel === 9
+                    });
+                    lastTick = Math.max(lastTick, event.ticks);
                 }
             });
-            if (notes.length) {
-                notes.sort(function (a, b) { return a.start - b.start; });
-                parts.push(notes);
-            }
+            notes.sort(function (a, b) { return a.start - b.start; });
+            tracks.push(notes);
         });
 
-        var beat = beatTicks(midi);
-        var clicks = [];
-        var index = 0;
-        for (var ticks = 0; ticks < lastTick; ticks += beat.step) {
-            clicks.push({ start: seconds(ticks), strong: index % beat.beats === 0 });
-            index++;
+        // The file carries a conductor track before the parts, so a leading track
+        // with no notes belongs to no part. Every other track keeps its place, even
+        // when the part rests through the whole range.
+        while (tracks.length > expectedParts && tracks.length && !tracks[0].length) {
+            tracks.shift();
         }
-        return { parts: parts, clicks: clicks, duration: seconds(lastTick) };
+        tracks.length = Math.min(tracks.length, expectedParts);
+        while (tracks.length < expectedParts) {
+            tracks.push([]);
+        }
+
+        var clicks = beatGrid(midi, lastTick).map(function (beat) {
+            return { start: seconds(beat.ticks), strong: beat.strong };
+        });
+        return { parts: tracks, clicks: clicks, duration: seconds(lastTick) };
     }
 
     /* Sounding the notes. */
 
-    function makeVoice(context, destination, note, velocity, start, end) {
-        var frequency = 440 * Math.pow(2, (note - 69) / 12);
+    function makeNote(context, destination, note, start, end) {
+        var frequency = 440 * Math.pow(2, (note.note - 69) / 12);
         var gain = context.createGain();
-        var level = Math.min(0.28, 0.06 + velocity / 127 * 0.22);
+        var level = Math.min(0.28, 0.06 + note.velocity / 127 * 0.22);
         var attack = 0.012;
         var release = Math.min(0.18, Math.max(0.05, (end - start) * 0.4));
+        var stopAt = end + release;
         gain.gain.setValueAtTime(0.0001, start);
         gain.gain.exponentialRampToValueAtTime(level, start + attack);
         gain.gain.setTargetAtTime(level * 0.6, start + attack, 0.35);
         gain.gain.setTargetAtTime(0.0001, Math.max(start + attack, end - release), release / 3);
+        // The decay never reaches zero on its own, so the tail is taken to silence
+        // before the oscillator stops rather than being cut off with a click.
+        gain.gain.linearRampToValueAtTime(0, stopAt);
         gain.connect(destination);
 
-        var stopAt = end + release + 0.05;
         [["triangle", 1], ["sine", 0.45]].forEach(function (shape) {
             var oscillator = context.createOscillator();
             oscillator.type = shape[0];
@@ -244,9 +298,25 @@
             oscillator.connect(mix);
             mix.connect(gain);
             oscillator.start(start);
-            oscillator.stop(stopAt);
+            oscillator.stop(stopAt + 0.02);
         });
-        return stopAt;
+    }
+
+    /* Percussion has no pitch to sound, so it is struck as a short tap that keeps
+       the written rhythm audible. A higher note number taps higher. */
+    function makeTap(context, destination, note, start) {
+        var oscillator = context.createOscillator();
+        var gain = context.createGain();
+        oscillator.type = "square";
+        oscillator.frequency.setValueAtTime(120 + (note.note % 24) * 22, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(Math.min(0.2, 0.05 + note.velocity / 127 * 0.15), start + 0.003);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.07);
+        gain.gain.linearRampToValueAtTime(0, start + 0.09);
+        oscillator.connect(gain);
+        gain.connect(destination);
+        oscillator.start(start);
+        oscillator.stop(start + 0.1);
     }
 
     function makeClick(context, destination, at, strong) {
@@ -257,10 +327,11 @@
         gain.gain.setValueAtTime(0.0001, at);
         gain.gain.exponentialRampToValueAtTime(strong ? 0.16 : 0.09, at + 0.002);
         gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.045);
+        gain.gain.linearRampToValueAtTime(0, at + 0.06);
         oscillator.connect(gain);
         gain.connect(destination);
         oscillator.start(at);
-        oscillator.stop(at + 0.06);
+        oscillator.stop(at + 0.07);
     }
 
     window.TalkingScoresPlayer = function (data, controls) {
@@ -269,6 +340,7 @@
         var master = null;
         var partGains = [];
         var scores = {};
+        var order = [];
         var timer = null;
         var playing = false;
         var pending = false;
@@ -291,8 +363,17 @@
             }
         }
 
-        function ready() {
-            status("Stopped. " + capital(label(group)) + " ready.");
+        // The reading page has one place where messages are spoken, so playback
+        // reports through it rather than announcing from the toolbar as well.
+        function report(text) {
+            status(text);
+            if (controls.announce) {
+                controls.announce(text);
+            }
+        }
+
+        function waiting() {
+            status(capital(label(group)) + " ready to play.");
         }
 
         function speedFactor() {
@@ -314,8 +395,20 @@
             return parseInt(controls.forward.value, 10);
         }
 
-        function repeating() {
-            return !!(controls.repeat && controls.repeat.checked);
+        // Only a part being played can be brought forward, so the rest are closed off.
+        function reflectBalance() {
+            if (!controls.forward) {
+                return;
+            }
+            var voice = chosenVoice();
+            Array.prototype.forEach.call(controls.forward.options, function (option) {
+                if (option.value !== "") {
+                    option.disabled = voice.parts.indexOf(parseInt(option.value, 10)) === -1;
+                }
+            });
+            if (controls.forward.selectedOptions[0] && controls.forward.selectedOptions[0].disabled) {
+                controls.forward.value = "";
+            }
         }
 
         function audio() {
@@ -328,9 +421,6 @@
                 master = context.createGain();
                 master.gain.value = 0.9;
                 master.connect(context.destination);
-            }
-            if (context.state === "suspended") {
-                context.resume();
             }
             return context;
         }
@@ -354,8 +444,7 @@
             var forward = forwardPart();
             partGains = music.parts.map(function (notes, index) {
                 var gain = context.createGain();
-                var wanted = voice.parts.indexOf(index) !== -1;
-                if (!wanted) {
+                if (voice.parts.indexOf(index) === -1) {
                     gain.gain.value = 0;
                 } else if (forward === -1) {
                     gain.gain.value = 1;
@@ -369,15 +458,23 @@
 
         function scheduleUpTo(until) {
             var factor = speedFactor();
+            var now = context.currentTime;
             var click = controls.click && controls.click.checked;
             music.parts.forEach(function (notes, part) {
                 var index = cursor.part[part];
                 while (index < notes.length && origin + notes[index].start * factor < until) {
                     var note = notes[index];
-                    if (partGains[part].gain.value > 0) {
-                        makeVoice(context, partGains[part], note.note, note.velocity,
-                            origin + note.start * factor,
-                            origin + Math.max(note.end, note.start + 0.05) * factor);
+                    var start = origin + note.start * factor;
+                    var end = origin + Math.max(note.end, note.start + 0.05) * factor;
+                    // A tab left in the background stalls the timer while the audio
+                    // clock runs on. Notes whose moment has passed are let go rather
+                    // than sounded together on the next pass.
+                    if (partGains[part].gain.value > 0 && start >= now - LATE_TOLERANCE) {
+                        if (note.percussion) {
+                            makeTap(context, partGains[part], note, Math.max(start, now));
+                        } else {
+                            makeNote(context, partGains[part], note, Math.max(start, now), end);
+                        }
                     }
                     index++;
                 }
@@ -385,8 +482,10 @@
             });
             if (click) {
                 while (cursor.click < music.clicks.length && origin + music.clicks[cursor.click].start * factor < until) {
-                    makeClick(context, master, origin + music.clicks[cursor.click].start * factor,
-                        music.clicks[cursor.click].strong);
+                    var at = origin + music.clicks[cursor.click].start * factor;
+                    if (at >= now - LATE_TOLERANCE) {
+                        makeClick(context, master, Math.max(at, now), music.clicks[cursor.click].strong);
+                    }
                     cursor.click++;
                 }
             } else {
@@ -418,82 +517,103 @@
             }
             playing = false;
             silence();
-            ready();
+            report("Reached the end of " + label(group) + ".");
+        }
+
+        function repeating() {
+            return Boolean(controls.repeat && controls.repeat.checked);
+        }
+
+        function remember(key, promise) {
+            scores[key] = promise;
+            order.push(key);
+            while (order.length > REMEMBERED_RANGES) {
+                delete scores[order.shift()];
+            }
+            return promise;
         }
 
         function fetchRange(start, end) {
             var key = start + "-" + end;
-            if (!scores[key]) {
-                scores[key] = fetch(data.midi.base + "?start=" + start + "&end=" + end)
-                    .then(function (response) {
-                        if (!response.ok) {
-                            throw { arrived: false };
-                        }
-                        return response.arrayBuffer();
-                    }, function () {
-                        throw { arrived: false };
-                    })
-                    .then(function (buffer) {
-                        try {
-                            return collect(parseMidi(buffer));
-                        } catch (error) {
-                            // The bytes came but are not a MIDI file this player can read.
-                            throw { arrived: true };
-                        }
-                    })
-                    .catch(function (error) {
-                        delete scores[key];
-                        throw error;
-                    });
+            if (scores[key]) {
+                return scores[key];
             }
-            return scores[key];
+            return remember(key, fetch(data.midi.base + "?start=" + start + "&end=" + end)
+                .then(function (response) {
+                    if (!response.ok) {
+                        var refused = new Error("the server refused the range");
+                        refused.refused = true;
+                        throw refused;
+                    }
+                    return response.arrayBuffer();
+                })
+                .then(function (buffer) {
+                    return collect(parseMidi(buffer), data.midi.parts.length);
+                })
+                .catch(function (error) {
+                    delete scores[key];
+                    throw error;
+                }));
         }
 
-        function stop() {
+        function stop(spoken) {
+            var wasSounding = playing || pending;
             pending = false;
-            if (playing) {
-                playing = false;
-                silence();
-                ready();
-            } else {
-                silence();
+            playing = false;
+            silence();
+            if (wasSounding && spoken) {
+                report("Stopped. " + capital(label(group)) + " ready to play.");
             }
+        }
+
+        function start(parsed) {
+            music = parsed;
+            playing = true;
+            origin = context.currentTime + 0.15;
+            restart();
+            report("Playing " + label(group) + ".");
         }
 
         function play() {
             if (!audio()) {
-                status("This browser cannot play the score. The bars are written out above.");
+                report("This browser cannot sound the score. The bars are written out below.");
                 return;
             }
-            stop();
+            stop(false);
             var wanted = group;
             pending = true;
-            status("Loading " + label(group) + ".");
-            fetchRange(group.start, group.end).then(function (parsed) {
+            report("Loading " + label(group) + ".");
+            var loaded = fetchRange(group.start, group.end);
+            // The browser holds the audio clock until a gesture releases it, so
+            // playback waits for the resume as well as for the file.
+            Promise.all([loaded, context.resume()]).then(function (results) {
                 if (!pending || wanted !== group) {
                     return;
                 }
                 pending = false;
-                if (!parsed.parts.length) {
-                    status("Nothing is written to play in " + label(group) + ".");
+                if (context.state !== "running") {
+                    report("This browser is holding the sound back. Press Play this group again.");
                     return;
                 }
-                music = parsed;
-                playing = true;
-                origin = context.currentTime + 0.15;
-                restart();
-                status("Playing " + label(group) + ".");
+                if (!results[0].parts.some(function (notes) { return notes.length; })) {
+                    report("Nothing is written to play in " + label(group) + ".");
+                    return;
+                }
+                start(results[0]);
             }, function (error) {
                 pending = false;
-                if (error && error.arrived) {
-                    status("The audio for " + label(wanted) + " could not be read. Reload the page and try again.");
+                if (error && error.refused) {
+                    report("The server would not send the audio for " + label(wanted) + ". Reload the page and try again.");
+                } else if (error && error.arrived) {
+                    report("The audio for " + label(wanted) + " could not be read. Reload the page and try again.");
                 } else {
-                    status("The audio for " + label(wanted) + " did not arrive. Check your connection and press Play this group again.");
+                    report("The audio for " + label(wanted) + " did not arrive. Check your connection and press Play this group again.");
                 }
             });
         }
 
         function replayIfPlaying() {
+            reflectBalance();
             if (playing || pending) {
                 play();
             }
@@ -503,29 +623,30 @@
             controls.play.addEventListener("click", play);
         }
         if (controls.stop) {
-            controls.stop.addEventListener("click", stop);
+            controls.stop.addEventListener("click", function () { stop(true); });
         }
-        if (controls.speed) {
-            controls.speed.addEventListener("change", replayIfPlaying);
-        }
-        if (controls.voice) {
-            controls.voice.addEventListener("change", replayIfPlaying);
-        }
-        if (controls.forward) {
-            controls.forward.addEventListener("change", replayIfPlaying);
-        }
-        if (controls.click) {
-            controls.click.addEventListener("change", replayIfPlaying);
-        }
+        [controls.speed, controls.voice, controls.forward, controls.click].forEach(function (control) {
+            if (control) {
+                control.addEventListener("change", replayIfPlaying);
+            }
+        });
+        reflectBalance();
 
         return {
             groupChanged: function (next) {
-                if (group && next !== group) {
-                    stop();
+                if (next === group) {
+                    return;
                 }
+                var wasSounding = playing || pending;
+                stop(false);
                 group = next;
-                ready();
+                waiting();
+                if (wasSounding && controls.announce) {
+                    controls.announce("Playback stopped.");
+                }
             }
         };
     };
+    // Reading a file and laying its tracks against the parts is checked on its own.
+    window.TalkingScoresPlayer.reading = { parseMidi: parseMidi, collect: collect };
 })();

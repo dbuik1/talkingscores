@@ -71,8 +71,6 @@ class Music21TalkingScore(TalkingScoreBase):
         self.selected_instruments = []
         self.unselected_instruments = []
         self.selected_part_names = []
-        self.binary_selected_instruments = 1
-        self.binary_play_all = 1
         self.use_settings(settings or RenderSettings())
         super().__init__()
 
@@ -279,14 +277,11 @@ class Music21TalkingScore(TalkingScoreBase):
 
         self.selected_instruments = []
         self.unselected_instruments = []
-        self.binary_selected_instruments = 1
         self.selected_part_names = []
 
         for ins in self.part_instruments:
-            self.binary_selected_instruments <<= 1
             if ins in chosen:
                 self.selected_instruments.append(ins)
-                self.binary_selected_instruments += 1
             else:
                 self.unselected_instruments.append(ins)
 
@@ -300,7 +295,6 @@ class Music21TalkingScore(TalkingScoreBase):
 
     def _configure_playback_options(self):
         settings = self.settings
-        choices = [settings.play_all, settings.play_selected, settings.play_unselected]
 
         if len(self.part_instruments) == 1:
             settings.play_all = False
@@ -311,12 +305,6 @@ class Music21TalkingScore(TalkingScoreBase):
             settings.play_selected = False
         if len(self.selected_instruments) == 1:
             settings.play_selected = False
-
-        self.binary_play_all = 1
-        for choice in choices:
-            self.binary_play_all <<= 1
-            if choice:
-                self.binary_play_all += 1
 
     def get_number_of_parts(self):
         self.get_instruments()
@@ -620,7 +608,7 @@ class HTMLTalkingScoreFormatter:
         self._generate_main_segments(start_bar_for_loop, self.segments)
         self.facts = self._build_facts()
         if web_path and self.segments:
-            # The bars the page opens on, so the first press of play has nothing to wait for.
+            # The bars the page opens on.
             self._trigger_midi_generation(self.segments[0].start_bar, self.segments[0].end_bar)
         self.built = True
 
@@ -818,11 +806,7 @@ class HTMLTalkingScoreFormatter:
             self.score.timeSigs[measure_num] = previous_ts
 
     def _trigger_midi_generation(self, start_bar, end_bar):
-        """Write the audio for one range of bars.
-
-        Writing an excerpt strips repeat marks from the parsed score, so this runs
-        only once the descriptions have been built from it.
-        """
+        """Write the audio for one range of bars, so the first press of play waits for nothing."""
         from lib.midiHandler import MidiHandler
 
         id_hash = os.path.basename(os.path.dirname(self.score.filepath))

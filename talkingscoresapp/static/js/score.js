@@ -455,8 +455,9 @@
         var playButton = document.getElementById("play-group");
         var stopButton = document.getElementById("stop-playback");
         if (data.midi && window.TalkingScoresPlayer) {
-            player = window.TalkingScoresPlayer(data, {
+            var playbackControls = {
                 status: document.getElementById("playback-status-text"),
+                announce: announce,
                 play: playButton,
                 stop: stopButton,
                 speed: document.getElementById("speed"),
@@ -465,7 +466,9 @@
                 forward: document.getElementById("setting-forward"),
                 repeat: document.getElementById("setting-repeat"),
                 rangeLabel: rangeLabel
-            });
+            };
+            restorePlayback(playbackControls);
+            player = window.TalkingScoresPlayer(data, playbackControls);
         } else if (playButton) {
             playButton.disabled = true;
             if (stopButton) {
@@ -473,8 +476,40 @@
             }
             var statusText = document.getElementById("playback-status-text");
             if (statusText) {
-                statusText.textContent = "Playback is not available on this page.";
+                statusText.textContent = "A downloaded page cannot play the score. Open it on the Talking Scores website to hear these bars.";
             }
+        }
+
+        // Playback choices are kept alongside the reading settings, so a reader who
+        // needs half speed or the click sets them once.
+        function restorePlayback(playbackControls) {
+            var saved = prefs.playback || {};
+            [["speed", "speed"], ["voice", "voice"], ["forward", "forward"]].forEach(function (pair) {
+                var control = playbackControls[pair[0]];
+                if (control && saved[pair[1]] !== undefined) {
+                    control.value = saved[pair[1]];
+                    if (control.selectedIndex === -1) {
+                        control.selectedIndex = 0;
+                    }
+                }
+            });
+            [["click", "click"], ["repeat", "repeat"]].forEach(function (pair) {
+                var control = playbackControls[pair[0]];
+                if (control && saved[pair[1]] !== undefined) {
+                    control.checked = Boolean(saved[pair[1]]);
+                }
+            });
+            ["speed", "voice", "forward", "click", "repeat"].forEach(function (name) {
+                var control = playbackControls[name];
+                if (!control) {
+                    return;
+                }
+                control.addEventListener("change", function () {
+                    prefs.playback = prefs.playback || {};
+                    prefs.playback[name] = control.type === "checkbox" ? control.checked : control.value;
+                    savePrefs();
+                });
+            });
         }
 
         buildGroups(barsPerGroup);

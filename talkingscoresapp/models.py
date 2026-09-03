@@ -7,7 +7,7 @@ import json
 import logging
 import socket
 from talkingscores.settings import MEDIA_ROOT
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, quote
 import tempfile
 from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
 from pathvalidate import sanitize_filename
@@ -645,11 +645,14 @@ class TSScore(object):
         data_path = self.get_data_file_path()
         html_cache_path = self.get_html_cache_file_path()
 
-        web_path = f"/midis/{self.id}/{self.filename}"
-        download_html_url = f"/download/html/{self.id}/{self.filename}"
-        download_text_url = f"/download/text/{self.id}/{self.filename}"
-        download_braille_url = f"/download/braille/{self.id}/{self.filename}"
-        options_url = f"/score_options/{self.id}/{self.filename}"
+        # A name can carry a character a URL reads as punctuation, such as a hash,
+        # so the name is escaped before it goes into a link the page follows.
+        url_filename = quote(self.filename)
+        web_path = f"/midis/{self.id}/{url_filename}"
+        download_html_url = f"/download/html/{self.id}/{url_filename}"
+        download_text_url = f"/download/text/{self.id}/{url_filename}"
+        download_braille_url = f"/download/braille/{self.id}/{url_filename}"
+        options_url = f"/score_options/{self.id}/{url_filename}"
         midi_output_path = os.path.join(MEDIA_ROOT, self.id)
         os.makedirs(midi_output_path, exist_ok=True)
         

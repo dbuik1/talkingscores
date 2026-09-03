@@ -1,7 +1,9 @@
 __author__ = 'PMarchant'
 
+import copy
 import logging
 import os
+import tempfile
 
 from music21 import converter, stream, tempo
 
@@ -17,7 +19,8 @@ class MidiHandler:
     Choosing parts, changing the speed, the metronome click and repeating a range
     all happen in the browser, so a range needs only this one file however it is
     played. Parts are written in score order, which is the order the reading page
-    names them in.
+    names them in, and a part resting through the range still gets its track so
+    the browser can line the tracks up with the parts.
     """
 
     def __init__(self, request, folder, filename):
@@ -41,12 +44,25 @@ class MidiHandler:
         start, end = self.requested_range()
         return self.make_midi_file(start, end)
 
+    def score_bar_range(self):
+        measures = self.score.parts[0].getElementsByClass(stream.Measure) if self.score.parts else []
+        if not len(measures):
+            raise ValueError("The score has no bars to play.")
+        return measures[0].number, measures[-1].number
+
     def make_midi_file(self, start=None, end=None):
+        # A range already written is served without reparsing the score.
+        if start is not None and end is not None and os.path.exists(self.midi_path(start, end)):
+            return self.midi_path(start, end)
+
         if not self.score:
             self.score = converter.parse(os.path.join(MEDIA_ROOT, self.folder, self.filename))
-        if start is None or end is None:
-            measures = self.score.parts[0].getElementsByClass('Measure')
-            start, end = measures[0].number, measures[-1].number
+        first_bar, last_bar = self.score_bar_range()
+        # A range reaching past the score writes the same file as the range that
+        # stops at its last bar, so asking for bars that do not exist adds nothing
+        # to the folder.
+        start = first_bar if start is None else min(max(start, first_bar), last_bar)
+        end = last_bar if end is None else min(max(end, start), last_bar)
 
         path = self.midi_path(start, end)
         if os.path.exists(path):
@@ -59,7 +75,10 @@ class MidiHandler:
             measures = part.measures(start, end, collect=('Clef', 'TimeSignature', 'Instrument', 'KeySignature'))
             if measures is None:
                 continue
-            # A repeat mark inside an excerpt would play bars the reader is not showing.
+            # Excerpting hands back the score's own bars, so the copy is what gets
+            # stripped: a repeat mark inside an excerpt would play bars the reader
+            # is not showing, and the score itself is still described with repeats.
+            measures = copy.deepcopy(measures)
             for measure in measures.getElementsByClass(stream.Measure):
                 measure.removeByClass('Repeat')
             segment.insert(0, measures)
@@ -69,10 +88,16 @@ class MidiHandler:
 
         self.insert_tempos(segment, offset)
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        # Two requests can ask for the same range at once, so the file appears whole or not at all.
-        partial_path = f"{path}.{os.getpid()}.partial"
-        segment.write('midi', partial_path)
-        os.replace(partial_path, path)
+        # Two requests can ask for the same range at once, so each writes its own
+        # file and the last one to finish puts it in place whole.
+        handle, partial_path = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".partial")
+        os.close(handle)
+        try:
+            segment.write('midi', partial_path)
+            os.replace(partial_path, path)
+        finally:
+            if os.path.exists(partial_path):
+                os.remove(partial_path)
         logger.info(f"Wrote MIDI for bars {start} to {end}: {path}")
         return path
 
