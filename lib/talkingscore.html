@@ -111,14 +111,15 @@
                 <fieldset class="field">
                     <legend>Text size</legend>
                     <div class="sizes">
-                        <label class="size"><input type="radio" name="size" value="standard" checked><span><span class="name">Standard</span> <span class="muted small">Fits two bars on a laptop screen.</span></span><span class="demo" style="font-size:28px">crotchet, C above middle C</span></label>
-                        <label class="size"><input type="radio" name="size" value="large"><span><span class="name">Large</span> <span class="muted small">About 30 letters a line.</span></span><span class="demo" style="font-size:40px">crotchet, C above middle C</span></label>
-                        <label class="size"><input type="radio" name="size" value="xlarge"><span><span class="name">Extra large</span> <span class="muted small">One note per line.</span></span><span class="demo" style="font-size:56px">crotchet, C above middle C</span></label>
+                        <label class="size"><input type="radio" name="size" value="standard" checked><span><span class="name">Standard</span> <span class="muted small">Fits two bars on a laptop screen.</span></span><span class="demo" style="font-size:1.75rem">crotchet, C above middle C</span></label>
+                        <label class="size"><input type="radio" name="size" value="large"><span><span class="name">Large</span> <span class="muted small">About 30 letters a line.</span></span><span class="demo" style="font-size:2.5rem">crotchet, C above middle C</span></label>
+                        <label class="size"><input type="radio" name="size" value="xlarge"><span><span class="name">Extra large</span> <span class="muted small">One note per line.</span></span><span class="demo" style="font-size:3.5rem">crotchet, C above middle C</span></label>
                         <label class="size"><input type="radio" name="size" value="browser"><span><span class="name">Follow my browser</span> <span class="muted small">Uses the size set in your browser or magnifier.</span></span></label>
                     </div>
                 </fieldset>
                 <div class="row">
-                    <label class="check"><input type="checkbox" id="setting-stack">One note per line</label>
+                    <label class="check"><input type="checkbox" id="setting-stack" aria-describedby="stack-locked">One note per line</label>
+                    <p class="small muted" id="stack-locked" hidden>Extra large sets one note per line.</p>
                     <label class="goto"><span>Colours</span><select class="input" id="setting-theme"><option value="system">Match my system</option><option value="light">Light</option><option value="dark">Dark</option><option value="contrast">High contrast</option></select></label>
                 </div>
                 <p class="small muted">Changes apply straight away and are kept on this device.{% if options_url %} The words themselves are set under <a href="{{ options_url }}">Choose how it reads</a>.{% endif %}</p>

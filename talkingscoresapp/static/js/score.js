@@ -447,6 +447,12 @@
                     // Extra large always stacks, so the box shows that and cannot be cleared.
                     stack.checked = stacked(prefs);
                     stack.disabled = prefs.size === "xlarge";
+                    // A greyed box is the whole explanation to anyone reading the
+                    // screen, so the reason is written out beside it as well.
+                    var locked = document.getElementById("stack-locked");
+                    if (locked) {
+                        locked.hidden = !stack.disabled;
+                    }
                 }
             }
 

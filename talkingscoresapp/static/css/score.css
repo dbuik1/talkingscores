@@ -25,7 +25,9 @@
 html:not(.js) .group-toggle { cursor: default; }
 .group-toggle .chev { width: 0.8em; height: 0.8em; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex: none; transition: transform 0.15s; }
 html:not(.js) .group-toggle .chev { display: none; }
-.group-toggle[aria-expanded="true"] .chev { transform: rotate(90deg); }
+/* The open group's toggle carries aria-current rather than aria-expanded, since
+   it no longer offers a state to change, so the chevron follows the group. */
+.group.current .group-toggle .chev { transform: rotate(90deg); }
 .group h2:focus-visible { outline: none; }
 .group:not(.current) h2 { font-size: 1.5rem; font-weight: 400; }
 .group h2 .prev { color: var(--muted); font-family: var(--font-body); font-size: 1.0625rem; margin-left: auto; font-weight: 400; }
