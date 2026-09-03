@@ -297,6 +297,19 @@ def score(request, id, filename):
             return redirect('error', id, filename)
 
 
+def saved_midi_name(filename, query_params):
+    """The name a reader sees when they keep the audio, rather than the cache name."""
+    start = int(query_params["start"])
+    end = int(query_params["end"])
+    stem = os.path.splitext(os.path.basename(filename))[0]
+    # Bar zero is the pickup bar throughout the score, and the reading page names it that way.
+    if start == end:
+        bars = "pickup bar" if start == 0 else f"bar {start}"
+    else:
+        bars = f"bars {start} to {end}"
+    return f"{stem} {bars}.mid"
+
+
 def midi(request, id, filename):
     try:
         validate_midi_query_params(request.GET)
@@ -320,7 +333,7 @@ def midi(request, id, filename):
             open(midi_file_path, "rb"),
             content_type="audio/midi",
             as_attachment=False,
-            filename=os.path.basename(midi_file_path),
+            filename=saved_midi_name(filename, request.GET),
         )
         fr['X-Robots-Tag'] = "noindex"
         return fr

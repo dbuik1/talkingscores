@@ -268,6 +268,9 @@
                 window.history.replaceState(null, "", "#" + group.section.id);
             }
             rememberPosition(group.start);
+            if (midiLink) {
+                midiLink.href = data.midi.base + "?start=" + group.start + "&end=" + group.end;
+            }
             if (player) {
                 player.groupChanged(group);
             }
@@ -450,6 +453,9 @@
             }
             reflect();
         }
+
+        // The saved file follows the open group, so it holds the bars on screen.
+        var midiLink = data.midi ? document.getElementById("download-midi") : null;
 
         // Playback of the open group. The player is a separate script when audio is available.
         var playButton = document.getElementById("play-group");

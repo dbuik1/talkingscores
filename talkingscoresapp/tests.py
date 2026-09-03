@@ -339,8 +339,16 @@ class DownloadTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("audio/midi", response["Content-Type"])
-        self.assertIn(".mid", response["Content-Disposition"])
+        self.assertIn("score bars 3 to 7.mid", response["Content-Disposition"])
         self.assertNotIn("Access-Control-Allow-Origin", response)
+
+    def test_saved_midi_files_are_named_for_the_bars_they_hold(self):
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", {"start": "1", "end": "2"}),
+                         "bach bars 1 to 2.mid")
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", {"start": "4", "end": "4"}),
+                         "bach bar 4.mid")
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", {"start": "0", "end": "0"}),
+                         "bach pickup bar.mid")
 
     @patch("talkingscoresapp.views.MidiHandler.get_or_make_midi_file")
     def test_midi_rejects_missing_required_query_params(self, mock_get_midi):
@@ -1415,6 +1423,7 @@ class ReaderPageTests(TestCase):
         self.assertIn('src="/static/js/player.js" defer', html)
         self.assertIn("Metronome click", html)
         self.assertIn('id="setting-repeat"', html)
+        self.assertIn('id="download-midi"', html)
         self.assertNotIn('id="setting-voice"', html)     # one voice needs no choice
         self.assertNotIn('id="setting-forward"', html)   # one part cannot be brought forward
         self.assertNotIn("midijs.net", html)             # the page sounds the MIDI itself
@@ -1832,6 +1841,49 @@ class MidiFileTests(TestCase):
                 measure.rightBarline = bar.Repeat(direction="end")
                 handler.make_midi_file(1, 2)
                 self.assertIsInstance(measure.rightBarline, bar.Repeat)
+
+
+class StaleMidiCleanupTests(TestCase):
+    """Files written for the old way of asking for audio are removed; current ones stay."""
+
+    def test_only_files_that_no_longer_match_a_range_are_removed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = os.path.join(temp_dir, VALID_ID)
+            os.makedirs(folder)
+            names = [
+                "score.musicxml",
+                "score.musicxmls1e2.mid",          # a range the page still asks for
+                "score.musicxmls1e2c0t100.mid",    # a speed and a click the browser now applies
+                "score.musicxmlsel-1s1e2.mid",     # a selection of instruments
+                "score.musicxmls0e0_upfront.generated",
+                "score.musicxmls3e4.mid.abc.partial",
+                "other.mid",                       # names no score in its folder
+            ]
+            for name in names:
+                with open(os.path.join(folder, name), "w", encoding="utf-8") as handle:
+                    handle.write("x")
+
+            output = StringIO()
+            with patch("talkingscoresapp.management.commands.cleanup_midi.MEDIA_ROOT", temp_dir):
+                call_command("cleanup_midi", stdout=output)
+
+            self.assertEqual(sorted(os.listdir(folder)), ["score.musicxml", "score.musicxmls1e2.mid"])
+            self.assertIn("Removed 5 file(s); kept 1.", output.getvalue())
+
+    def test_a_dry_run_removes_nothing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = os.path.join(temp_dir, VALID_ID)
+            os.makedirs(folder)
+            for name in ("score.musicxml", "score.musicxmls1e2t50.mid"):
+                with open(os.path.join(folder, name), "w", encoding="utf-8") as handle:
+                    handle.write("x")
+
+            output = StringIO()
+            with patch("talkingscoresapp.management.commands.cleanup_midi.MEDIA_ROOT", temp_dir):
+                call_command("cleanup_midi", "--dry-run", stdout=output)
+
+            self.assertEqual(len(os.listdir(folder)), 2)
+            self.assertIn("Would remove", output.getvalue())
 
 
 class PlayerScriptTests(TestCase):

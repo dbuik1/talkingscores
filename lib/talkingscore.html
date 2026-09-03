@@ -151,6 +151,7 @@
                     {% if download_html_url %}<a class="btn" href="{{ download_html_url }}">Download as a web page</a>{% endif %}
                     {% if download_text_url %}<a class="btn" href="{{ download_text_url }}">Download as text</a>{% endif %}
                     {% if download_braille_url %}<a class="btn" href="{{ download_braille_url }}">Download as braille</a>{% endif %}
+                    {% if score_data.midi %}<a class="btn" id="download-midi" href="{{ score_data.midi.base }}?start={{ score_data.firstBar }}&amp;end={{ score_data.firstBar }}" download>Download this group as MIDI</a>{% endif %}
                     <button class="btn" type="button" id="print-score">Print every bar</button>
                 </div>
                 {% if not export_mode %}<p class="small muted">The web page works offline and keeps these reading settings. The braille file is uncontracted text for a 40-cell display or embosser.</p>{% endif %}
