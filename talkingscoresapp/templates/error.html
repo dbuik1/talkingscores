@@ -1,26 +1,18 @@
 {% extends "base_site.html" %}
-{% load static %}
 
-{% block title %}This score could not be generated - Talking Scores{% endblock %}
-{% block noindex %}<meta name="robots" content="noindex" />{% endblock %}
+{% block title %}This score could not be written - Talking Scores{% endblock %}
+{% block noindex %}<meta name="robots" content="noindex">{% endblock %}
 
 {% block content %}
-<div class="error-page">
-    <header class="page-header">
-        <h1>This score could not be generated</h1>
-    </header>
-
-    <div class="col-md-11 mx-auto text-start">
-        <section class="error-message-section">
-            <div class="alert alert-warning tsp" role="alert">
-                <span class="alert-icon" aria-hidden="true">⚠️</span>
-                <div class="alert-content">
-                    <p>The file was read, but turning it into a talking score failed part way through. The failure has been logged.</p>
-                    <p>Fixes are listed on the <a href="{% url 'change-log' %}">change log</a>. To report the score, use the <a href="{% url 'contact-us' %}">contact page</a> and include the file name: {{ filename }}.</p>
-                </div>
-            </div>
-        </section>
-        <p class="tsp"><a class="btn btn-primary btn-lg" href="{% url 'index' %}">Try another score</a></p>
-    </div>
+<div>
+    <h1>This score could not be written</h1>
+    <p class="lead">The file <b>{{ filename }}</b> was read, but writing it out as a talking score stopped part way through. The failure has been recorded on this server.</p>
 </div>
+
+<div class="actions">
+    <a class="btn primary" href="{% url 'index' %}">Open a different score</a>
+    <a href="{% url 'change-log' %}">Fixes already made are listed on the change log</a>
+</div>
+
+<p class="small muted">To report this score, use the <a href="{% url 'contact-us' %}">contact page</a> and quote the file name {{ filename }}.</p>
 {% endblock content %}

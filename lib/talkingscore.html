@@ -13,6 +13,7 @@
     </style>
     {% else %}
     <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Atkinson+Hyperlegible+Next:wght@400;700&display=swap" rel="stylesheet">
+    <link href="{{ static_site_css_url }}" rel="stylesheet">
     <link href="{{ static_css_url }}" rel="stylesheet">
     {% endif %}
     {% if palette_css %}<style>{{ palette_css|safe }}</style>{% endif %}
@@ -206,7 +207,7 @@
         <span>Downloaded from Talking Scores. Words: {{ style_name }}.</span>
         {% else %}
         <span>Talking Scores</span>
-        <a href="/privacy-policy">What we keep and for how long</a>
+        <a href="/privacy-policy">What is kept and for how long</a>
         <a href="/change-log">Change log</a>
         <a href="/contact-us">Contact</a>
         {% endif %}

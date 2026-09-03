@@ -1,87 +1,89 @@
 {% extends "base_site.html" %}
-{% load static %}
 
-{% block title %}Processing Score - Talking Scores (Beta){% endblock %}
-{% block noindex %}<meta name="robots" content="noindex" />{% endblock %}
+{% block title %}Preparing your score - Talking Scores{% endblock %}
+{% block noindex %}<meta name="robots" content="noindex">{% endblock %}
 
 {% block content %}
-    <h1>Talking Scores Beta</h1>
+<div>
+    <p class="meta"><b>{{ filename }}</b></p>
+    <h1 style="margin-top: 8px;">Preparing your score</h1>
+</div>
 
-    <div class="col-md-11 mx-auto text-start">
+<p id="processing-status" role="status" aria-live="polite">Starting to read the file</p>
 
-        <h4>Generating the talking score. This can take a minute or two. Keep this page open.</h4>
+<div id="processing-next" tabindex="-1" hidden>
+    <p id="processing-next-message"></p>
+    <p><a id="processing-next-link" class="btn" href="{% url 'index' %}">Open a different score</a></p>
+</div>
 
-        <p id="processing-status" role="status" aria-live="polite">Starting score generation</p>
-        <div id="processing-next" tabindex="-1" hidden>
-            <p id="processing-next-message"></p>
-            <p><a id="processing-next-link" href="{% url 'index' %}">Go to the home page</a></p>
-        </div>
+<p>Usually about a minute. Nothing will move or reload on its own; the score opens here when it is ready.</p>
+<p class="small muted">You can leave this page. The link in the address bar brings you back to the finished score.</p>
 
-        <div class="text-center" style="margin-top: 50px" aria-hidden="true">
-        <img class="loading" src="{% static 'img/loading.png' %}"/>
-        </div>
-
-    </div>
-
-    <script>
-        const processingStatus = document.getElementById('processing-status');
-        const processingNext = document.getElementById('processing-next');
-        const processingNextLink = document.getElementById('processing-next-link');
-        const processingNextMessage = document.getElementById('processing-next-message');
-        const pollDeadline = Date.now() + 15 * 60 * 1000;
-
-        function setProcessingStatus(message) {
-            if (processingStatus && message) {
-                processingStatus.textContent = message;
-            }
-        }
-
-        function stopWithNextStep(message, href, label) {
-            // Focus lands on the block holding both the message and the link, so
-            // the message is read out in full before the link rather than being
-            // cut off by a focus move to the link alone.
-            processingStatus.hidden = true;
-            processingNextMessage.textContent = message;
-            if (href) {
-                processingNextLink.href = href;
-            }
-            if (label) {
-                processingNextLink.textContent = label;
-            }
-            processingNext.hidden = false;
-            processingNext.focus();
-        }
-
-        (function pollStatus() {
-            if (Date.now() > pollDeadline) {
-                stopWithNextStep(
-                    'The score is taking longer than expected. Reload this page to keep waiting, or start again from the home page.',
-                    "{% url 'index' %}",
-                    'Go to the home page'
-                );
-                return;
-            }
-            fetch("{% url 'process-status' id filename %}", {headers: {'Accept': 'application/json'}})
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'complete' && data.score_url) {
-                        setProcessingStatus('Score ready. Opening it now.');
-                        window.location = data.score_url;
-                    } else if (data.status === 'failed') {
-                        window.location = "{% url 'error' id filename %}";
-                    } else if (data.status === 'missing') {
-                        stopWithNextStep(data.message, data.next_url, 'Go to the home page');
-                    } else if (data.status === 'options_required' && data.next_url) {
-                        window.location = data.next_url;
-                    } else {
-                        setProcessingStatus(data.message || 'Generating score');
-                        setTimeout(pollStatus, 2000);
-                    }
-                })
-                .catch(() => {
-                    setProcessingStatus('Waiting for the server to respond');
-                    setTimeout(pollStatus, 4000);
-                });
-        })();
-    </script>
+<noscript>
+    <p class="noscript">This page checks for the finished score with script, which is turned off. Reload the page every minute or so to see whether it is ready.</p>
+</noscript>
 {% endblock content %}
+
+{% block javascript %}
+<script>
+    const processingStatus = document.getElementById('processing-status');
+    const processingNext = document.getElementById('processing-next');
+    const processingNextLink = document.getElementById('processing-next-link');
+    const processingNextMessage = document.getElementById('processing-next-message');
+    const pollDeadline = Date.now() + 15 * 60 * 1000;
+
+    function setProcessingStatus(message) {
+        if (processingStatus && message) {
+            processingStatus.textContent = message;
+        }
+    }
+
+    function stopWithNextStep(message, href, label) {
+        // Focus lands on the block holding both the message and the link, so
+        // the message is read out in full before the link rather than being
+        // cut off by a focus move to the link alone.
+        processingStatus.hidden = true;
+        processingNextMessage.textContent = message;
+        if (href) {
+            processingNextLink.href = href;
+        }
+        if (label) {
+            processingNextLink.textContent = label;
+        }
+        processingNext.hidden = false;
+        processingNext.focus();
+    }
+
+    (function pollStatus() {
+        if (Date.now() > pollDeadline) {
+            stopWithNextStep(
+                'The score is taking longer than expected. Reload this page to keep waiting, or open a different score.',
+                "{% url 'index' %}",
+                'Open a different score'
+            );
+            return;
+        }
+        fetch("{% url 'process-status' id filename %}", {headers: {'Accept': 'application/json'}})
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'complete' && data.score_url) {
+                    setProcessingStatus('The score is ready. Opening it now.');
+                    window.location = data.score_url;
+                } else if (data.status === 'failed') {
+                    window.location = "{% url 'error' id filename %}";
+                } else if (data.status === 'missing') {
+                    stopWithNextStep(data.message, data.next_url, 'Open a different score');
+                } else if (data.status === 'options_required' && data.next_url) {
+                    window.location = data.next_url;
+                } else {
+                    setProcessingStatus(data.message || 'Writing the bars');
+                    setTimeout(pollStatus, 2000);
+                }
+            })
+            .catch(() => {
+                setProcessingStatus('Waiting for the server to answer');
+                setTimeout(pollStatus, 4000);
+            });
+    })();
+</script>
+{% endblock %}

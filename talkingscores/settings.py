@@ -69,16 +69,16 @@ env_csrf_trusted_origins = [
 
 CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(DEFAULT_CSRF_TRUSTED_ORIGINS + env_csrf_trusted_origins))
 
-# Scripts come from this origin. The theme toggle on the site pages is still an
-# inline script, so 'unsafe-inline' stays on script-src until it moves to a
-# static file. The score page carries its colour palette as an inline style
-# block and loads its typefaces from Google Fonts. The player fetches its MIDI
-# files from this origin and sounds them itself, so no other host is named, and
-# it needs neither a worker nor a media element to do it.
+# Scripts come from this origin. The site pages read the stored colours and text
+# size from an inline script before the page paints, so 'unsafe-inline' stays on
+# script-src until that moves to a static file. The score page carries its colour
+# palette as an inline style block and loads its typefaces from Google Fonts. The
+# player fetches its MIDI files from this origin and sounds them itself, so no
+# other host is named, and it needs neither a worker nor a media element to do it.
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline'; "
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com; "
     "img-src 'self' data:; "
     "media-src 'none'; "

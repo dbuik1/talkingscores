@@ -44,6 +44,7 @@ def reader_context(**overrides):
         "export_theme": None,
         "inline_css": "",
         "inline_js": "",
+        "static_site_css_url": "/static/css/site.css",
         "static_css_url": "/static/css/score.css",
         "static_js_url": "/static/js/score.js",
         "static_player_url": "/static/js/player.js",
@@ -151,6 +152,30 @@ class BasicFunctionalityTests(TestCase):
         self.assertIn("worker-src 'none'", policy)
         self.assertIn("media-src 'none'", policy)
 
+    def test_home_page_names_the_file_it_takes_and_where_it_goes(self):
+        response = self.client.get(reverse("index"))
+        content = response.content.decode("utf-8")
+
+        # The file rules sit above the control they govern, not under it.
+        self.assertLess(content.index("up to 10 MB"), content.index('type="file"'))
+        self.assertIn('accept=".xml,.musicxml,.mxl"', content)
+        self.assertIn("Choose how it reads", content)
+
+    def test_site_shell_reads_the_stored_colours_before_the_page_paints(self):
+        response = self.client.get(reverse("index"))
+        content = response.content.decode("utf-8")
+
+        # The settings are read in the head, so the page never repaints under the reader.
+        self.assertLess(content.index("talkingscores.reader"), content.index("<body>"))
+        self.assertIn('href="/static/css/site.css"', content)
+        self.assertIn("Skip to the main content", content)
+
+    def test_site_shell_carries_no_bootstrap(self):
+        for name in ("index", "change-log", "contact-us", "privacy-policy"):
+            content = self.client.get(reverse(name)).content.decode("utf-8")
+            self.assertNotIn("bootstrap", content.lower(), name)
+            self.assertNotIn("navbar", content, name)
+
     def test_site_shell_does_not_load_external_active_scripts(self):
         response = self.client.get(reverse('index'))
         content = response.content.decode("utf-8")
@@ -197,7 +222,7 @@ class BasicFunctionalityTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'aria-live="polite"')
-        self.assertContains(response, "Starting score generation")
+        self.assertContains(response, "Starting to read the file")
         mock_start.assert_called_once()
 
     @patch("talkingscoresapp.views.TSScore.state", return_value="fetching")
@@ -247,7 +272,7 @@ class ErrorPageTests(TestCase):
         response = Client().get(reverse("error", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Try another score")
+        self.assertContains(response, "Open a different score")
         self.assertNotContains(response, "<form")
 
 
@@ -470,6 +495,7 @@ class DownloadTests(TestCase):
 
         html = template.render(reader_context())
 
+        self.assertIn('href="/static/css/site.css"', html)
         self.assertIn('href="/static/css/score.css"', html)
         self.assertIn('src="/static/js/score.js"', html)
         self.assertIn('src="/static/js/player.js"', html)
@@ -1250,6 +1276,23 @@ class ReviewedEngineTests(TestCase):
         self.assertContains(response, 'name="style"')
         for name in ("Everyday words", "Musical terms", "Short", "Braille display", "Everything"):
             self.assertContains(response, f">{name}<")
+
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_options_page_keeps_the_detail_behind_one_disclosure(self, mock_logger_info, mock_data_path, mock_info):
+        mock_data_path.return_value = "/tmp/score.musicxml"
+        mock_info.return_value = {"title": "Score", "composer": "Composer", "instruments": ["Piano"],
+                                  "rhythm_range": [], "beat_division_options": []}
+        response = self.client.get(reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
+        content = response.content.decode("utf-8")
+
+        # The style choice is the page; everything else is folded away behind it.
+        self.assertLess(content.index('name="style"'), content.index("<details"))
+        self.assertEqual(content.count("<details"), 2)
+        self.assertIn("Generate the reading", content)
+        for field in ("bars_at_a_time", "colour_style", "chk_include_rests", "colorProfile"):
+            self.assertIn(f'name="{field}"', content)
 
     def test_unpitched_parts_are_described_instead_of_failing(self):
         from music21 import note

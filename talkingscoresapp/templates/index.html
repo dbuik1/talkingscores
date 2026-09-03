@@ -1,302 +1,76 @@
 {% extends "base_site.html" %}
 {% load static %}
 
-{% block title %}Talking Scores – making MusicXML files more accessible{% endblock %}
-{% block meta-description %}Open source project to convert MusicXML files to a spoken description with audio segments – to make sheet music more accessible to print impaired musicians{% endblock %}
+{% block title %}Talking Scores - sheet music written out bar by bar{% endblock %}
+{% block meta-description %}Open a MusicXML file and read every bar as words, with a screen reader, a braille display or a magnifier, and hear any bar on its own.{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="talking-scores">
+<div>
+    <h1>Sheet music, in words you can read bar by bar.</h1>
+    <p class="lead">Open a MusicXML file and Talking Scores writes out every bar: the rhythm, the pitch, the dynamics. Read it with a screen reader, a braille display, a magnifier, or your eyes, and hear any bar on its own.</p>
+</div>
 
-        <!-- 1. Headline and Welcome -->
-        <h1>Talking Scores – making sheet music more accessible for blind and print impaired musicians</h1>
-        <div class="col-md-11 mx-auto text-start">
-            <p class="tsp welcome-intro">
-                Transform your MusicXML files into detailed, spoken descriptions with synchronised audio playback. 
-                Designed for blind, visually impaired, and print impaired musicians, as well as anyone learning to read music or preferring auditory learning methods.
-            </p>
-        </div>
+<p class="callout"><strong>MusicXML files</strong> (.musicxml, .xml or .mxl) up to 10 MB. The file and the reading written from it stay on this server, and the link to them keeps working. Nothing is shared or listed.</p>
 
-        <!-- 2. How It Works -->
-        <div class="how-it-works-section">
-            <h2>How It Works</h2>
-            <div class="steps-container">
-                <div class="step-item">
-                    <div class="step-number">1</div>
-                    <h3>Upload</h3>
-                    <p>Upload your MusicXML file (.xml, .musicxml, .mxl) or provide a URL</p>
-                </div>
-                <div class="step-arrow">→</div>
-                <div class="step-item">
-                    <div class="step-number">2</div>
-                    <h3>Customise</h3>
-                    <p>Choose your preferred description style, rhythm notation, and audio options</p>
-                </div>
-                <div class="step-arrow">→</div>
-                <div class="step-item">
-                    <div class="step-number">3</div>
-                    <h3>Read & Listen</h3>
-                    <p>Navigate your talking score with synchronised MIDI playback</p>
-                </div>
-            </div>
-            <p class="processing-time">⏱️ Processing typically takes 30–60 seconds depending on score complexity</p>
-        </div>
-
-        <!-- 3. File Upload/URL Entry -->
-        <div id="drop-zone">
-            <h2><strong>🎼 Upload Your Music Score</strong></h2>
-            <div class="upload-instructions-container">
-                <p class="upload-instructions">
-                    <strong>Drag and drop your MusicXML file, click to browse your computer, or provide a direct URL.</strong>
-                </p>
-                <div class="supported-formats-prominent">
-                    <strong>Supported formats:</strong> 
-                    <span class="format-badges">
-                        <span class="format-badge">.xml</span>
-                        <span class="format-badge">.musicxml</span>
-                        <span class="format-badge">.mxl</span>
-                    </span>
-                </div>
-            </div>
-        
-            <form class="form-horizontal text-center mx-auto" action="/" method="post" enctype="multipart/form-data">
-                {% csrf_token %}
-                
-                <div class="form-group mx-auto">
-                    <div class="form-section-label">📁 Upload MusicXML File</div>
-                    <div class="col-sm-6 mx-auto">
-                        <div class="custom-file-upload">
-                            <input type="file" id="id_filename" name="filename" accept=".xml,.musicxml,.mxl" aria-describedby="file-format-help">
-                            <label for="id_filename" class="btn btn-secondary btn-lg" tabindex="0" id="id_filename_label">Choose File</label>
-                            <span id="file-chosen-name">No file selected</span>
-                            <button type="button" id="clear-file-button" class="clear-file-btn" aria-label="Clear selected file" hidden>&times;</button>
-                        </div>
-                        <p id="file-format-help" class="file-format-help">Select a MusicXML file from your computer (.xml, .musicxml, or .mxl format)</p>
-                    </div>
-                </div>
-        
-                <div class="form-separator">or</div>
-        
-                <div class="form-group">
-                    <div class="form-section-label">🌐 Direct URL to MusicXML File</div>
-                    <div class="col-sm-6 mx-auto">
-                        <input type="url" class="form-control input-lg" id="id_url" name="url" placeholder="https://example.com/score.musicxml" aria-describedby="url-format-help">
-                    </div>
-                    <p id="url-format-help" class="url-format-help">Enter a direct link to a MusicXML file hosted online</p>
-                </div>
-                
-                <div class="form-group">
-                    <div class="col-sm-offset-3 col-sm-6 mx-auto">
-                        <button type="submit" class="btn btn-primary btn-lg generate-btn">
-                            <span class="btn-icon">🚀</span>
-                            Generate Talking Score
-                        </button>
-                    </div>
-                    <div class="processing-info">
-                        <p><small>After clicking, you'll customise your preferences, then we'll process your score (usually 30–60 seconds)</small></p>
-                    </div>
-                </div>
-            </form>
-        </div>
-
-        <!-- 4. Features Section -->
-        <div class="features-section">
-            <h2>🎼 Key Features</h2>
-            <div class="feature-grid">
-                <div class="feature-item">
-                    <h3>📝 Detailed Descriptions</h3>
-                    <p>Comprehensive text descriptions of pitches, rhythms, dynamics, articulations, and structural elements with customisable detail levels.</p>
-                </div>
-                <div class="feature-item">
-                    <h3>🎵 Audio Playback</h3>
-                    <p>Synchronised MIDI playback for complete scores, individual instruments, or specific sections at 50%, 100%, or 150% speed with optional click tracks.</p>
-                </div>
-                <div class="feature-item">
-                    <h3>⚙️ Customisable Output</h3>
-                    <p>Adjust rhythm notation (British/American), octave announcements, colour coding, accent handling, and description verbosity to match your learning style.</p>
-                </div>
-                <div class="feature-item">
-                    <h3>📊 Intelligent Analysis</h3>
-                    <p>Automatic detection of repeated sections, pattern analysis, structural summaries, and learning-focused repetition descriptions to aid memorisation.</p>
-                </div>
-                <div class="feature-item">
-                    <h3>🧭 Easy Navigation</h3>
-                    <p>Well-structured text with clear headings and the ability to jump between bars, beats, and instruments effortlessly.</p>
-                </div>
-                <div class="feature-item">
-                    <h3>🎹 Multi-Instrument Support</h3>
-                    <p>Handle complex orchestral scores with separate descriptions and playback for each instrument, including piano left/right hand separation.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- 5. Example Output -->
-        <div class="example-output">
-            <h2>📋 Example Output</h2>
-            <p class="example-description">Here's what a typical talking score description looks like:</p>
-            <div class="example-container">
-                <div class="example-content" role="region" aria-label="Sample talking score output">
-                    <p class="tsp">
-                        <strong>Bar 1:</strong><br>
-                        Time signature – 1 of 1 is 4 4.<br>
-                        Key signature – 1 of 1 is 2 sharps.<br><br>
-                        
-                        <strong>Beat 1:</strong> crotchet high D<br>
-                        <strong>Beat 2:</strong> quaver rest, mid A<br>
-                        <strong>Beat 3:</strong> crotchet high D<br>
-                        <strong>Beat 4:</strong> quaver rest, mid A<br><br>
-                        
-                        <strong>Bar 2:</strong><br>
-                        <strong>Beat 1:</strong> quaver high D, mid A<br>
-                        <strong>Beat 2:</strong> quaver high D, F<br>
-                        <strong>Beat 3:</strong> crotchet high A<br>
-                        <strong>Beat 4:</strong> crotchet rest<br>
-                    </p>
-                </div>
-                <div class="example-audio-note">
-                    <p><em>💡 In the actual talking score, each section includes clickable MIDI playback links at multiple speeds. You can use your screen reader to navigate and hear the descriptions spoken aloud.</em></p>
-                </div>
-            </div>
-        </div>
-
-        <!-- 6. Project Info -->
-        <div class="col-md-11 mx-auto text-start">
-            <p class="tsp project-info">
-                This is an <a href="https://github.com/bentimms/talkingscores" target="_blank">open source project</a> developed by a small team in our spare time. While fully functional, we're continuously improving.
-                Check our <a href="/change-log">Change Log</a> for recent updates or <a href="/contact-us">contact us</a> with questions, problems, or feature requests.
-            </p>
-        </div>
-
-        <hr class="section-divider">
-
-        <!-- 7. Example Scores (at the bottom) -->
-        <div class="sample-files-section">
-            <h2>Example scores</h2>
-            <p>
-                These example scores have been produced by this website and should give a good idea of what a Talking Score is.
-                They might not have been produced by the latest version of the code.
-            </p>
-            <ul class="sample-links-list" style="font-size:1.1rem;">
-                <li>
-                    <a href="/static/data/Faure-Sicilienne-cello-010323.html">Faure-Sicilienne-cello-010323.html</a>
-                </li>
-                <li>
-                    <a href="/static/data/macdowell-to-a-wild-rose-010323.html">macdowell-to-a-wild-rose-010323.html</a>
-                </li>
-            </ul>
-        </div>
+<form id="open" class="form" action="{% url 'index' %}" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="field">
+        <label for="id_filename">Score file</label>
+        <input type="file" id="id_filename" name="filename" accept=".xml,.musicxml,.mxl">
     </div>
+    <details class="plain">
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Or paste a link to a MusicXML file</summary>
+        <div class="field" style="padding: 12px 0 8px;">
+            <label for="id_url">Link to the file</label>
+            <input type="url" class="input" id="id_url" name="url" aria-describedby="url-help">
+            <p class="small muted" id="url-help">The link has to point at the file itself, not at a page about it</p>
+        </div>
+    </details>
+    <button class="btn primary" type="submit">Choose how it reads</button>
+</form>
+
+<div>
+    <details>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>How to get a MusicXML file from MuseScore, Sibelius, Finale or Dorico</summary>
+        <div class="panel">
+            <p>Every notation program writes MusicXML, usually under Export rather than Save.</p>
+            <ul class="bullets">
+                <li><b>MuseScore</b> - File, Export, then MusicXML.</li>
+                <li><b>Sibelius</b> - File, Export, MusicXML.</li>
+                <li><b>Finale</b> - File, Export, MusicXML, Uncompressed.</li>
+                <li><b>Dorico</b> - File, Export, MusicXML.</li>
+            </ul>
+            <p class="small muted">A PDF or a scan cannot be read here. The music has to have been typed into a notation program.</p>
+        </div>
+    </details>
+    <details>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Try an example score</summary>
+        <div class="panel">
+            {% if example_scores %}
+            <p>These were written by this site and show what a reading page looks like. They may have been written by an earlier version.</p>
+            <ul class="bullets">
+                {% for score in example_scores %}
+                <li><a href="{% static 'data/' %}{{ score }}">{{ score }}</a></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>There are no example scores on this server at the moment.</p>
+            {% endif %}
+        </div>
+    </details>
+    <details>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>What Talking Scores does and does not do</summary>
+        <div class="panel">
+            <p>It writes out the notes, rests, rhythms, dynamics and repeats a MusicXML file holds, bar by bar, in the words you choose. Every bar range can be played back, and the whole reading can be downloaded as a page, as plain text or as uncontracted braille.</p>
+            <p>It does not read PDFs, images or scans, and it does not teach the music. Lyrics, chord symbols and figured bass are read only where the file records them.</p>
+        </div>
+    </details>
+    <details>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>What is kept and for how long</summary>
+        <div class="panel">
+            <p>The file you open and the reading written from it stay on this server so your link keeps working. Nothing is listed publicly and nothing is shared.</p>
+            <p><a href="{% url 'privacy-policy' %}">Read the privacy policy</a></p>
+        </div>
+    </details>
 </div>
 {% endblock content %}
-
-{% block javascript %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const fileInput = document.getElementById('id_filename');
-    const fileChosenSpan = document.getElementById('file-chosen-name');
-    const fileInputLabel = document.getElementById('id_filename_label');
-    const dropZone = document.getElementById('drop-zone');
-    const clearFileButton = document.getElementById('clear-file-button');
-
-    function updateFileDisplay() {
-        if (fileInput.files.length > 0) {
-            const fileName = fileInput.files[0].name;
-            const fileSize = fileInput.files[0].size;
-            const fileExtension = fileName.split('.').pop().toLowerCase();
-            const validExtensions = ['xml', 'musicxml', 'mxl'];
-            
-            // Format file size for display
-            const sizeText = fileSize > 1024 * 1024 ? 
-                `${(fileSize / (1024 * 1024)).toFixed(1)}MB` : 
-                `${(fileSize / 1024).toFixed(0)}KB`;
-            
-            fileChosenSpan.textContent = `${fileName} (${sizeText})`;
-            clearFileButton.hidden = false;
-            
-            // Visual feedback for file type
-            if (validExtensions.includes(fileExtension)) {
-                fileChosenSpan.style.color = 'var(--link-color)';
-                fileChosenSpan.setAttribute('aria-label', `Valid MusicXML file selected: ${fileName} (${sizeText})`);
-            } else {
-                fileChosenSpan.style.color = 'var(--clear-btn-color)';
-                fileChosenSpan.setAttribute('aria-label', `Invalid file type selected: ${fileName}. Please select a .xml, .musicxml, or .mxl file.`);
-            }
-        } else {
-            fileChosenSpan.textContent = 'No file selected';
-            fileChosenSpan.style.color = '';
-            fileChosenSpan.removeAttribute('aria-label');
-            clearFileButton.hidden = true;
-        }
-    }
-
-    function handleFileSelect(file) {
-        if (file) {
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(file);
-            fileInput.files = dataTransfer.files;
-            updateFileDisplay();
-        }
-    }
-
-    function isValidMusicXMLFile(file) {
-        const validExtensions = ['xml', 'musicxml', 'mxl'];
-        const extension = file.name.split('.').pop().toLowerCase();
-        return validExtensions.includes(extension);
-    }
-
-    if (fileInput) {
-        fileInput.addEventListener('change', updateFileDisplay);
-    }
-
-    if (fileInputLabel) {
-        fileInputLabel.addEventListener('keydown', function(event) {
-            if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                fileInput.click();
-            }
-        });
-    }
-
-    if (clearFileButton) {
-        clearFileButton.addEventListener('click', function() {
-            fileInput.value = '';
-            updateFileDisplay();
-        });
-    }
-
-    if (dropZone) {
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, e => {
-                e.preventDefault();
-                e.stopPropagation();
-            }, false);
-        });
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => {
-                dropZone.classList.add('drag-over');
-            }, false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => {
-                dropZone.classList.remove('drag-over');
-            }, false);
-        });
-
-        dropZone.addEventListener('drop', e => {
-            const droppedFile = e.dataTransfer.files[0];
-            if (droppedFile && isValidMusicXMLFile(droppedFile)) {
-                handleFileSelect(droppedFile);
-            } else if (droppedFile) {
-                fileChosenSpan.textContent = `Invalid file: ${droppedFile.name}`;
-                fileChosenSpan.style.color = 'var(--clear-btn-color)';
-                clearFileButton.hidden = false;
-            }
-        }, false);
-    }
-
-    updateFileDisplay();
-});
-</script>
-{% endblock %}
