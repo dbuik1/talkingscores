@@ -46,6 +46,10 @@ function file(tracks, options) {
 const tempo = (microseconds) => variable(0).concat([0xff, 0x51, 0x03,
     (microseconds >> 16) & 0xff, (microseconds >> 8) & 0xff, microseconds & 0xff]);
 // The second byte is the power of two the beat is written in: 1 is a minim, 3 a quaver.
+// music21 repeats the closing speed on the final barline, so the file carries the
+// end of the range even when it finishes in rests.
+const tempoAfter = (delta, microseconds) => variable(delta).concat([0xff, 0x51, 0x03,
+    (microseconds >> 16) & 0xff, (microseconds >> 8) & 0xff, microseconds & 0xff]);
 const timeSignature = (beats, beatPower) => variable(0).concat([0xff, 0x58, 0x04, beats, beatPower, 24, 8]);
 const noteOn = (delta, note, velocity = 90, channel = 0) => variable(delta).concat([0x90 | channel, note, velocity]);
 const noteOff = (delta, note, channel = 0) => variable(delta).concat([0x80 | channel, note, 64]);
@@ -121,7 +125,10 @@ test("percussion keeps its rhythm and its place among the parts", () => {
 });
 
 test("a note still sounding at the end of the track is held to the end", () => {
-    const events = noteOn(0, 60).concat(variable(DIVISION), [0xff, 0x2f, 0x00]);
+    // A note tied out of the last bar has no note off, so it runs to the closing
+    // speed on the final barline rather than being dropped.
+    const events = tempo(500000).concat(noteOn(0, 60), tempoAfter(DIVISION, 500000),
+        variable(DIVISION), [0xff, 0x2f, 0x00]);
     const music = collect(parseMidi(Uint8Array.from(
         header({ tracks: 1 }).concat(chunk("MTrk", events))).buffer), 1);
     assert.equal(music.parts[0].length, 1);
@@ -129,22 +136,34 @@ test("a note still sounding at the end of the track is held to the end", () => {
 });
 
 test("a range finishing in rests keeps its full length", () => {
-    // The notes stop a beat before the track does, which is where the bar ends.
-    const events = tempo(500000).concat(noteOn(0, 60), noteOff(DIVISION, 60),
-        variable(DIVISION * 3), [0xff, 0x2f, 0x00]);
+    // Two bars of four four sounding one note: the writing stops at that note, the
+    // closing speed marks the end of the range, and the end of track sits a beat
+    // further on again, which is why it says nothing about how long the range is.
+    const events = timeSignature(4, 2).concat(tempo(500000), noteOn(0, 60), noteOff(DIVISION, 60),
+        tempoAfter(DIVISION * 7, 500000), variable(DIVISION), [0xff, 0x2f, 0x00]);
+    const music = collect(parseMidi(Uint8Array.from(
+        header({ tracks: 1 }).concat(chunk("MTrk", events))).buffer), 1);
+    assert.equal(Math.round(music.duration * 1000), 4000);
+    assert.equal(music.clicks.length, 8);
+});
+
+test("the end of track written past the range does not lengthen it", () => {
+    const events = timeSignature(4, 2).concat(tempo(500000), noteOn(0, 60),
+        noteOff(DIVISION * 4, 60), tempoAfter(0, 500000), variable(DIVISION), [0xff, 0x2f, 0x00]);
     const music = collect(parseMidi(Uint8Array.from(
         header({ tracks: 1 }).concat(chunk("MTrk", events))).buffer), 1);
     assert.equal(Math.round(music.duration * 1000), 2000);
     assert.equal(music.clicks.length, 4);
 });
 
-test("a file whose tracks do not match the score keeps them in the order written", () => {
+test("a file with more tracks than parts keeps them in the order written and says so", () => {
     const conductor = tempo(500000);
     const first = noteOn(0, 60).concat(noteOff(DIVISION, 60));
     const second = noteOn(0, 48).concat(noteOff(DIVISION, 48));
     const music = collect(parseMidi(file([conductor, first, second])), 1);
-    assert.equal(music.parts.length, 3);
-    assert.deepEqual(music.parts.map(notes => notes.length), [0, 1, 1]);
+    assert.deepEqual(music.parts.map(notes => notes[0].note), [60, 48]);
+    // The parts cannot be named from a file that does not line up with the score.
+    assert.equal(music.matches, false);
 });
 
 test("a system message does not lose the rest of the track", () => {

@@ -466,9 +466,17 @@
                 prefs.playback = prefs.playback || {};
                 prefs.playback[name] = value;
             } else if (scoreKey) {
-                prefs.playbackByScore = prefs.playbackByScore || {};
-                prefs.playbackByScore[scoreKey] = prefs.playbackByScore[scoreKey] || {};
-                prefs.playbackByScore[scoreKey][name] = value;
+                var byScore = prefs.playbackByScore && typeof prefs.playbackByScore === "object"
+                    ? prefs.playbackByScore : {};
+                var kept = byScore[scoreKey] || {};
+                delete byScore[scoreKey];
+                var keys = Object.keys(byScore);
+                while (keys.length >= REMEMBERED_SCORES) {
+                    delete byScore[keys.shift()];
+                }
+                kept[name] = value;
+                byScore[scoreKey] = kept;
+                prefs.playbackByScore = byScore;
             }
             savePrefs();
         }

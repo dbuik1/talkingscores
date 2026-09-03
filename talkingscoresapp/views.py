@@ -306,17 +306,17 @@ def saved_midi_name(filename, midi_file_path):
     The bars come from the file that was written, not from the request, because a
     range reaching past the score is written as the bars that do exist.
     """
-    stem = os.path.splitext(os.path.basename(filename))[0]
+    stem = safe_export_basename(filename)
     written = MIDI_PATH_RANGE.search(os.path.basename(midi_file_path))
     if not written:
         return f"{stem}.mid"
     start, end = int(written.group(1)), int(written.group(2))
     # Bar zero is the pickup bar throughout the score, and the reading page names it that way.
     if start == end:
-        bars = "pickup bar" if start == 0 else f"bar {start}"
+        bars = "pickup-bar" if start == 0 else f"bar-{start}"
     else:
-        bars = f"bars {start} to {end}"
-    return f"{stem} {bars}.mid"
+        bars = f"bars-{start}-to-{end}"
+    return f"{stem}-{bars}.mid"
 
 
 def midi(request, id, filename):

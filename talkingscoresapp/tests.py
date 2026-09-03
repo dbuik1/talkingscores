@@ -342,22 +342,22 @@ class DownloadTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("audio/midi", response["Content-Type"])
-        self.assertIn("score bars 3 to 7.mid", response["Content-Disposition"])
+        self.assertIn("score-bars-3-to-7.mid", response["Content-Disposition"])
         self.assertNotIn("Access-Control-Allow-Origin", response)
 
     def test_saved_midi_files_are_named_for_the_bars_they_hold(self):
         self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls1e2.mid"),
-                         "bach bars 1 to 2.mid")
+                         "bach-bars-1-to-2.mid")
         self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls4e4.mid"),
-                         "bach bar 4.mid")
+                         "bach-bar-4.mid")
         self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls0e0.mid"),
-                         "bach pickup bar.mid")
+                         "bach-pickup-bar.mid")
 
     def test_a_saved_midi_file_is_named_for_the_bars_written_not_the_bars_asked_for(self):
         # A request reaching past the score is written as the bars that exist, and the
         # name follows the file so it never claims bars it does not hold.
         self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls5e9.mid"),
-                         "bach bars 5 to 9.mid")
+                         "bach-bars-5-to-9.mid")
         self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/unreadable"),
                          "bach.mid")
 
@@ -1962,6 +1962,37 @@ class PlayerScriptTests(TestCase):
             # The top part plays C then A, the lower one C two octaves down twice.
             self.assertEqual(music["parts"][0], [72, 69])
             self.assertEqual(music["parts"][1], [48, 48])
+            # Two bars of four four at the written speed, counted through to the barline.
+            self.assertEqual(music["clicks"], 8)
+            self.assertAlmostEqual(music["duration"], 4.0, places=3)
+
+    def test_a_range_ending_in_rests_keeps_its_full_length(self):
+        """The file stops at the last note, so the bars after it have to be marked."""
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("node is not installed")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                from lib.midiHandler import MidiHandler
+
+                folder = os.path.join(temp_dir, VALID_ID)
+                os.makedirs(folder)
+                shutil.copy(os.path.join(settings.BASE_DIR, "talkingscoresapp", "fixtures",
+                                         "rest-at-the-end.musicxml"),
+                            os.path.join(folder, "score.musicxml"))
+                request = Mock()
+                request.GET = {}
+                path = MidiHandler(request, VALID_ID, "score.musicxml").make_midi_file(1, 2)
+
+            reader = os.path.join(settings.BASE_DIR, "talkingscoresapp", "static", "js",
+                                  "tests", "read-midi.mjs")
+            result = subprocess.run([node, reader, path, "1"], capture_output=True, text=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            music = json.loads(result.stdout)
+            # One note in the first bar, then a bar of rests that is still counted.
+            self.assertEqual(music["parts"][0], [72])
+            self.assertEqual(music["clicks"], 8)
+            self.assertAlmostEqual(music["duration"], 4.0, places=3)
 
 
 def _raise_or_return(outcome):

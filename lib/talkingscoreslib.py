@@ -237,7 +237,9 @@ class Music21TalkingScore(TalkingScoreBase):
         # way through a part would otherwise count as another part, and the numbers
         # here are read as positions in the score's parts.
         for c, part in enumerate(self.score.parts):
-            instrument = part.getInstrument()
+            # A notation program can leave the instrument inside the first bar rather
+            # than on the part, and an unnamed part still has to be told from the next.
+            instrument = part.getInstrument(recurse=True)
             part_id = instrument.partId or part.id
             if (len(self.part_instruments) == 0 or
                     self.part_instruments[ins_count - 1][3] != part_id):

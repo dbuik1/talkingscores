@@ -103,12 +103,20 @@ class MidiHandler:
 
     def insert_tempos(self, segment, offset_start):
         """Carry the score's metronome marks into the excerpt, timed from its first bar."""
-        end_of_segment = offset_start + segment.duration.quarterLength
+        length = segment.duration.quarterLength
+        end_of_segment = offset_start + length
+        last = None
         for start_offset, end_offset, mark in self.score.metronomeMarkBoundaries():
             if start_offset >= end_of_segment:
-                return
+                break
             if end_offset > offset_start:
                 number = Music21TalkingScore.fix_tempo_number(tempo=mark).number
                 # A mark that began before the excerpt still applies to its first note.
                 position = 0.001 if start_offset <= offset_start else start_offset - offset_start
-                segment.insert(position, tempo.MetronomeMark(number=number, referent=mark.referent))
+                last = tempo.MetronomeMark(number=number, referent=mark.referent)
+                segment.insert(position, last)
+        if last is not None and length:
+            # The written file ends with the last note, so bars of rests at the end of a
+            # range would shorten it. Repeating the closing speed on the final barline
+            # puts the end of the range in the file without changing how it sounds.
+            segment.insert(length, tempo.MetronomeMark(number=last.number, referent=last.referent))

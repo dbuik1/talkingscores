@@ -74,8 +74,13 @@
             var status = reader.bytes[reader.at];
             if (status & 0x80) {
                 reader.at++;
-                // Meta and system events cancel running status.
-                running = status < 0xf0 ? status : 0;
+                // Meta and system common events cancel running status; the real-time
+                // bytes above them may fall between two events without disturbing it.
+                if (status < 0xf0 || status === 0xff) {
+                    running = status < 0xf0 ? status : 0;
+                } else if (status <= 0xf7) {
+                    running = 0;
+                }
             } else {
                 if (!running) {
                     throw unreadable("an event has no status byte");
@@ -98,9 +103,6 @@
                 }
                 reader.at = after;
                 if (type === 0x2f) {
-                    // The end of the track falls at the end of the last bar, which is
-                    // how a range finishing in rests keeps its full length.
-                    events.push({ ticks: ticks, kind: "end" });
                     break;
                 }
             } else if (status === 0xf0 || status === 0xf7) {
@@ -235,32 +237,14 @@
 
     function collect(midi, expectedParts) {
         var seconds = tempoMap(midi);
-        var tracks = [];
+        // The written file stops at the last note, and the end-of-track mark that
+        // follows it sits a beat further on, so neither says where the range ends.
+        // The closing speed the server writes on the final barline does.
         var lastTick = 0;
         midi.tracks.forEach(function (track) {
-            var notes = [];
-            var sounding = {};
-            var trackEnd = 0;
             track.forEach(function (event) {
-                trackEnd = Math.max(trackEnd, event.ticks);
-                var key = event.channel + ":" + event.note;
-                if (event.kind === "on") {
-                    // Two voices in one part can hold the same pitch at once.
-                    (sounding[key] = sounding[key] || []).push(event);
-                } else if (event.kind === "off" && sounding[key] && sounding[key].length) {
-                    notes.push(held(sounding[key].shift(), event.ticks));
-                }
+                lastTick = Math.max(lastTick, event.ticks);
             });
-            // A note left sounding at the end of the track is held to the end of the
-            // range rather than dropped, so a tie out of the last bar is still heard.
-            Object.keys(sounding).forEach(function (key) {
-                sounding[key].forEach(function (started) {
-                    notes.push(held(started, trackEnd));
-                });
-            });
-            lastTick = Math.max(lastTick, trackEnd);
-            notes.sort(function (a, b) { return a.start - b.start; });
-            tracks.push(notes);
         });
 
         function held(started, endTicks) {
@@ -273,12 +257,33 @@
             };
         }
 
-        // The file carries a conductor track holding the tempo and the time signature
-        // before the parts, so a file with one track more than the score has parts
-        // starts with a track belonging to no part. Any other count means the file
-        // does not match the score, and lining the tracks up by guesswork would sound
-        // the wrong instrument, so they are left in the order they were written.
-        if (tracks.length === expectedParts + 1 && !tracks[0].length) {
+        var tracks = midi.tracks.map(function (track) {
+            var notes = [];
+            var sounding = {};
+            track.forEach(function (event) {
+                var key = event.channel + ":" + event.note;
+                if (event.kind === "on") {
+                    // Two voices in one part can hold the same pitch at once.
+                    (sounding[key] = sounding[key] || []).push(event);
+                } else if (event.kind === "off" && sounding[key] && sounding[key].length) {
+                    notes.push(held(sounding[key].shift(), event.ticks));
+                }
+            });
+            // A note left sounding at the end of the file is held to the end of the
+            // range rather than dropped, so a tie out of the last bar is still heard.
+            Object.keys(sounding).forEach(function (key) {
+                sounding[key].forEach(function (started) {
+                    notes.push(held(started, lastTick));
+                });
+            });
+            notes.sort(function (a, b) { return a.start - b.start; });
+            return notes;
+        });
+
+        // The file carries a conductor track holding the speed and the time signature
+        // before the parts, so a leading track with no notes belongs to no part. Every
+        // other track keeps its place, even when the part rests through the range.
+        while (tracks.length > expectedParts && tracks.length && !tracks[0].length) {
             tracks.shift();
         }
         while (tracks.length < expectedParts) {
@@ -288,7 +293,14 @@
         var clicks = beatGrid(midi, lastTick).map(function (beat) {
             return { start: seconds(beat.ticks), strong: beat.strong };
         });
-        return { parts: tracks, clicks: clicks, duration: seconds(lastTick) };
+        return {
+            parts: tracks,
+            clicks: clicks,
+            duration: seconds(lastTick),
+            // A file with a track for every part is the only one the parts can be
+            // named from, so a reader is told when it does not line up.
+            matches: tracks.length === expectedParts
+        };
     }
 
     /* Sounding the notes. */
@@ -416,9 +428,10 @@
         }
 
         // Only a part being played can be brought forward, so the rest are closed off.
-        function reflectBalance(spoken) {
+        // Says whether it had to let the chosen part go, which the reader is told.
+        function reflectBalance() {
             if (!controls.forward) {
-                return;
+                return false;
             }
             var voice = chosenVoice();
             Array.prototype.forEach.call(controls.forward.options, function (option) {
@@ -428,15 +441,14 @@
             });
             if (controls.forward.selectedOptions[0] && controls.forward.selectedOptions[0].disabled) {
                 // Clearing the control in script raises no change event, so the choice
-                // is written down and said here rather than reappearing on the next visit.
+                // is written down here rather than reappearing on the next visit.
                 controls.forward.value = "";
                 if (controls.remember) {
                     controls.remember("forward", "");
                 }
-                if (spoken && controls.announce) {
-                    controls.announce("Balance set to every part level.");
-                }
+                return true;
             }
+            return false;
         }
 
         function audio() {
@@ -604,15 +616,18 @@
             report("Playing " + label(group) + ".");
         }
 
-        function play() {
+        // A note said before the state is a note the next message would wipe out, so
+        // anything to say about the settings goes in front of the state itself.
+        function play(note) {
+            var said = typeof note === "string" ? note : "";
             if (!audio()) {
-                report("This browser cannot sound the score. The bars are written out below.");
+                report(said + "This browser cannot sound the score. The bars are written out below.");
                 return;
             }
             stop(false);
             var wanted = group;
             pending = true;
-            report("Loading " + label(group) + ".");
+            report(said + "Loading " + label(group) + ".");
             var loaded = fetchRange(group.start, group.end);
             // The browser holds the audio clock until a gesture releases it, so
             // playback waits for the resume as well as for the file.
@@ -631,6 +646,10 @@
                     report("There is nothing to play in " + label(group) + ".");
                     return;
                 }
+                if (!results[0].matches) {
+                    report("The audio for " + label(group) + " does not match this score. Reload the page and try again.");
+                    return;
+                }
                 start(results[0]);
             }, function (error) {
                 pending = false;
@@ -645,14 +664,16 @@
         }
 
         function replayIfPlaying() {
-            reflectBalance(true);
+            var said = reflectBalance() ? "Balance set to every part level. " : "";
             if (playing || pending) {
-                play();
+                play(said);
+            } else if (said) {
+                report(said + capital(label(group)) + " ready to play.");
             }
         }
 
         if (controls.play) {
-            controls.play.addEventListener("click", play);
+            controls.play.addEventListener("click", function () { play(); });
         }
         if (controls.stop) {
             controls.stop.addEventListener("click", function () { stop(true); });
