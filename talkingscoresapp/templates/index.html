@@ -10,13 +10,13 @@
     <p class="lead">Open a MusicXML file and Talking Scores writes out every bar: the rhythm, the pitch, the dynamics. Read it with a screen reader, a braille display, a magnifier, or your eyes, and hear any bar on its own.</p>
 </div>
 
-<p class="callout"><strong>MusicXML files</strong> (.musicxml, .xml or .mxl) up to 10 MB. The file and the reading written from it stay on this server, and the link to them keeps working. Nothing is shared or listed.</p>
+<p class="callout" id="file-rules"><strong>MusicXML files</strong> (.musicxml, .xml or .mxl) up to 10 MB. The file and the reading written from it stay on this server, and the link to them keeps working. Nothing is shared or listed.</p>
 
 <form id="open" class="form" action="{% url 'index' %}" method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <div class="field">
         <label for="id_filename">Score file</label>
-        <input type="file" id="id_filename" name="filename" accept=".xml,.musicxml,.mxl">
+        <input type="file" id="id_filename" name="filename" accept=".xml,.musicxml,.mxl" aria-describedby="file-rules">
     </div>
     <details class="plain">
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Or paste a link to a MusicXML file</h2></summary>

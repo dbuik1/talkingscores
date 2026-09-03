@@ -159,6 +159,9 @@ class BasicFunctionalityTests(TestCase):
 
         # The file rules sit above the control they govern, not under it.
         self.assertLess(content.index("up to 10 MB"), content.index('type="file"'))
+        # The rules are attached to the control, so they are read out with it.
+        self.assertIn('aria-describedby="file-rules"', content)
+        self.assertIn('id="file-rules"', content)
         self.assertIn('accept=".xml,.musicxml,.mxl"', content)
         self.assertIn("Choose how it reads", content)
 
