@@ -43,21 +43,19 @@
             <p class="small muted">A PDF or a scan cannot be read here. The music has to have been typed into a notation program.</p>
         </div>
     </details>
+    {% if example_scores %}
     <details>
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Try an example score</h2></summary>
         <div class="panel">
-            {% if example_scores %}
             <p>These were written by this site and show what a reading page looks like. They may have been written by an earlier version.</p>
             <ul class="bullets">
                 {% for score in example_scores %}
                 <li><a href="{% static 'data/' %}{{ score }}">{{ score }}</a></li>
                 {% endfor %}
             </ul>
-            {% else %}
-            <p>There are no example scores on this server at the moment.</p>
-            {% endif %}
         </div>
     </details>
+    {% endif %}
     <details>
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>What Talking Scores does and does not do</h2></summary>
         <div class="panel">

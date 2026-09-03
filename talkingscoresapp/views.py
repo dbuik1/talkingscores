@@ -207,11 +207,11 @@ class MusicXMLSubmissionForm(forms.Form):
             file_extension = os.path.splitext(uploaded_file.name)[1].lower()
             if file_extension not in ALLOWED_MUSICXML_EXTENSIONS:
                 raise forms.ValidationError(
-                    f"Invalid file type. Please upload a MusicXML file (.xml, .musicxml, or .mxl)."
+                    "Choose a MusicXML file. The name has to end in .musicxml, .xml or .mxl."
                 )
             if uploaded_file.size > MAX_UPLOADED_SCORE_BYTES:
                 raise forms.ValidationError(
-                    "MusicXML file is too large. Please upload a file smaller than 10 MB."
+                    "The file is too large. Choose a MusicXML file smaller than 10 MB."
                 )
         return uploaded_file
 
@@ -222,7 +222,7 @@ class MusicXMLSubmissionForm(forms.Form):
             file_extension = os.path.splitext(parsed_url.path)[1].lower()
             if file_extension not in ALLOWED_MUSICXML_EXTENSIONS:
                 raise forms.ValidationError(
-                    "Invalid URL file type. Please provide a URL ending in .xml, .musicxml, or .mxl."
+                    "The link has to end in .musicxml, .xml or .mxl, and point at the file itself."
                 )
         return url
 
@@ -231,14 +231,19 @@ class MusicXMLSubmissionForm(forms.Form):
         filename = cleaned_data.get("filename")
         url = cleaned_data.get("url")
 
+        if self.errors:
+            # A file or link that was given but rejected is already named in an
+            # error of its own; saying nothing was given as well would contradict it.
+            return cleaned_data
+
         if not filename and not url:
             raise forms.ValidationError(
-                "Please upload a MusicXML file or provide a URL.", code='required'
+                "Choose a MusicXML file, or paste a link to one.", code='required'
             )
 
         if filename and url:
             raise forms.ValidationError(
-                "Please provide either a file or a URL, not both.", code='conflict'
+                "Choose a file or paste a link, not both.", code='conflict'
             )
 
         return cleaned_data

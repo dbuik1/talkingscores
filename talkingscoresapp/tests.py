@@ -203,6 +203,8 @@ class BasicFunctionalityTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Talking Scores')
+        # Nothing to try, so nothing offers it.
+        self.assertNotContains(response, 'Try an example score')
         mock_logger_warning.assert_called_once()
 
     @patch("talkingscoresapp.views.os.listdir")
@@ -326,6 +328,18 @@ class SubmissionFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("filename", form.errors)
         self.assertIn("too large", form.errors["filename"][0])
+
+    def test_a_rejected_file_is_named_once(self):
+        from talkingscoresapp.views import MusicXMLSubmissionForm
+
+        upload = SimpleUploadedFile("score.pdf", b"%PDF-1.4")
+        form = MusicXMLSubmissionForm(files={"filename": upload})
+
+        self.assertFalse(form.is_valid())
+        # Saying the file is the wrong type and that no file was given at all
+        # would leave the reader with two contradictory things to fix.
+        self.assertEqual(form.errors, {"filename": [
+            "Choose a MusicXML file. The name has to end in .musicxml, .xml or .mxl."]})
 
     def test_submission_form_accepts_musicxml_url_with_query_string(self):
         from talkingscoresapp.views import MusicXMLSubmissionForm
