@@ -43,6 +43,16 @@ logger = logging.getLogger("TSScore")
 
 UNTITLED = "Untitled work"
 UNKNOWN_COMPOSER = "Unknown composer"
+
+# music21 stamps its own name into a file it writes, so a file that has been
+# through it carries these in place of the title and composer it never had.
+WRITER_STAMPS = ("music21", "music21 fragment")
+
+
+def written_by_hand(value):
+    """The text as written, or nothing where it is only the writing tool's own stamp."""
+    text = (value or "").strip()
+    return "" if text.lower() in WRITER_STAMPS else text
 NOT_GIVEN = "not given"
 
 
@@ -167,8 +177,15 @@ class Music21TalkingScore(TalkingScoreBase):
     # Title and composer
 
     def get_title(self):
-        if self.score.metadata.title:
-            return self.score.metadata.title
+        title = written_by_hand(self.score.metadata.title)
+        if title:
+            return title
+        # A file that names only the movement has that as its title on the page.
+        # music21 puts the file's own name there when the file names neither.
+        movement = written_by_hand(self.score.metadata.movementName)
+        file_name = os.path.basename(self.filepath)
+        if movement and movement not in (file_name, os.path.splitext(file_name)[0]):
+            return movement
         for tb in self.score.flatten().getElementsByClass('TextBox'):
             if (getattr(tb, 'justify', None) == 'center' and
                     getattr(tb, 'alignVertical', None) == 'top' and
@@ -177,8 +194,9 @@ class Music21TalkingScore(TalkingScoreBase):
         return UNTITLED
 
     def get_composer(self):
-        if self.score.metadata.composer:
-            return self.score.metadata.composer
+        composer = written_by_hand(self.score.metadata.composer)
+        if composer:
+            return composer
         for tb in self.score.getElementsByClass('TextBox'):
             if tb.style.justify == 'right':
                 return tb.content
@@ -305,11 +323,20 @@ class Music21TalkingScore(TalkingScoreBase):
         return float(ts.beatDuration.quarterLength)
 
     def get_number_of_bars(self):
-        """Counted by bar number, the same way the bars are described."""
+        """Counted by bar number, the same way the bars are described.
+
+        A pickup bar is short of a full bar and carries no number of its own, so
+        it is not counted here either; the player counts the bars the same way.
+        """
         measures = self.score.parts[0].getElementsByClass('Measure')
         if not measures:
             return 0
-        return measures[-1].number - measures[0].number + 1
+        first = measures[0]
+        total = measures[-1].number - first.number + 1
+        signature = first.timeSignature or self.timeSigs.get(first.number) or self._get_initial_time_signature_object()
+        if signature is not None and first.duration.quarterLength < signature.barDuration.quarterLength:
+            total -= 1
+        return max(total, 0)
 
     # Instruments and parts
 

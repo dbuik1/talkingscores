@@ -1638,6 +1638,29 @@ class ReviewedEngineTests(TestCase):
         self.assertLess(text.index("Beat 1"), text.index("Repeat ends"))
         self.assertNotIn("dolce", self._text(score, {"style": "standard", "directions": False, "bars_at_a_time": 2}))
 
+    def test_the_movement_name_is_the_title_when_the_file_gives_no_other(self):
+        from music21 import note
+        from talkingscoreslib import Music21TalkingScore
+        score = self._score_of_bars([[note.Note("C4")]])
+        path = self._score_path(score)
+        # music21 writes its own name and the file's name into a file it saves.
+        self.assertEqual(Music21TalkingScore(path).get_title(), "Untitled work")
+        self.assertEqual(Music21TalkingScore(path).get_composer(), "Unknown composer")
+        named = Music21TalkingScore(path)
+        named.score.metadata.movementName = "Second movement"
+        self.assertEqual(named.get_title(), "Second movement")
+
+    def test_a_pickup_bar_is_not_counted_as_a_bar(self):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        fixture = os.path.join(os.getcwd(), "test_scores", "Paganini - Le Streghe mvt 2.xml")
+        formatter = HTMLTalkingScoreFormatter(Music21TalkingScore(fixture), options={"style": "standard"})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            formatter.build()
+        self.assertEqual(formatter.segments[0].label, "Pickup bar")
+        # The page counts the bars the same way the player does.
+        self.assertEqual(formatter._get_preamble()["number_of_bars"],
+                         formatter._score_data("", False)["totalBars"])
+
     def test_grace_notes_are_read_before_the_note_they_decorate(self):
         from music21 import note
         grace = note.Note("D5").getGrace()
