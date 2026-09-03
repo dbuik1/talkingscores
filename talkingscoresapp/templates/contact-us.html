@@ -1,30 +1,36 @@
 {% extends "base_site.html" %}
-{% load static %}
 
-{% block title %}Contact Us - Talking Scores{% endblock %}
-{% block meta-description %}We welcome your comments / questions / bug reports - Talking Scores - an open source project to convert MusicXML files to a spoken representation.{% endblock %}
+{% block title %}Contact - Talking Scores{% endblock %}
+{% block meta-description %}How to report a score that does not read correctly, or ask a question about Talking Scores.{% endblock %}
 
 {% block content %}
-<div class="contact-page">
-    <header class="page-header">
-        <h1>Talking Scores</h1>
-        <h2>Contact Us</h2>
-    </header>
+<div>
+    <h1>Contact</h1>
+    <p class="lead">Questions, bug reports and requests all go to the same address.</p>
+</div>
 
-    <div class="col-md-11 mx-auto text-start">
-        <section class="contact-intro">
-            <p class="tsp">Please do feel free to contact us with questions / bug reports / feature requests etc - or even just to let us know if you find this project useful! It is encouraging to hear from users - thank you!</p>
+<p class="callout"><a href="mailto:talkingscores@gmail.com">talkingscores@gmail.com</a></p>
 
-            <div class="contact-details">
-                <p class="tsp">Our email address is <a href="mailto:talkingscores@gmail.com">talkingscores@gmail.com</a></p>
-            </div>
-        </section>
-
-        <section class="privacy-notice">
-            <h3>Privacy Information</h3>
-            <p class="tsp">If you choose to contact us, we will try to reply in a timely manner. We will most likely contact you again, some time later, when we have addressed your question more fully.</p>
-            <p class="tsp">We will not pass your contact details on to anyone else or use them for any other purpose. For more information - see our <a href="/privacy-policy">Privacy Policy</a>.</p>
-        </section>
-    </div>
+<div>
+    <details>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Reporting a score that does not read correctly</summary>
+        <div class="panel">
+            <p>Three things make a report quick to act on:</p>
+            <ul class="bullets">
+                <li>The MusicXML file itself, attached.</li>
+                <li>The bar number, and what the reading says about it.</li>
+                <li>What the bar actually contains.</li>
+            </ul>
+            <p>The notation program that wrote the file is worth naming too, since each one writes MusicXML slightly differently.</p>
+        </div>
+    </details>
+    <details>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>What happens to an email</summary>
+        <div class="panel">
+            <p>An email address sent here is used to reply and for nothing else. It is not passed to anyone, added to a list, or used to get in touch about anything other than the message it came with.</p>
+            <p>An enquiry may be discussed with other people or published as an example, with nothing identifying who sent it.</p>
+            <p><a href="{% url 'privacy-policy' %}">Read the privacy policy</a></p>
+        </div>
+    </details>
 </div>
 {% endblock content %}

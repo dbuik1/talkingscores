@@ -205,13 +205,31 @@ class BasicFunctionalityTests(TestCase):
         """Test the change log page loads correctly."""
         response = self.client.get(reverse('change-log'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Change Log')
-        
+        self.assertContains(response, 'Change log')
+
     def test_contact_us_loads(self):
         """Test the contact us page loads correctly."""
         response = self.client.get(reverse('contact-us'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Contact Us')
+        self.assertContains(response, 'talkingscores@gmail.com')
+
+    def test_privacy_page_describes_what_the_site_actually_stores(self):
+        """The page names the cookies that are set, so it has to track the code."""
+        response = self.client.get(reverse('privacy-policy'))
+        content = response.content.decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("What is kept and for how long", content)
+        for cookie in ("csrftoken", "messages"):
+            self.assertIn(cookie, content)
+        self.assertNotIn("Google Analytics", content)
+
+    def test_no_page_claims_an_analytics_cookie_that_is_never_set(self):
+        """Nothing on the site loads analytics, so no cookie of that name exists."""
+        for name in ("index", "privacy-policy", "contact-us"):
+            content = self.client.get(reverse(name)).content.decode("utf-8")
+            for cookie in ("_ga", "_gid", "_gat_gtag_"):
+                self.assertNotIn(cookie, content, name)
 
     @patch("talkingscoresapp.views.TSScore.start_background_processing", return_value=True)
     @patch("talkingscoresapp.views.TSScore.state", return_value="processed")
