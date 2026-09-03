@@ -76,6 +76,7 @@
         var perGroup = document.getElementById("bars-per-group");
         var contents = document.getElementById("contents-list");
         var live = document.getElementById("reader-live");
+        var clearLive = 0;
         var groups = [];
         var current = 0;
         var barsPerGroup = data.barsPerGroup;
@@ -208,7 +209,7 @@
             if (!first) {
                 return "";
             }
-            var text = first.textContent.replace(/\s+/g, " ").trim();
+            var text = readableText(first).replace(/\s+/g, " ").trim();
             var label = bar.querySelector(".part .label");
             if (label) {
                 text = label.textContent.trim() + ": " + text;
@@ -240,36 +241,55 @@
                 item.appendChild(link);
                 var preview = document.createElement("span");
                 preview.className = "prev";
+                preview.setAttribute("aria-hidden", "true");
                 preview.textContent = group.preview.textContent;
                 item.appendChild(preview);
                 contents.appendChild(item);
             });
         }
 
-        function show(index, focus) {
+        function show(index, focus, keepTyped) {
             current = Math.max(0, Math.min(groups.length - 1, index));
             groups.forEach(function (group, i) {
                 var open = i === current;
                 group.section.classList.toggle("current", open);
-                group.toggle.setAttribute("aria-expanded", open ? "true" : "false");
+                // A long score has one toggle per group, and tabbing back through
+                // all of them to reach the toolbar costs more than it saves: the
+                // contents list, Previous, Next and the bar box all reach a group.
+                group.toggle.tabIndex = open ? 0 : -1;
+                // Only one group is open at a time, so the open one's own toggle has
+                // nothing to do: it says where the reader is rather than offering a
+                // state they can change.
+                if (open) {
+                    group.toggle.removeAttribute("aria-expanded");
+                    group.toggle.removeAttribute("aria-controls");
+                    group.toggle.setAttribute("aria-current", "true");
+                    group.toggle.setAttribute("aria-disabled", "true");
+                } else {
+                    group.toggle.setAttribute("aria-expanded", "false");
+                    group.toggle.setAttribute("aria-controls", group.section.id + "-body");
+                    group.toggle.removeAttribute("aria-current");
+                    group.toggle.removeAttribute("aria-disabled");
+                }
             });
             var group = groups[current];
             if (position) {
                 position.textContent = positionText(group).replace(/\.$/, "");
             }
-            if (gotoInput) {
+            if (gotoInput && !keepTyped) {
                 gotoInput.value = String(group.start);
             }
             if (focus) {
                 group.section.scrollIntoView({block: "start", behavior: reducedMotion() ? "auto" : "smooth"});
                 group.toggle.focus({preventScroll: true});
             }
-            if (window.history && window.history.replaceState && window.location.hash !== "#" + group.section.id) {
+            if (focus && window.history && window.history.replaceState && window.location.hash !== "#" + group.section.id) {
                 window.history.replaceState(null, "", "#" + group.section.id);
             }
             rememberPosition(group.start);
             if (midiLink) {
                 midiLink.href = data.midi.base + "?start=" + group.start + "&end=" + group.end;
+                midiLink.textContent = "Download " + rangeLabel(group.start, group.end, false) + " as MIDI";
             }
             if (player) {
                 player.groupChanged(group);
@@ -308,7 +328,7 @@
             var number = parseInt(gotoInput.value, 10);
             var index = isNaN(number) ? -1 : groupIndexForBar(number);
             if (index < 0) {
-                var message = "Enter a bar number from " + data.firstNumberedBar + " to " + data.lastBar + ".";
+                var message = "Enter a bar number from " + data.firstBar + " to " + data.lastBar + ".";
                 gotoError.textContent = message;
                 gotoInput.setAttribute("aria-invalid", "true");
                 if (document.activeElement === gotoInput) {
@@ -320,7 +340,7 @@
             }
             gotoError.textContent = "";
             gotoInput.removeAttribute("aria-invalid");
-            show(index, true);
+            show(index, true, true);
         }
 
         function regroup(size) {
@@ -328,6 +348,7 @@
             barsPerGroup = size;
             buildGroups(size);
             show(Math.max(0, groupIndexForBar(currentStart)), false);
+            announce(positionText(groups[current]));
             prefs.barsPerGroup = size;
             savePrefs();
         }
@@ -402,6 +423,8 @@
             }
             live.textContent = "";
             window.setTimeout(function () { live.textContent = text; }, 50);
+            window.clearTimeout(clearLive);
+            clearLive = window.setTimeout(function () { live.textContent = ""; }, 10000);
         }
 
         function wireSettings() {
@@ -434,6 +457,11 @@
                     applyAppearance(prefs);
                     reflect();
                     savePrefs();
+                    // Extra large turns one note per line on and locks the box, so
+                    // the side effect is said rather than left to be discovered.
+                    if (stack && stack.disabled) {
+                        announce("Extra large text. One note per line is on and cannot be turned off at this size.");
+                    }
                 });
             });
             if (stack) {

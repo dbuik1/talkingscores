@@ -48,7 +48,9 @@ html.js .group:not(.current) > .body { display: none; }
     font-variant-numeric: lining-nums tabular-nums;
 }
 .bar h3 small { display: block; font-size: 16px; font-family: var(--font-body); color: var(--muted); margin-bottom: 6px; }
-.bar h3.words { font-size: 32px; line-height: 1.1; }
+/* "Pickup bar" is words rather than a number, so it outgrows the number column
+   as soon as the reader widens the letter spacing. */
+.bar h3.words { font-size: 32px; line-height: 1.1; overflow-wrap: anywhere; }
 .bar .parts { grid-column: 2; display: flex; flex-direction: column; gap: 22px; }
 .part .label { font-weight: 700; font-size: 16px; color: var(--muted); margin-bottom: 6px; }
 .part .change { font-style: italic; margin: 4px 0; }
@@ -85,6 +87,10 @@ html.stack .beats li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 html.stack .beats li b { padding-top: 0; }
 html.stack .beats .sep::after { content: "\A"; white-space: pre; }
 html.stack .bar { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+/* The bar is one column here, so the parts have to leave column 2: an implicit
+   second track collapses the declared one to nothing and prints the bar number
+   over the notes. */
+html.stack .bar h3, html.stack .bar .parts { grid-column: 1; }
 html.stack .bar h3 { display: flex; align-items: baseline; gap: 14px; font-size: 80px; }
 html.stack .bar h3 small { margin: 0; font-size: 18px; }
 html.stack .bar h3.words { font-size: 32px; }
@@ -114,6 +120,8 @@ html[data-theme="contrast"] .colour-background [class*="colour-"] {
     html[data-size="large"] { --note: 36px; }
     html[data-size="xlarge"] { --note: 48px; }
     .bar { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    /* Same single-column reset as the stacked layout. */
+    .bar h3, .bar .parts { grid-column: 1; }
     .bar h3 { display: flex; align-items: baseline; gap: 12px; font-size: 40px; }
     .bar h3 small { margin: 0; }
     .beats li { grid-template-columns: minmax(0, 1fr); gap: 2px; }

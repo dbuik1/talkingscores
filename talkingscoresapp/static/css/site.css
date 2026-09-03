@@ -6,6 +6,9 @@
     --ink: #1c1a17;
     --muted: #5b5650;
     --rule: #d9d3c7;
+    /* A border that carries meaning, rather than separating two blocks, has to
+       reach 3:1 against the paper behind it; --rule is a hairline and does not. */
+    --edge: #8a8378;
     --accent: #1e6a73;
     --accent-ink: #ffffff;
     --focus: #9a5f00;
@@ -23,6 +26,7 @@ html[data-theme="dark"] {
     --ink: #ece7dd;
     --muted: #b3aca0;
     --rule: #3a3731;
+    --edge: #736e64;
     --accent: #7fd1d8;
     --accent-ink: #0f1a1c;
     --focus: #ffc94d;
@@ -39,6 +43,7 @@ html[data-theme="dark"] {
         --ink: #ece7dd;
         --muted: #b3aca0;
         --rule: #3a3731;
+    --edge: #736e64;
         --accent: #7fd1d8;
         --accent-ink: #0f1a1c;
         --focus: #ffc94d;
@@ -55,6 +60,7 @@ html[data-theme="contrast"] {
     --ink: #ffffff;
     --muted: #ffffff;
     --rule: #ffffff;
+    --edge: #ffffff;
     --accent: #ffffff;
     --accent-ink: #202020;
     --focus: #ffff00;
@@ -202,7 +208,11 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 input.input { width: 6em; }
 select.input { padding-right: 10px; }
 
-.goto { display: flex; align-items: center; gap: 8px; }
+/* A select is as wide as its longest option, and a flex item will not shrink
+   below its content, so a labelled control overflows a narrow window unless it
+   is allowed to wrap and the select is capped. */
+.goto { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.goto select.input { max-width: 100%; }
 
 .toolbar {
     display: flex;
@@ -279,7 +289,9 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .size:has(input:checked), .size.checked { border-color: var(--accent); background: var(--panel2); }
 .size input { width: 28px; height: 28px; margin: 4px 0 0; accent-color: var(--accent); }
 .size .name { font-weight: 700; font-size: 20px; }
-.size .demo { grid-column: 2; line-height: 1.35; }
+/* The sample is set at the size it is describing, so at extra large a single
+   word is wider than the panel and has to be allowed to break. */
+.size .demo { grid-column: 2; line-height: 1.35; overflow-wrap: anywhere; }
 
 .check { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; cursor: pointer; }
 .check input { width: 26px; height: 26px; margin: 0; accent-color: var(--accent); }
@@ -288,11 +300,12 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .contents li:last-child { border-bottom: 0; }
 .contents .prev { color: var(--muted); font-size: 17px; }
 
-.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 24px; margin: 0; }
+.facts { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 6px 24px; margin: 0; }
 .facts dt { font-weight: 700; }
+.facts dt, .facts dd { overflow-wrap: anywhere; }
 .facts dd { margin: 0; }
 .about { display: flex; flex-direction: column; gap: 16px; }
-.about h2 { font-family: var(--font-body); font-size: 18px; font-weight: 700; margin-top: 8px; }
+.about h3 { font-family: var(--font-body); font-size: 18px; font-weight: 700; margin-top: 8px; }
 .links { display: flex; flex-wrap: wrap; gap: 12px; }
 
 .live { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
@@ -376,7 +389,7 @@ input[type="url"].input { width: 100%; max-width: 520px; }
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr);
     gap: 6px 16px;
-    border: 2px solid var(--rule);
+    border: 2px solid var(--edge);
     border-radius: 8px;
     padding: 16px 20px;
     background: var(--paper);
@@ -407,7 +420,10 @@ input[type="url"].input { width: 100%; max-width: 520px; }
     gap: 12px;
 }
 .box-set > legend { font-weight: 700; padding: 0 8px; }
-.setting { display: flex; align-items: center; gap: 8px; }
+/* Same cap as .goto: the settings rows hold the longest option strings on the
+   site and are the first thing to overflow at 400% magnification. */
+.setting { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.setting select.input { max-width: 100%; }
 
 
 .noscript { border: 1px solid var(--rule); padding: 12px 16px; font-size: 18px; background: var(--panel); }
