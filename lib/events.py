@@ -55,7 +55,7 @@ class TSPitch:
     """A single pitch: letter, octave number and accidental facts."""
 
     def __init__(self, step, octave, alter, pitch_number, accidental_name=None,
-                 accidental_displayed=False, accidental_changed=False, cancels_key=False):
+                 accidental_displayed=False, accidental_changed=False, differs_from_key=False):
         self.step = step
         self.octave = octave
         self.alter = alter or 0
@@ -63,7 +63,9 @@ class TSPitch:
         self.accidental_name = accidental_name
         self.accidental_displayed = accidental_displayed
         self.accidental_changed = accidental_changed
-        self.cancels_key = cancels_key         # a natural that undoes the key signature
+        # The sounding pitch is not the one the key signature gives this letter, so
+        # the letter on its own would be read as the wrong note.
+        self.differs_from_key = differs_from_key
 
     @property
     def diatonic_number(self):

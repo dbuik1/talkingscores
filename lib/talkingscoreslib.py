@@ -17,6 +17,7 @@ from types import SimpleNamespace
 
 from jinja2 import Environment, FileSystemLoader
 from music21 import converter, duration, environment, key, meter, stream
+from music21 import pitch as pitch_module
 from django.conf import settings as django_settings
 
 from lib.braille import text_to_brf
@@ -42,6 +43,14 @@ logger = logging.getLogger("TSScore")
 UNTITLED = "Untitled work"
 UNKNOWN_COMPOSER = "Unknown composer"
 NOT_GIVEN = "not given"
+
+
+def alter_name(alter):
+    """The accidental name for a written alteration, or None if there is not one."""
+    try:
+        return pitch_module.Accidental(alter or 0).name
+    except Exception:
+        return None
 
 
 def get_accidental_steps(num_accidentals):
@@ -477,10 +486,15 @@ class Music21TalkingScore(TalkingScoreBase):
         last_alter = state.get(pitch.step)
         changed = last_alter is None or pitch.alter != last_alter
         state[pitch.step] = pitch.alter
-        cancels_key = name == 'natural' and bool(state.get("key", {}).get(pitch.step))
+        differs_from_key = (pitch.alter or 0) != state.get("key", {}).get(pitch.step, 0)
+        if name is None and differs_from_key:
+            # A note carrying an alteration set earlier in the same bar is written
+            # without an accidental of its own, so the letter alone would be read
+            # as the key signature's version of it.
+            name = alter_name(pitch.alter)
         return TSPitch(pitch.step, pitch.octave, pitch.alter, pitch.ps,
                        accidental_name=name, accidental_displayed=displayed,
-                       accidental_changed=changed, cancels_key=cancels_key)
+                       accidental_changed=changed, differs_from_key=differs_from_key)
 
     def _create_event_from_element(self, element, state):
         element_type = type(element).__name__

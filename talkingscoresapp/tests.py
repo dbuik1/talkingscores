@@ -1510,6 +1510,16 @@ class ReviewedEngineTests(TestCase):
         c_major = self._score_of_bars([[note.Note("F#4"), natural, note.Note("G4"), note.Note("A4")]])
         self.assertNotIn("F natural", self._text(c_major, {"style": "standard", "key_signature_accidentals": "applied"}))
 
+    def test_a_natural_kept_from_earlier_in_the_bar_is_still_read(self):
+        from music21 import note, key
+        first, cancelled = note.Note("F#4"), note.Note("F4")
+        cancelled.pitch.accidental = "natural"
+        # The fourth note is written as a bare F: the natural earlier in the bar
+        # still applies to it, so it sounds a semitone below the key signature.
+        score = self._score_of_bars([[key.KeySignature(2), first, cancelled, note.Note("F4"), note.Note("F#4")]])
+        text = self._text(score, {"style": "standard", "key_signature_accidentals": "applied"})
+        self.assertEqual(text.count("F natural"), 2)
+
     def test_grace_notes_are_read_before_the_note_they_decorate(self):
         from music21 import note
         grace = note.Note("D5").getGrace()
