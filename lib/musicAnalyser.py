@@ -1130,8 +1130,12 @@ class AnalysePart:
         written = []
         for element in measure.recurse().notesAndRests:
             names = tuple(p.nameWithOctave for p in getattr(element, "pitches", ()))
-            tie = element.tie.type if getattr(element, "tie", None) else None
-            written.append((names, tie))
+            chord_notes = getattr(element, "notes", None)
+            if chord_notes is None:
+                ties = (element.tie.type if getattr(element, "tie", None) else None,)
+            else:
+                ties = tuple(n.tie.type if n.tie else None for n in chord_notes)
+            written.append((names, ties))
         dynamics = tuple(
             (float(element.offset), element.value)
             for element in measure.recurse().getElementsByClass("Dynamic"))

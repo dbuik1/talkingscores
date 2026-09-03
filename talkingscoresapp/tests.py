@@ -1543,6 +1543,21 @@ class ReviewedEngineTests(TestCase):
         repeated = self._score_of_bars([sharps, [note.Note("F#4") for _ in range(4)]])
         self.assertIn("Same as bar 1", self._text(repeated, {"style": "standard", "repetition_mode": "learning", "bars_at_a_time": 2}))
 
+    def test_a_tie_on_one_note_of_a_chord_is_read_beside_that_note(self):
+        from music21 import chord, note, tie
+        held = chord.Chord(["C4", "E4", "G4"])
+        held.notes[0].tie = tie.Tie("start")
+        whole = chord.Chord(["C4", "E4", "G4"])
+        whole.tie = tie.Tie("start")
+        score = self._score_of_bars([
+            [held, note.Rest(quarterLength=3)],
+            [whole, note.Rest(quarterLength=3)],
+        ])
+        text = self._text(score, {"style": "standard", "bars_at_a_time": 2})
+        bar_one, bar_two = text.split("Bar 2")[0], text.split("Bar 2")[1]
+        self.assertIn("C tied to next E G", bar_one)
+        self.assertIn("C E G tied to next", bar_two)
+
     def test_grace_notes_are_read_before_the_note_they_decorate(self):
         from music21 import note
         grace = note.Note("D5").getGrace()

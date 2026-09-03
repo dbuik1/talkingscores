@@ -504,6 +504,9 @@ class DescriptionBuilder:
         previous = state.previous_pitch
         for pitch in pitches:
             pitch_words.extend(self._pitch_fragments(pitch, previous))
+            # A tie set on one note of a chord belongs to that note, so it is read
+            # beside it rather than over the whole chord.
+            pitch_words.extend(self._tie_words(pitch.tie))
             previous = pitch
         if self.settings.word_order == "pitch_first":
             words.extend(pitch_words)
@@ -591,8 +594,11 @@ class DescriptionBuilder:
         return previous_pitch.octave != pitch.octave
 
     def _tie_fragments(self, event):
-        if event.tie and self.settings.ties:
-            text = self.vocabulary.tie(event.tie)
+        return self._tie_words(event.tie)
+
+    def _tie_words(self, tie_type):
+        if tie_type and self.settings.ties:
+            text = self.vocabulary.tie(tie_type)
             if text:
                 return [Fragment(text)]
         return []

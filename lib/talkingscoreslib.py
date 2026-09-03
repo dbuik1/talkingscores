@@ -530,8 +530,19 @@ class Music21TalkingScore(TalkingScoreBase):
             return TSChordSymbol(element.figure)
         if element_type == 'Chord':
             event = TSChord()
-            event.pitches = [self._make_pitch(p, state) for p in element.pitches]
-            if element.tie:
+            event.pitches = []
+            for chord_note in element.notes:
+                pitch = self._make_pitch(chord_note.pitch, state)
+                pitch.tie = chord_note.tie.type if chord_note.tie else None
+                event.pitches.append(pitch)
+            ties = {pitch.tie for pitch in event.pitches}
+            if len(ties) == 1:
+                # Every note of the chord is tied the same way, so the tie is read
+                # once for the chord rather than after each note.
+                event.tie = ties.pop()
+                for pitch in event.pitches:
+                    pitch.tie = None
+            elif element.tie and not ties - {None}:
                 event.tie = element.tie.type
             event.expressions = [exp.name for exp in element.expressions if getattr(exp, 'name', None)]
             return event

@@ -66,6 +66,8 @@ class TSPitch:
         # The sounding pitch is not the one the key signature gives this letter, so
         # the letter on its own would be read as the wrong note.
         self.differs_from_key = differs_from_key
+        # Set only where the notes of a chord are tied differently from each other.
+        self.tie = None
 
     @property
     def diatonic_number(self):
