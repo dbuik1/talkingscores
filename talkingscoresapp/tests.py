@@ -1592,6 +1592,52 @@ class ReviewedEngineTests(TestCase):
         self.assertIn("crotchet 2 unpitched together", text)
         self.assertIn("dotted minim unpitched", text)
 
+    def test_slurs_and_articulations_are_read_with_the_notes_they_mark(self):
+        from music21 import articulations, note, spanner
+        notes = [note.Note("C4"), note.Note("D4"), note.Note("E4"), note.Note("F4")]
+        notes[0].articulations.append(articulations.Staccato())
+        notes[1].articulations.append(articulations.Accent())
+        score = self._score_of_bars([notes])
+        score.parts[0].insert(0, spanner.Slur(notes[0], notes[2]))
+        text = self._text(score, {"style": "standard"})
+        self.assertIn("mid C staccato slur starts", text)
+        self.assertIn("D accent", text)
+        self.assertIn("E slur ends", text)
+        without = self._text(score, {"style": "standard", "slurs": False, "articulations": False})
+        self.assertNotIn("slur", without)
+        self.assertNotIn("staccato", without)
+
+    def test_repeats_endings_clefs_and_directions_are_read_where_they_are_written(self):
+        from music21 import bar, clef, expressions, note, repeat, spanner, stream, meter
+        first = stream.Measure(number=1)
+        first.append(meter.TimeSignature("4/4"))
+        for pitch in ("C4", "D4", "E4", "F4"):
+            first.append(note.Note(pitch))
+        first.leftBarline = bar.Repeat(direction="start")
+        first.rightBarline = bar.Repeat(direction="end", times=3)
+        first.insert(0, expressions.TextExpression("dolce"))
+        second = stream.Measure(number=2)
+        second.append(clef.BassClef())
+        for pitch in ("G3", "A3", "B3", "C4"):
+            second.append(note.Note(pitch))
+        second.insert(0, repeat.Segno())
+        second.insert(0, repeat.DaCapoAlFine())
+        part = stream.Part()
+        part.append(first)
+        part.append(second)
+        bracket = spanner.RepeatBracket(number=1)
+        bracket.addSpannedElements(first)
+        part.insert(0, bracket)
+        score = stream.Score()
+        score.append(part)
+        text = self._text(score, {"style": "standard", "bars_at_a_time": 2})
+        for line in ("Repeat starts", "1st time", "dolce", "Repeat ends, play 3 times",
+                     "Bass clef", "Segno", "Da Capo al fine"):
+            self.assertIn(line, text)
+        self.assertLess(text.index("Repeat starts"), text.index("Beat 1"))
+        self.assertLess(text.index("Beat 1"), text.index("Repeat ends"))
+        self.assertNotIn("dolce", self._text(score, {"style": "standard", "directions": False, "bars_at_a_time": 2}))
+
     def test_grace_notes_are_read_before_the_note_they_decorate(self):
         from music21 import note
         grace = note.Note("D5").getGrace()

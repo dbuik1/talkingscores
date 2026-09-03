@@ -67,6 +67,15 @@ ACCIDENTAL_ABBREVIATIONS = {
 
 TIE_WORDS = {'start': 'tied to next', 'stop': 'tied from previous', 'continue': 'tied through'}
 
+SLUR_WORDS = {'start': 'slur starts', 'stop': 'slur ends', 'both': 'slur ends, slur starts'}
+
+SLUR_ABBREVIATIONS = {'start': 'sl', 'stop': 'end sl', 'both': 'end sl, sl'}
+
+ARTICULATION_ABBREVIATIONS = {
+    'staccato': 'st', 'staccatissimo': 'stt', 'accent': 'ac', 'strong accent': 'sac',
+    'tenuto': 'tn', 'detached legato': 'dl', 'spiccato': 'sp',
+}
+
 INTERVAL_NAMES = {
     1: 'same note', 2: 'a second', 3: 'a third', 4: 'a fourth', 5: 'a fifth',
     6: 'a sixth', 7: 'a seventh', 8: 'an octave', 9: 'a ninth', 10: 'a tenth',
@@ -245,6 +254,16 @@ class Vocabulary:
         count = getattr(event, 'count', 1)
         name = 'unpitched' if count == 1 else f'{count} unpitched together'
         return f'{self.duration(event, beat_quarter_length)} {name}'.strip()
+
+    def slur(self, edge):
+        if self.settings.abbreviations:
+            return SLUR_ABBREVIATIONS.get(edge, '')
+        return SLUR_WORDS.get(edge, '')
+
+    def articulation(self, name):
+        if self.settings.abbreviations:
+            return ARTICULATION_ABBREVIATIONS.get(name, name[:3])
+        return name.lower()
 
     def tie(self, tie_type):
         if self.settings.abbreviations:

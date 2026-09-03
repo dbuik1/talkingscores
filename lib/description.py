@@ -61,6 +61,7 @@ class BarDescription:
     number: int
     label: str
     signatures: list = field(default_factory=list)
+    after_notes: list = field(default_factory=list)   # marks read after the bar, such as a repeat ending
     repeat_note: str = ""
     repeat_type: str = ""            # exact, rhythm or empty
     repeat_detail: str = ""
@@ -81,13 +82,14 @@ class BarDescription:
         if self.repeat_note:
             lines.append(self.repeat_note)
         if self.collapsed:
-            return lines
+            return lines + self.after_notes
         if self.whole_bar_rest:
             lines.append(self.rest_text)
         elif one_beat_per_line:
             lines.extend(beat.text_with_label for beat in self.beats)
         else:
             lines.append(self.text)
+        lines.extend(self.after_notes)
         return lines
 
 
@@ -281,11 +283,13 @@ class PartState:
 
 
 class DescriptionBuilder:
-    def __init__(self, settings, time_and_keys=None, immediate_repetitions=None, detailed_repetitions=None):
+    def __init__(self, settings, time_and_keys=None, bar_endings=None,
+                 immediate_repetitions=None, detailed_repetitions=None):
         self.settings = settings
         self.vocabulary = Vocabulary(settings)
         self.palette = Palette(settings)
         self.time_and_keys = time_and_keys or {}
+        self.bar_endings = bar_endings or {}
         self.immediate_repetitions = immediate_repetitions or {}
         self.detailed_repetitions = detailed_repetitions or {}
 
@@ -317,6 +321,7 @@ class DescriptionBuilder:
                   written_length=None, actual_length=None, is_pickup=False):
         bar = BarDescription(number=bar_number, label=self.bar_label(bar_number, is_pickup))
         bar.signatures = list(self.time_and_keys.get(bar_number, []))
+        bar.after_notes = list(self.bar_endings.get(bar_number, []))
         self._add_repeat_notes(bar, part_index, bar_number)
 
         has_sounding_event = any(
@@ -447,6 +452,8 @@ class DescriptionBuilder:
             return self._join(fragments)
         if kind == "unpitched":
             fragments = [Fragment(self.vocabulary.unpitched(event, beat_ql))]
+            fragments.extend(self._articulation_fragments(event))
+            fragments.extend(self._slur_fragments(event))
             state.previous_rhythm = event.rhythm_key
             return self._join(fragments)
         if kind == "note":
@@ -485,7 +492,9 @@ class DescriptionBuilder:
             words.extend(rhythm)
             words.extend(pitch)
         words.extend(self._tuplet_fragments(event, opening=False))
+        words.extend(self._articulation_fragments(event))
         words.extend(self._tie_fragments(event))
+        words.extend(self._slur_fragments(event))
         words.extend(self._beam_fragments(event))
         state.previous_pitch = event.pitch
         if not event.grace:
@@ -519,7 +528,9 @@ class DescriptionBuilder:
             words.extend(rhythm)
             words.extend(pitch_words)
         words.extend(self._tuplet_fragments(event, opening=False))
+        words.extend(self._articulation_fragments(event))
         words.extend(self._tie_fragments(event))
+        words.extend(self._slur_fragments(event))
         words.extend(self._beam_fragments(event))
         if pitches:
             state.previous_pitch = pitches[-1]
@@ -596,6 +607,22 @@ class DescriptionBuilder:
                 return previous_pitch.octave != pitch.octave
             return True
         return previous_pitch.octave != pitch.octave
+
+    def _articulation_fragments(self, event):
+        if not self.settings.articulations:
+            return []
+        fragments = []
+        for name in event.articulations:
+            text = self.vocabulary.articulation(name)
+            if text:
+                fragments.append(Fragment(text))
+        return fragments
+
+    def _slur_fragments(self, event):
+        if not (event.slur and self.settings.slurs):
+            return []
+        text = self.vocabulary.slur(event.slur)
+        return [Fragment(text)] if text else []
 
     def _tie_fragments(self, event):
         return self._tie_words(event.tie)

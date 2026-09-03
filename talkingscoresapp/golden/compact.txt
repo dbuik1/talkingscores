@@ -7,66 +7,71 @@ Instruments: Instrument 1 (unnamed)
 
 Bars 1 to 4
 Bar 1
-mezzoforte, minim G 5, quaver E, C
+Allegretto
+[ crotchet = c. 126]
+mezzoforte, minim G 5, quaver E slur starts, C slur ends
 Bar 2
-crotchet F 5, D, B 4
+crotchet F 5 slur starts, D, B 4 slur ends
 Bar 3
 Same rhythm as bar 2
-crotchet C 5, D, E
+crotchet C 5 staccato, D staccato, E staccato
 Bar 4
-crotchet F 5, D, crotchet rest
+crotchet F 5 staccato, D staccato, crotchet rest
 
 Bars 5 to 8
 Bar 5
-minim G 5, quaver E, C
+minim G 5, quaver E slur starts, C slur ends
 Bar 6
-crotchet F 5, D, B 4
+crotchet F 5 slur starts, D, B 4 slur ends
 Bar 7
 Same rhythm as bar 6
-crotchet C 5, D, B 4
+crotchet C 5 slur starts, D slur ends, B 4 staccato
 Bar 8
 dotted minim C 5
+Repeat ends
 
 Bars 9 to 12
 Bar 9
 Rests for the whole bar
 Bar 10
+Repeat starts
 piano, minim G 5, crotchet B 4
 Bar 11
-crotchet C 5, D, E
+crotchet C 5 slur starts, D, E slur ends
 Bar 12
 Same rhythm as bar 11
-crotchet F 5, F, F
+crotchet F 5 staccato, F staccato, F staccato
 
 Bars 13 to 16
 Bar 13
-minim F 5, crotchet E
+minim F 5 slur starts, crotchet E slur ends
 Bar 14
-crotchet C 5, D, E
+crotchet C 5 slur starts, D, E slur ends
 Bar 15
 Same rhythm as bar 14
-crotchet F 5, F, E
+crotchet F 5 staccato, F staccato, E staccato
 Bar 16
-crotchet E 5, quaver D, crescendo starts, D, E, F
+crotchet E 5 slur starts, quaver D slur ends, crescendo starts, D staccato, E staccato, F staccato
 
 Bars 17 to 20
 Bar 17
-forte, minim G 5, quaver E, C
+forte, minim G 5, quaver E slur starts, C slur ends
 Bar 18
-crotchet F 5, D, B 4
+crotchet F 5 slur starts, D, B 4 slur ends
 Bar 19
 Same rhythm as bar 18
-crotchet C 5, D, E
+crotchet C 5 staccato, D staccato, E staccato
 Bar 20
-crotchet F 5, D, crotchet rest
+crotchet F 5 staccato, D staccato, crotchet rest
 
 Bars 21 to 24
 Bar 21
-minim G 5, quaver E, C
+minim G 5, quaver E slur starts, C slur ends
 Bar 22
-crotchet F 5, D, B 4
+crotchet F 5 slur starts, D, B 4 slur ends
 Bar 23
 Same rhythm as bar 22
-crotchet C 5, E, D
+crotchet C 5 slur starts, E slur ends, D staccato
 Bar 24
 dotted minim C 5
+Repeat ends

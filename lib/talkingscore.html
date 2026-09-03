@@ -195,6 +195,7 @@
                             {% else %}
                             {% include 'beats.html' %}
                             {% endif %}
+                            {% for line in part.bar.after_notes %}<p class="change">{{ line }}</p>{% endfor %}
                         </div>
                     {% endfor %}
                     </div>

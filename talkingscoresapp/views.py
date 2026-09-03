@@ -43,6 +43,7 @@ def submitted_settings(post):
 CHECKBOX_FIELDS = (
     "chk_playAll", "chk_playSelected", "chk_playUnselected", "chk_include_rests",
     "chk_include_ties", "chk_include_arpeggios", "chk_include_dynamics",
+    "chk_include_slurs", "chk_include_articulations", "chk_include_directions",
     "chk_describe_chords", "chk_colourPitch",
 )
 
@@ -247,6 +248,9 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     chk_playUnselected = forms.BooleanField(required=False)
     chk_include_rests = forms.BooleanField(required=False)
     chk_include_ties = forms.BooleanField(required=False)
+    chk_include_slurs = forms.BooleanField(required=False)
+    chk_include_articulations = forms.BooleanField(required=False)
+    chk_include_directions = forms.BooleanField(required=False)
     chk_include_arpeggios = forms.BooleanField(required=False)
     chk_describe_chords = forms.BooleanField(required=False)
     
@@ -525,6 +529,9 @@ def options(request, id, filename):
             "octave_announcement": request.POST.get("octave_announcement", "onChange"),
             "include_rests": "chk_include_rests" in request.POST,
             "include_ties": "chk_include_ties" in request.POST,
+            "slurs": "chk_include_slurs" in request.POST,
+            "articulations": "chk_include_articulations" in request.POST,
+            "directions": "chk_include_directions" in request.POST,
             "include_arpeggios": "chk_include_arpeggios" in request.POST,
             "describe_chords": "chk_describe_chords" in request.POST,
             "include_dynamics": "chk_include_dynamics" in request.POST,

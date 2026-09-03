@@ -46,6 +46,62 @@ UNKNOWN_COMPOSER = "Unknown composer"
 NOT_GIVEN = "not given"
 
 
+CLEF_NAMES = {
+    "TrebleClef": "Treble clef", "BassClef": "Bass clef", "AltoClef": "Alto clef",
+    "TenorClef": "Tenor clef", "SopranoClef": "Soprano clef",
+    "MezzoSopranoClef": "Mezzo-soprano clef", "BaritoneClef": "Baritone clef",
+    "PercussionClef": "Percussion clef", "Treble8vbClef": "Treble clef, an octave lower",
+    "Treble8vaClef": "Treble clef, an octave higher", "Bass8vbClef": "Bass clef, an octave lower",
+}
+
+ORDINALS = {1: "1st", 2: "2nd", 3: "3rd"}
+
+# A metronome mark is often written with a note drawn by a music font, one letter
+# to a note, so the letter alone would be read as a letter.
+GLYPH_DURATIONS = {"w": "whole", "h": "half", "q": "quarter", "e": "eighth", "x": "16th"}
+
+MUSIC_FONT_HINTS = ("opus", "maestro", "petrucci", "sonata", "bravura", "emmentaler", "engraver", "jazz")
+
+
+def clef_name(clef_change):
+    """What a clef is called, or its sign and line where it has no common name."""
+    name = CLEF_NAMES.get(type(clef_change).__name__)
+    if name:
+        return name
+    sign = getattr(clef_change, "sign", None)
+    line = getattr(clef_change, "line", None)
+    if sign and line:
+        return f"{sign} clef on line {line}"
+    return "Clef change"
+
+
+def ending_label(number):
+    """"1st time" or "1st and 2nd time", from the numbers written over the bracket."""
+    parts = [part.strip() for part in str(number or "").replace(",", " ").split() if part.strip()]
+    words = []
+    for part in parts:
+        try:
+            value = int(part)
+        except ValueError:
+            words.append(part)
+            continue
+        words.append(ORDINALS.get(value, f"{value}th"))
+    if not words:
+        return "Time ending"
+    if len(words) == 1:
+        return f"{words[0]} time"
+    return f"{' and '.join(words)} time"
+
+
+def repeat_expression_text(expression):
+    """The words a repeat mark is written with, such as Segno or Da Capo al fine."""
+    try:
+        text = expression.getText()
+    except Exception:
+        text = None
+    return (text or type(expression).__name__).strip()
+
+
 def mark_tuplet_brackets(measure_stream):
     """Work out where each tuplet begins and ends, for scores that do not say.
 
@@ -100,6 +156,7 @@ class Music21TalkingScore(TalkingScoreBase):
         self.selected_instruments = []
         self.unselected_instruments = []
         self.selected_part_names = []
+        self.slur_edges = {}
         self.use_settings(settings or RenderSettings())
         super().__init__()
 
@@ -384,6 +441,8 @@ class Music21TalkingScore(TalkingScoreBase):
                     and start_bar in self.timeSigs and self.timeSigs[start_bar] is not None):
                 first.insert(0, self.timeSigs[start_bar])
 
+        self.slur_edges = self._slur_edges(part_index) if self.settings.slurs else {}
+
         for bar_index in range(start_bar, end_bar + 1):
             if start_bar == 0:
                 found = measures.getElementsByClass('Measure')
@@ -421,6 +480,20 @@ class Music21TalkingScore(TalkingScoreBase):
             written = float(ts.barDuration.quarterLength) if ts is not None else float(measure.duration.quarterLength)
             lengths[bar_index] = (written, float(measure.duration.quarterLength))
         return lengths
+
+    def _slur_edges(self, part_index):
+        """{(bar, offset): start, stop or both} for the notes a slur begins or ends on."""
+        edges = {}
+        for spanner in self.score.parts[part_index].spanners.stream():
+            if type(spanner).__name__ != 'Slur':
+                continue
+            for element, edge in ((spanner.getFirst(), 'start'), (spanner.getLast(), 'stop')):
+                if element is None or element.measureNumber is None:
+                    continue
+                key = (element.measureNumber, element.offset)
+                # One note can close one slur and open the next.
+                edges[key] = edge if edges.get(key, edge) == edge else 'both'
+        return edges
 
     def _add_dynamic_spanners(self, part_index, start_bar, end_bar, intermediate_events):
         names = {'Crescendo': ('Crescendo starts', 'Crescendo ends'),
@@ -556,8 +629,7 @@ class Music21TalkingScore(TalkingScoreBase):
             return TSDynamic(long_name=element.longName, short_name=element.value)
         return None
 
-    @staticmethod
-    def _set_event_timing_and_duration(event, element):
+    def _set_event_timing_and_duration(self, event, element):
         event.start_offset = element.offset
         event.beat = element.beat
         event.quarter_length = float(element.duration.quarterLength)
@@ -570,6 +642,11 @@ class Music21TalkingScore(TalkingScoreBase):
                 event.tuplet_start = (tuplet.fullName, tuplet.tupletActual[0], tuplet.tupletNormal[0])
             if tuplet.type in ("stop", "startStop"):
                 event.tuplet_stop = True
+        if self.settings.articulations:
+            event.articulations = [
+                articulation.name for articulation in getattr(element, 'articulations', ())
+                if getattr(articulation, 'name', None)]
+        event.slur = self.slur_edges.get((element.measureNumber, element.offset))
         beams = getattr(element, 'beams', None)
         if beams is not None and beams.beamsList:
             beam_type = beams.beamsList[0].type
@@ -638,6 +715,7 @@ class HTMLTalkingScoreFormatter:
         self.segments = []
         self.facts = None
         self.time_and_keys = {}
+        self.bar_endings = {}
         self.signature_changes = []
         self.music_analyser = None
         self.builder = None
@@ -657,6 +735,7 @@ class HTMLTalkingScoreFormatter:
         self.builder = DescriptionBuilder(
             self.settings,
             time_and_keys=self.time_and_keys,
+            bar_endings=self.bar_endings,
             immediate_repetitions=self.music_analyser.immediate_repetition_contexts,
             detailed_repetitions=self.music_analyser.repetition_in_contexts,
         )
@@ -833,11 +912,16 @@ class HTMLTalkingScoreFormatter:
         return measures[0].number, measures[-1].number
 
     def _process_time_and_key_changes(self):
-        """Signature and tempo changes after the first bar, keyed by bar number."""
+        """What is announced at a bar: the marks that steer playing, signatures and tempo."""
         self.time_and_keys = {}
+        self.bar_endings = {}
         self.signature_changes = []
         part = self.score.score.parts[0]
         first_bar = part.getElementsByClass('Measure')[0].number
+
+        # Repeat marks and clef changes come before the signatures, because they
+        # decide where the reader is before they decide what the notes mean.
+        self._add_structure_notes(part, first_bar)
 
         def note(bar, text):
             if bar is None or bar <= first_bar:
@@ -851,6 +935,74 @@ class HTMLTalkingScoreFormatter:
             note(ks.measureNumber, f"Key signature {self.score.describe_key_signature(ks)}")
         for mark in self.score.score.flatten().getElementsByClass('MetronomeMark'):
             note(mark.measureNumber, f"Tempo {self.score.describe_tempo(mark)}")
+
+        if self.settings.directions:
+            self._add_written_directions(part)
+
+    def _direction_word(self, expression):
+        """A written word, or the note it names where a music font draws it as a symbol."""
+        content = (expression.content or "").strip()
+        fonts = " ".join(getattr(expression.style, "fontFamily", None) or []).lower()
+        if not any(hint in fonts for hint in MUSIC_FONT_HINTS):
+            return content
+        duration_type = GLYPH_DURATIONS.get(content.rstrip(".").lower())
+        if duration_type is None:
+            return content
+        table = AMERICAN_DURATIONS if self.settings.duration_names == "american" else BRITISH_DURATIONS
+        name = table.get(duration_type, duration_type)
+        return f"dotted {name}" if content.endswith(".") else name
+
+    def _add_structure_notes(self, part, first_bar):
+        """Repeat marks, time endings and clef changes, read where they are written."""
+        brackets = {}
+        for spanner in part.spanners.stream():
+            if type(spanner).__name__ != 'RepeatBracket':
+                continue
+            measures = [m for m in spanner.getSpannedElements() if getattr(m, "number", None) is not None]
+            if not measures:
+                continue
+            brackets[measures[0].number] = ending_label(spanner.number)
+
+        for measure in part.getElementsByClass('Measure'):
+            bar = measure.number
+            before = self.time_and_keys.setdefault(bar, [])
+            after = self.bar_endings.setdefault(bar, [])
+            left, right = measure.leftBarline, measure.rightBarline
+            if type(left).__name__ == 'Repeat' and left.direction == 'start':
+                before.append("Repeat starts")
+            if bar in brackets:
+                before.append(brackets[bar])
+            for clef_change in measure.getElementsByClass('Clef'):
+                if bar > first_bar or measure.elementOffset(clef_change) > 0:
+                    before.append(clef_name(clef_change))
+            for expression in measure.getElementsByClass('RepeatExpression'):
+                text = repeat_expression_text(expression)
+                if not text:
+                    continue
+                if type(expression).__name__ in ('Segno', 'Coda'):
+                    before.append(text)
+                else:
+                    after.append(text)
+            if type(right).__name__ == 'Repeat' and right.direction == 'end':
+                times = getattr(right, "times", None)
+                after.append("Repeat ends" if not times or times == 2 else f"Repeat ends, play {times} times")
+            if not before:
+                del self.time_and_keys[bar]
+            if not after:
+                del self.bar_endings[bar]
+
+    def _add_written_directions(self, part):
+        """Words written over the stave, such as dolce or a tempo."""
+        for measure in part.getElementsByClass('Measure'):
+            at_offset = {}
+            for expression in measure.getElementsByClass('TextExpression'):
+                content = self._direction_word(expression)
+                if content:
+                    # A tempo mark reaches music21 as one word each, so the words
+                    # written at the same point are read as the one direction.
+                    at_offset.setdefault(measure.elementOffset(expression), []).append(content)
+            for offset in sorted(at_offset):
+                self.time_and_keys.setdefault(measure.number, []).append(" ".join(at_offset[offset]))
 
     def _setup_measure_time_signatures(self):
         self.score.timeSigs = {}

@@ -7,66 +7,71 @@ Instruments: Instrument 1 (unnamed)
 
 Bars 1 to 4
 Bar 1
-b1 mf, G 5 mn, b3 E qv, C
+Allegretto
+[ crotchet = c. 126]
+b1 mf, G 5 mn, b3 E qv sl, C end sl
 Bar 2
-b1 F 5 cr, b2 D, b3 B
+b1 F 5 cr sl, b2 D, b3 B end sl
 Bar 3
 rhythm = bar 2
-b1 C 5 cr, b2 D, b3 E
+b1 C 5 cr st, b2 D st, b3 E st
 Bar 4
-b1 F 5 cr, b2 D, b3 cr r
+b1 F 5 cr st, b2 D st, b3 cr r
 
 Bars 5 to 8
 Bar 5
-b1 G 5 mn, b3 E qv, C
+b1 G 5 mn, b3 E qv sl, C end sl
 Bar 6
-b1 F 5 cr, b2 D, b3 B
+b1 F 5 cr sl, b2 D, b3 B end sl
 Bar 7
 rhythm = bar 6
-b1 C 5 cr, b2 D, b3 B
+b1 C 5 cr sl, b2 D end sl, b3 B st
 Bar 8
 b1 C 5 dmn
+Repeat ends
 
 Bars 9 to 12
 Bar 9
 bar r
 Bar 10
+Repeat starts
 b1 p, G 5 mn, b3 B 4 cr
 Bar 11
-b1 C 5 cr, b2 D, b3 E
+b1 C 5 cr sl, b2 D, b3 E end sl
 Bar 12
 rhythm = bar 11
-b1 F 5 cr, b2 F, b3 F
+b1 F 5 cr st, b2 F st, b3 F st
 
 Bars 13 to 16
 Bar 13
-b1 F 5 mn, b3 E cr
+b1 F 5 mn sl, b3 E cr end sl
 Bar 14
-b1 C 5 cr, b2 D, b3 E
+b1 C 5 cr sl, b2 D, b3 E end sl
 Bar 15
 rhythm = bar 14
-b1 F 5 cr, b2 F, b3 E
+b1 F 5 cr st, b2 F st, b3 E st
 Bar 16
-b1 E 5 cr, b2 D qv, crescendo starts, D, b3 E, F
+b1 E 5 cr sl, b2 D qv end sl, crescendo starts, D st, b3 E st, F st
 
 Bars 17 to 20
 Bar 17
-b1 f, G 5 mn, b3 E qv, C
+b1 f, G 5 mn, b3 E qv sl, C end sl
 Bar 18
-b1 F 5 cr, b2 D, b3 B
+b1 F 5 cr sl, b2 D, b3 B end sl
 Bar 19
 rhythm = bar 18
-b1 C 5 cr, b2 D, b3 E
+b1 C 5 cr st, b2 D st, b3 E st
 Bar 20
-b1 F 5 cr, b2 D, b3 cr r
+b1 F 5 cr st, b2 D st, b3 cr r
 
 Bars 21 to 24
 Bar 21
-b1 G 5 mn, b3 E qv, C
+b1 G 5 mn, b3 E qv sl, C end sl
 Bar 22
-b1 F 5 cr, b2 D, b3 B
+b1 F 5 cr sl, b2 D, b3 B end sl
 Bar 23
 rhythm = bar 22
-b1 C 5 cr, b2 E, b3 D
+b1 C 5 cr sl, b2 E end sl, b3 D st
 Bar 24
 b1 C 5 dmn
+Repeat ends

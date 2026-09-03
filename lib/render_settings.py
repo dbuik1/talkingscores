@@ -73,6 +73,9 @@ class RenderSettings:
     # Extra words
     rests: str = "all"                   # all, structural, none
     ties: bool = True
+    slurs: bool = True
+    articulations: bool = True
+    directions: bool = True              # words written over the stave, such as dolce
     intervals: bool = False
     chords: bool = True                  # say "3-note chord" before the pitches
     chords_low_to_high: bool = True
@@ -180,7 +183,8 @@ class RenderSettings:
 WORDING_FIELDS = frozenset({
     "beat_prefix", "duration_names", "duration_frequency", "dot_position",
     "pitch_names", "word_order", "octave_naming", "octave_position", "octave_frequency",
-    "rests", "ties", "intervals", "chords", "chords_low_to_high", "chord_symbols",
+    "rests", "ties", "slurs", "articulations", "directions",
+    "intervals", "chords", "chords_low_to_high", "chord_symbols",
     "arpeggios", "dynamics", "beams", "abbreviations", "repetition_mode",
 })
 

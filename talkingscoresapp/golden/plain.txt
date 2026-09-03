@@ -7,66 +7,71 @@ Instruments: Instrument 1 (unnamed)
 
 Bars 1 to 4
 Bar 1
-Beat 1 mezzoforte, high G 2 beats, Beat 3 E half a beat, C half a beat
+Allegretto
+[ crotchet = c. 126]
+Beat 1 mezzoforte, high G 2 beats, Beat 3 E half a beat slur starts, C half a beat slur ends
 Bar 2
-Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 middle B 1 beat
+Beat 1 high F 1 beat slur starts, Beat 2 D 1 beat, Beat 3 middle B 1 beat slur ends
 Bar 3
 Same rhythm as bar 2
-Beat 1 high C 1 beat, Beat 2 D 1 beat, Beat 3 E 1 beat
+Beat 1 high C 1 beat staccato, Beat 2 D 1 beat staccato, Beat 3 E 1 beat staccato
 Bar 4
-Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 rest for 1 beat
+Beat 1 high F 1 beat staccato, Beat 2 D 1 beat staccato, Beat 3 rest for 1 beat
 
 Bars 5 to 8
 Bar 5
-Beat 1 high G 2 beats, Beat 3 E half a beat, C half a beat
+Beat 1 high G 2 beats, Beat 3 E half a beat slur starts, C half a beat slur ends
 Bar 6
-Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 middle B 1 beat
+Beat 1 high F 1 beat slur starts, Beat 2 D 1 beat, Beat 3 middle B 1 beat slur ends
 Bar 7
 Same rhythm as bar 6
-Beat 1 high C 1 beat, Beat 2 D 1 beat, Beat 3 middle B 1 beat
+Beat 1 high C 1 beat slur starts, Beat 2 D 1 beat slur ends, Beat 3 middle B 1 beat staccato
 Bar 8
 Beat 1 high C 3 beats
+Repeat ends
 
 Bars 9 to 12
 Bar 9
 Rests for the whole bar
 Bar 10
+Repeat starts
 Beat 1 piano, high G 2 beats, Beat 3 middle B 1 beat
 Bar 11
-Beat 1 high C 1 beat, Beat 2 D 1 beat, Beat 3 E 1 beat
+Beat 1 high C 1 beat slur starts, Beat 2 D 1 beat, Beat 3 E 1 beat slur ends
 Bar 12
 Same rhythm as bar 11
-Beat 1 high F 1 beat, Beat 2 F 1 beat, Beat 3 F 1 beat
+Beat 1 high F 1 beat staccato, Beat 2 F 1 beat staccato, Beat 3 F 1 beat staccato
 
 Bars 13 to 16
 Bar 13
-Beat 1 high F 2 beats, Beat 3 E 1 beat
+Beat 1 high F 2 beats slur starts, Beat 3 E 1 beat slur ends
 Bar 14
-Beat 1 high C 1 beat, Beat 2 D 1 beat, Beat 3 E 1 beat
+Beat 1 high C 1 beat slur starts, Beat 2 D 1 beat, Beat 3 E 1 beat slur ends
 Bar 15
 Same rhythm as bar 14
-Beat 1 high F 1 beat, Beat 2 F 1 beat, Beat 3 E 1 beat
+Beat 1 high F 1 beat staccato, Beat 2 F 1 beat staccato, Beat 3 E 1 beat staccato
 Bar 16
-Beat 1 high E 1 beat, Beat 2 D half a beat, crescendo starts, D half a beat, Beat 3 E half a beat, F half a beat
+Beat 1 high E 1 beat slur starts, Beat 2 D half a beat slur ends, crescendo starts, D half a beat staccato, Beat 3 E half a beat staccato, F half a beat staccato
 
 Bars 17 to 20
 Bar 17
-Beat 1 forte, high G 2 beats, Beat 3 E half a beat, C half a beat
+Beat 1 forte, high G 2 beats, Beat 3 E half a beat slur starts, C half a beat slur ends
 Bar 18
-Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 middle B 1 beat
+Beat 1 high F 1 beat slur starts, Beat 2 D 1 beat, Beat 3 middle B 1 beat slur ends
 Bar 19
 Same rhythm as bar 18
-Beat 1 high C 1 beat, Beat 2 D 1 beat, Beat 3 E 1 beat
+Beat 1 high C 1 beat staccato, Beat 2 D 1 beat staccato, Beat 3 E 1 beat staccato
 Bar 20
-Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 rest for 1 beat
+Beat 1 high F 1 beat staccato, Beat 2 D 1 beat staccato, Beat 3 rest for 1 beat
 
 Bars 21 to 24
 Bar 21
-Beat 1 high G 2 beats, Beat 3 E half a beat, C half a beat
+Beat 1 high G 2 beats, Beat 3 E half a beat slur starts, C half a beat slur ends
 Bar 22
-Beat 1 high F 1 beat, Beat 2 D 1 beat, Beat 3 middle B 1 beat
+Beat 1 high F 1 beat slur starts, Beat 2 D 1 beat, Beat 3 middle B 1 beat slur ends
 Bar 23
 Same rhythm as bar 22
-Beat 1 high C 1 beat, Beat 2 E 1 beat, Beat 3 D 1 beat
+Beat 1 high C 1 beat slur starts, Beat 2 E 1 beat slur ends, Beat 3 D 1 beat staccato
 Bar 24
 Beat 1 high C 3 beats
+Repeat ends

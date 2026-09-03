@@ -25,6 +25,8 @@ class TSEvent:
         self.start_offset = 0.0
         self.beat = 0.0
         self.grace = False             # an ornament with no length of its own
+        self.articulations = []        # music21 articulation names: staccato, accent ...
+        self.slur = None               # start, stop, or both where a slur begins and ends here
 
     @property
     def rhythm_key(self):

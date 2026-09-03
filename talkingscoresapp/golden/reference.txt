@@ -7,102 +7,107 @@ Instruments: Instrument 1 (unnamed)
 
 Bars 1 to 4
 Bar 1
+Allegretto
+[ crotchet = c. 126]
 Beat 1 mezzoforte, minim G 5
-Beat 3 quaver E 5 down a third beam starts, quaver C 5 down a third beam ends
+Beat 3 quaver E 5 down a third slur starts beam starts, quaver C 5 down a third slur ends beam ends
 Bar 2
-Beat 1 crotchet F 5
+Beat 1 crotchet F 5 slur starts
 Beat 2 crotchet D 5 down a third
-Beat 3 crotchet B 4 down a third
+Beat 3 crotchet B 4 down a third slur ends
 Bar 3
 Same rhythm as bar 2
-Beat 1 crotchet C 5
-Beat 2 crotchet D 5 up a second
-Beat 3 crotchet E 5 up a second
+Beat 1 crotchet C 5 staccato
+Beat 2 crotchet D 5 up a second staccato
+Beat 3 crotchet E 5 up a second staccato
 Bar 4
-Beat 1 crotchet F 5
-Beat 2 crotchet D 5 down a third
+Beat 1 crotchet F 5 staccato
+Beat 2 crotchet D 5 down a third staccato
 Beat 3 crotchet rest
 
 Bars 5 to 8
 Bar 5
 Beat 1 minim G 5
-Beat 3 quaver E 5 down a third beam starts, quaver C 5 down a third beam ends
+Beat 3 quaver E 5 down a third slur starts beam starts, quaver C 5 down a third slur ends beam ends
 Bar 6
-Beat 1 crotchet F 5
+Beat 1 crotchet F 5 slur starts
 Beat 2 crotchet D 5 down a third
-Beat 3 crotchet B 4 down a third
+Beat 3 crotchet B 4 down a third slur ends
 Bar 7
 Same rhythm as bar 6
-Beat 1 crotchet C 5
-Beat 2 crotchet D 5 up a second
-Beat 3 crotchet B 4 down a third
+Beat 1 crotchet C 5 slur starts
+Beat 2 crotchet D 5 up a second slur ends
+Beat 3 crotchet B 4 down a third staccato
 Bar 8
 Beat 1 dotted minim C 5
+Repeat ends
 
 Bars 9 to 12
 Bar 9
 Rests for the whole bar
 Bar 10
+Repeat starts
 Beat 1 piano, minim G 5
 Beat 3 crotchet B 4 down a sixth
 Bar 11
-Beat 1 crotchet C 5
+Beat 1 crotchet C 5 slur starts
 Beat 2 crotchet D 5 up a second
-Beat 3 crotchet E 5 up a second
+Beat 3 crotchet E 5 up a second slur ends
 Bar 12
 Same rhythm as bar 11
-Beat 1 crotchet F 5
-Beat 2 crotchet F 5 same note
-Beat 3 crotchet F 5 same note
+Beat 1 crotchet F 5 staccato
+Beat 2 crotchet F 5 same note staccato
+Beat 3 crotchet F 5 same note staccato
 
 Bars 13 to 16
 Bar 13
-Beat 1 minim F 5
-Beat 3 crotchet E 5 down a second
+Beat 1 minim F 5 slur starts
+Beat 3 crotchet E 5 down a second slur ends
 Bar 14
-Beat 1 crotchet C 5
+Beat 1 crotchet C 5 slur starts
 Beat 2 crotchet D 5 up a second
-Beat 3 crotchet E 5 up a second
+Beat 3 crotchet E 5 up a second slur ends
 Bar 15
 Same rhythm as bar 14
-Beat 1 crotchet F 5
-Beat 2 crotchet F 5 same note
-Beat 3 crotchet E 5 down a second
+Beat 1 crotchet F 5 staccato
+Beat 2 crotchet F 5 same note staccato
+Beat 3 crotchet E 5 down a second staccato
 Bar 16
-Beat 1 crotchet E 5
-Beat 2 quaver D 5 down a second beam starts, crescendo starts, quaver D 5 same note
-Beat 3 quaver E 5 up a second, quaver F 5 up a second beam ends
+Beat 1 crotchet E 5 slur starts
+Beat 2 quaver D 5 down a second slur ends beam starts, crescendo starts, quaver D 5 same note staccato
+Beat 3 quaver E 5 up a second staccato, quaver F 5 up a second staccato beam ends
 
 Bars 17 to 20
 Bar 17
 Beat 1 forte, minim G 5
-Beat 3 quaver E 5 down a third beam starts, quaver C 5 down a third beam ends
+Beat 3 quaver E 5 down a third slur starts beam starts, quaver C 5 down a third slur ends beam ends
 Bar 18
-Beat 1 crotchet F 5
+Beat 1 crotchet F 5 slur starts
 Beat 2 crotchet D 5 down a third
-Beat 3 crotchet B 4 down a third
+Beat 3 crotchet B 4 down a third slur ends
 Bar 19
 Same rhythm as bar 18
-Beat 1 crotchet C 5
-Beat 2 crotchet D 5 up a second
-Beat 3 crotchet E 5 up a second
+Beat 1 crotchet C 5 staccato
+Beat 2 crotchet D 5 up a second staccato
+Beat 3 crotchet E 5 up a second staccato
 Bar 20
-Beat 1 crotchet F 5
-Beat 2 crotchet D 5 down a third
+Beat 1 crotchet F 5 staccato
+Beat 2 crotchet D 5 down a third staccato
 Beat 3 crotchet rest
 
 Bars 21 to 24
 Bar 21
 Beat 1 minim G 5
-Beat 3 quaver E 5 down a third beam starts, quaver C 5 down a third beam ends
+Beat 3 quaver E 5 down a third slur starts beam starts, quaver C 5 down a third slur ends beam ends
 Bar 22
-Beat 1 crotchet F 5
+Beat 1 crotchet F 5 slur starts
 Beat 2 crotchet D 5 down a third
-Beat 3 crotchet B 4 down a third
+Beat 3 crotchet B 4 down a third slur ends
 Bar 23
 Same rhythm as bar 22
-Beat 1 crotchet C 5
-Beat 2 crotchet E 5 up a third
-Beat 3 crotchet D 5 down a second
+Beat 1 crotchet C 5 slur starts
+Beat 2 crotchet E 5 up a third slur ends
+Beat 3 crotchet D 5 down a second staccato
 Bar 24
 Beat 1 dotted minim C 5
+Repeat ends

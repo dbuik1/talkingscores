@@ -7,66 +7,71 @@ Instruments: Instrument 1 (unnamed)
 
 Bars 1 to 4
 Bar 1
-Beat 1 mezzoforte, minim high G, Beat 3 quaver E, C
+Allegretto
+[ crotchet = c. 126]
+Beat 1 mezzoforte, minim high G, Beat 3 quaver E slur starts, C slur ends
 Bar 2
-Beat 1 crotchet high F, Beat 2 D, Beat 3 mid B
+Beat 1 crotchet high F slur starts, Beat 2 D, Beat 3 mid B slur ends
 Bar 3
 Same rhythm as bar 2
-Beat 1 crotchet high C, Beat 2 D, Beat 3 E
+Beat 1 crotchet high C staccato, Beat 2 D staccato, Beat 3 E staccato
 Bar 4
-Beat 1 crotchet high F, Beat 2 D, Beat 3 crotchet rest
+Beat 1 crotchet high F staccato, Beat 2 D staccato, Beat 3 crotchet rest
 
 Bars 5 to 8
 Bar 5
-Beat 1 minim high G, Beat 3 quaver E, C
+Beat 1 minim high G, Beat 3 quaver E slur starts, C slur ends
 Bar 6
-Beat 1 crotchet high F, Beat 2 D, Beat 3 mid B
+Beat 1 crotchet high F slur starts, Beat 2 D, Beat 3 mid B slur ends
 Bar 7
 Same rhythm as bar 6
-Beat 1 crotchet high C, Beat 2 D, Beat 3 mid B
+Beat 1 crotchet high C slur starts, Beat 2 D slur ends, Beat 3 mid B staccato
 Bar 8
 Beat 1 dotted minim high C
+Repeat ends
 
 Bars 9 to 12
 Bar 9
 Rests for the whole bar
 Bar 10
+Repeat starts
 Beat 1 piano, minim high G, Beat 3 crotchet mid B
 Bar 11
-Beat 1 crotchet high C, Beat 2 D, Beat 3 E
+Beat 1 crotchet high C slur starts, Beat 2 D, Beat 3 E slur ends
 Bar 12
 Same rhythm as bar 11
-Beat 1 crotchet high F, Beat 2 F, Beat 3 F
+Beat 1 crotchet high F staccato, Beat 2 F staccato, Beat 3 F staccato
 
 Bars 13 to 16
 Bar 13
-Beat 1 minim high F, Beat 3 crotchet E
+Beat 1 minim high F slur starts, Beat 3 crotchet E slur ends
 Bar 14
-Beat 1 crotchet high C, Beat 2 D, Beat 3 E
+Beat 1 crotchet high C slur starts, Beat 2 D, Beat 3 E slur ends
 Bar 15
 Same rhythm as bar 14
-Beat 1 crotchet high F, Beat 2 F, Beat 3 E
+Beat 1 crotchet high F staccato, Beat 2 F staccato, Beat 3 E staccato
 Bar 16
-Beat 1 crotchet high E, Beat 2 quaver D, crescendo starts, D, Beat 3 E, F
+Beat 1 crotchet high E slur starts, Beat 2 quaver D slur ends, crescendo starts, D staccato, Beat 3 E staccato, F staccato
 
 Bars 17 to 20
 Bar 17
-Beat 1 forte, minim high G, Beat 3 quaver E, C
+Beat 1 forte, minim high G, Beat 3 quaver E slur starts, C slur ends
 Bar 18
-Beat 1 crotchet high F, Beat 2 D, Beat 3 mid B
+Beat 1 crotchet high F slur starts, Beat 2 D, Beat 3 mid B slur ends
 Bar 19
 Same rhythm as bar 18
-Beat 1 crotchet high C, Beat 2 D, Beat 3 E
+Beat 1 crotchet high C staccato, Beat 2 D staccato, Beat 3 E staccato
 Bar 20
-Beat 1 crotchet high F, Beat 2 D, Beat 3 crotchet rest
+Beat 1 crotchet high F staccato, Beat 2 D staccato, Beat 3 crotchet rest
 
 Bars 21 to 24
 Bar 21
-Beat 1 minim high G, Beat 3 quaver E, C
+Beat 1 minim high G, Beat 3 quaver E slur starts, C slur ends
 Bar 22
-Beat 1 crotchet high F, Beat 2 D, Beat 3 mid B
+Beat 1 crotchet high F slur starts, Beat 2 D, Beat 3 mid B slur ends
 Bar 23
 Same rhythm as bar 22
-Beat 1 crotchet high C, Beat 2 E, Beat 3 D
+Beat 1 crotchet high C slur starts, Beat 2 E slur ends, Beat 3 D staccato
 Bar 24
 Beat 1 dotted minim high C
+Repeat ends
