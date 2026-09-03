@@ -28,7 +28,7 @@ STYLE_SUMMARIES = {
     "plain": "Note lengths counted in beats, with no musical terms.",
     "standard": "Rhythm then pitch, grouped by beat.",
     "compact": "No beat numbers, octave numbers only when the octave changes.",
-    "braille40": "Abbreviated, pitch first, sized for a braille display.",
+    "braille40": "Abbreviations and braille octave marks, pitch first.",
     "reference": "Every note named in full, with intervals and beams.",
 }
 
