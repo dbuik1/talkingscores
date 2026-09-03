@@ -97,7 +97,6 @@ class BarDescription:
 class PartDescription:
     part_index: int
     name: str
-    octave_reference: str = ""
     bars: list = field(default_factory=list)
 
 
@@ -151,6 +150,7 @@ class ScoreFacts:
     piece: list = field(default_factory=list)      # title, composer, key, time, tempo, bars, parts
     changes: list = field(default_factory=list)    # time, key and tempo changes with bar numbers
     parts: list = field(default_factory=list)      # per part: name and a list of Fact
+    octave_reference: str = ""                     # what the octave words mean, in the words in use
 
 
 def relative_luminance(hex_colour):
@@ -302,8 +302,7 @@ class DescriptionBuilder:
         beat_quarter_length: one length for every bar, or {bar_number: length} when
         the time signature changes inside the range.
         """
-        part = PartDescription(part_index=part_index, name=name,
-                               octave_reference=self.vocabulary.octave_reference_line())
+        part = PartDescription(part_index=part_index, name=name)
         for bar_number in sorted(events_by_bar):
             written_length, actual_length = bar_lengths.get(bar_number, (None, None))
             if isinstance(beat_quarter_length, dict):
@@ -667,6 +666,8 @@ def segments_to_text(segments, facts=None, title="", one_beat_per_line=False):
             lines.append(f"{fact.label}: {fact.value}")
         for change in facts.changes:
             lines.append(change)
+        if facts.octave_reference:
+            lines.append(facts.octave_reference)
         lines.append("")
     for segment in segments:
         if segment.start_bar != segment.end_bar:

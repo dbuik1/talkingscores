@@ -4,6 +4,7 @@ Key: C major (no sharps or flats)
 Time signature: 3 4
 Bars: 24
 Instruments: Instrument 1 (unnamed)
+Middle means the octave from middle C up to the B above it. High is the octave above that, low the octave below.
 
 Bars 1 to 4
 Bar 1

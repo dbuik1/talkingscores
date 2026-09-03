@@ -1124,6 +1124,7 @@ class HTMLTalkingScoreFormatter:
         facts.piece.append(Fact("Instruments", ", ".join(
             self.score.part_instruments[ins][0] for ins in self.score.part_instruments)))
         facts.changes = list(self.signature_changes)
+        facts.octave_reference = self.builder.vocabulary.octave_reference_line()
 
         analyse_index = 0
         for ins in self.score.selected_instruments:

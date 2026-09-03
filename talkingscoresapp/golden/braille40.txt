@@ -4,6 +4,7 @@ Key: C major (no sharps or flats)
 Time signature: 3 4
 Bars: 24
 Instruments: Instrument 1 (unnamed)
+Octave numbers follow scientific pitch notation: middle C is C4.
 
 Bars 1 to 4
 Bar 1

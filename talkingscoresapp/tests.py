@@ -1732,7 +1732,7 @@ class ReviewedEngineTests(TestCase):
     def test_a_single_bar_segment_names_the_bar_once(self):
         from lib.description import segments_to_text, SegmentDescription, InstrumentDescription, PartDescription, BarDescription
         bar = BarDescription(number=1, label="Bar 1", whole_bar_rest=True, rest_text="Rests for the whole bar")
-        part = PartDescription(part_index=0, name="Flute", octave_reference="", bars=[bar])
+        part = PartDescription(part_index=0, name="Flute", bars=[bar])
         segment = SegmentDescription(start_bar=1, end_bar=1, label="Bar 1", anchor="segment-1", is_pickup=False,
                                      instruments=[InstrumentDescription(number=1, name="Flute", parts=[part])])
         self.assertEqual(segments_to_text([segment]), "Bar 1\nRests for the whole bar\n")

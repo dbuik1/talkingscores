@@ -91,15 +91,15 @@
                 <dl class="facts">
                     {% for fact in facts.piece %}<dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd>{% endfor %}
                 </dl>
+                {% if facts.octave_reference %}<p>{{ facts.octave_reference }}</p>{% endif %}
                 {% if facts.changes %}
                 <h3>Changes along the way</h3>
                 <ul>{% for change in facts.changes %}<li>{{ change }}</li>{% endfor %}</ul>
                 {% endif %}
                 {% for part in facts.parts %}
-                {% if part.facts or part.octave_reference %}
+                {% if part.facts %}
                 <h3>{{ part.name }}</h3>
-                {% if part.octave_reference %}<p>{{ part.octave_reference }}</p>{% endif %}
-                {% if part.facts %}<dl class="facts">{% for fact in part.facts %}<dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd>{% endfor %}</dl>{% endif %}
+                <dl class="facts">{% for fact in part.facts %}<dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd>{% endfor %}</dl>
                 {% endif %}
                 {% endfor %}
                 <p class="small muted">Words: {{ style_name }}.</p>
