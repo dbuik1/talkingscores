@@ -251,8 +251,13 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     chk_describe_chords = forms.BooleanField(required=False)
     
 
-    bars_at_a_time = forms.ChoiceField(choices=(('1', 1), ('2', 2), ('4', 4), ('8', 8)), initial=4,
-                                        label="Bars at a time")
+    bars_at_a_time = forms.ChoiceField(
+        choices=(('1', 1), ('2', 2), ('4', 4), ('8', 8)), initial=4,
+        label="Bars at a time",
+        error_messages={
+            "required": "Choose how many bars to read at a time.",
+            "invalid_choice": "Choose how many bars to read at a time: 1, 2, 4 or 8.",
+        })
 
     beat_division = forms.CharField(widget=forms.Select, required=False)
 

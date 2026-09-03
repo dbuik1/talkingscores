@@ -12,8 +12,12 @@
 {% if form.errors %}
 <div id="setup-errors" tabindex="-1">
     <h2 class="legend">The reading was not generated</h2>
-    {% for error in form.non_field_errors %}<p class="callout error-callout">{{ error }}</p>{% endfor %}
-    {% for field in form %}{% for error in field.errors %}<p class="callout error-callout">{{ field.label }}: {{ error }}</p>{% endfor %}{% endfor %}
+    <div class="callout error-callout">
+        <ul class="errors">
+            {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+            {% for field in form %}{% for error in field.errors %}<li><a href="#{{ field.name }}">{{ error }}</a></li>{% endfor %}{% endfor %}
+        </ul>
+    </div>
 </div>
 {{ submitted|json_script:"rejected-settings" }}
 {% endif %}

@@ -68,7 +68,8 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'complete' && data.score_url) {
-                    setProcessingStatus('The score is ready. Opening it now.');
+                    // The score opens immediately, so there is no time for a status
+                    // message here to be read; the score page names itself instead.
                     window.location = data.score_url;
                 } else if (data.status === 'failed') {
                     window.location = "{% url 'error' id filename %}";

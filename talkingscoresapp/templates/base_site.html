@@ -43,11 +43,17 @@
     </header>
 
     {% if messages %}
-    <div role="alert">
+    <div class="callout error-callout" id="site-message" tabindex="-1">
         {% for message in messages %}
-        <p class="callout error-callout">{{ message }}</p>
+        <p>{{ message }}</p>
         {% endfor %}
     </div>
+    <script>
+        // The message explains why this is not the page that was asked for. A live
+        // region that is already in the page when it loads is announced by some
+        // readers and not others, so focus is moved to the message instead.
+        document.getElementById("site-message").focus();
+    </script>
     {% endif %}
 
     <main id="main" tabindex="-1">

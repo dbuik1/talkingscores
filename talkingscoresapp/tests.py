@@ -144,14 +144,22 @@ class BasicFunctionalityTests(TestCase):
         response = self.client.get(reverse('index'))
 
         self.assertEqual(response.status_code, 200)
-        policy = response["Content-Security-Policy"]
-        self.assertIn("script-src 'self'", policy)
-        self.assertIn("frame-ancestors 'none'", policy)
-        self.assertIn("upgrade-insecure-requests", policy)
+        # Read as whole directives: "script-src 'self'" is also a substring of a
+        # policy that has since been widened to allow another host.
+        directives = {}
+        for directive in response["Content-Security-Policy"].split(";"):
+            parts = directive.split()
+            if parts:
+                directives[parts[0]] = parts[1:]
+
+        self.assertEqual(directives["script-src"], ["'self'", "'unsafe-inline'"])
+        self.assertEqual(directives["frame-ancestors"], ["'none'"])
+        self.assertIn("upgrade-insecure-requests", directives)
         # The page sounds its own MIDI, so it needs no other host, no worker and no media element.
-        self.assertNotIn("midijs.net", policy)
-        self.assertIn("worker-src 'none'", policy)
-        self.assertIn("media-src 'none'", policy)
+        self.assertEqual(directives["connect-src"], ["'self'"])
+        self.assertEqual(directives["worker-src"], ["'none'"])
+        self.assertEqual(directives["media-src"], ["'none'"])
+        self.assertEqual(directives["object-src"], ["'none'"])
 
     def test_home_page_names_the_file_it_takes_and_where_it_goes(self):
         response = self.client.get(reverse("index"))
@@ -728,7 +736,9 @@ class DownloadTests(TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Select a valid choice")
+        # The error names the action, and links to the control it is about.
+        self.assertContains(response, "Choose how many bars to read at a time")
+        self.assertContains(response, 'href="#bars_at_a_time"')
         mock_clear.assert_not_called()
 
 

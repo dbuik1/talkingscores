@@ -366,6 +366,11 @@ body:not(.reader) main { display: flex; flex-direction: column; gap: 32px; }
 .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 
 .error-callout { border-left-color: var(--error); }
+.callout p { margin: 0 0 8px; }
+.callout p:last-child { margin-bottom: 0; }
+/* One error to a line, each linking to the control it is about. */
+.errors { margin: 0; padding-left: 20px; }
+.errors li + li { margin-top: 8px; }
 
 input[type="file"] { font: inherit; font-size: 18px; }
 input[type="file"]::file-selector-button {
