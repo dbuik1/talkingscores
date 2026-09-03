@@ -531,35 +531,6 @@ class Music21TalkingScore(TalkingScoreBase):
             if beam_type in ('start', 'stop'):
                 event.beam = beam_type
 
-    # MIDI URLs
-
-    def generate_midi_filename_sel(self, base_url, range_start=None, range_end=None, sel=""):
-        query_params = f"bsi={self.binary_selected_instruments}&bpi={self.binary_play_all}"
-        if sel:
-            query_params += f"&sel={sel}"
-        if range_start is not None:
-            query_params += f"&start={range_start}&end={range_end}"
-        return f"{base_url}?{query_params}"
-
-    def generate_midi_filenames(self, base_url, range_start=None, range_end=None, add_instruments=None):
-        part_midis = []
-        instrument_midi = ""
-        if not add_instruments:
-            return (instrument_midi, part_midis)
-        last_ins = add_instruments[-1]
-        query_string = f"bsi={self.binary_selected_instruments}&bpi={self.binary_play_all}"
-        if range_start is not None:
-            query_string += f"&start={range_start}&end={range_end}"
-        for ins in add_instruments:
-            if self.part_instruments[ins][2] > 1:
-                start_part_index = self.part_instruments[ins][1]
-                end_part_index = start_part_index + self.part_instruments[ins][2]
-                for part_index in range(start_part_index, end_part_index):
-                    part_midis.append(f"{base_url}?part={part_index}&{query_string}")
-        if last_ins is not None:
-            instrument_midi = f"{base_url}?ins={last_ins}&{query_string}"
-        return (instrument_midi, part_midis)
-
     # Ranges
 
     def get_rhythm_range(self):
@@ -645,9 +616,12 @@ class HTMLTalkingScoreFormatter:
             detailed_repetitions=self.music_analyser.repetition_in_contexts,
         )
         self.segments = []
-        start_bar_for_loop = self._handle_pickup_bar(self.segments, web_path)
-        self._generate_main_segments(start_bar_for_loop, self.segments, web_path)
+        start_bar_for_loop = self._handle_pickup_bar(self.segments)
+        self._generate_main_segments(start_bar_for_loop, self.segments)
         self.facts = self._build_facts()
+        if web_path and self.segments:
+            # The bars the page opens on, so the first press of play has nothing to wait for.
+            self._trigger_midi_generation(self.segments[0].start_bar, self.segments[0].end_bar)
         self.built = True
 
     def generateHTML(self, output_path="", web_path="", download_html_url="", export_theme=None,
@@ -702,23 +676,41 @@ class HTMLTalkingScoreFormatter:
         items.append("1 bar" if bars == 1 else f"{bars} bars")
         return [item for item in items if item]
 
-    def _playback_voices(self):
+    def _playback_parts(self):
+        """Every part in the score, named as the reading page names it."""
+        parts = []
+        for ins, (name, first_part, part_count, part_id) in self.score.part_instruments.items():
+            for part_index in range(first_part, first_part + part_count):
+                parts.append({
+                    'index': part_index,
+                    'label': self.score.part_name(ins, part_index),
+                    'read': ins in self.score.selected_instruments,
+                })
+        return parts
+
+    def _playback_voices(self, parts):
         """What the player can be asked for, in the order the choice is offered."""
         settings = self.settings
+        every = [part['index'] for part in parts]
+        read = [part['index'] for part in parts if part['read']]
+        others = [part['index'] for part in parts if not part['read']]
         voices = []
         if settings.play_all:
-            voices.append({'query': 'sel=all', 'label': 'Every instrument'})
-        if settings.play_selected:
-            voices.append({'query': 'sel=sel', 'label': 'The instruments being read'})
-        if settings.play_unselected:
-            voices.append({'query': 'sel=un', 'label': 'The other instruments'})
+            voices.append({'parts': every, 'label': "Every instrument"})
+        if settings.play_selected and read:
+            voices.append({'parts': read, 'label': "The instruments being read"})
+        if settings.play_unselected and others:
+            voices.append({'parts': others, 'label': "The other instruments"})
         for ins in self.score.selected_instruments:
-            name, first_part, part_count, _ = self.score.part_instruments[ins]
-            voices.append({'query': f'ins={ins}', 'label': name})
+            name, first_part, part_count, part_id = self.score.part_instruments[ins]
+            instrument_parts = list(range(first_part, first_part + part_count))
+            voices.append({'parts': instrument_parts, 'label': name})
             if part_count > 1:
-                for part_index in range(first_part, first_part + part_count):
-                    voices.append({'query': f'part={part_index}',
+                for part_index in instrument_parts:
+                    voices.append({'parts': [part_index],
                                    'label': self.score.part_name(ins, part_index)})
+        if not voices:
+            voices.append({'parts': every, 'label': "Every instrument"})
         return voices
 
     def _score_data(self, web_path, export_mode):
@@ -729,11 +721,8 @@ class HTMLTalkingScoreFormatter:
         bars_per_group = max(1, int(self.settings.bars_at_a_time))
         midi = None
         if web_path and not export_mode:
-            midi = {
-                'base': web_path,
-                'query': f"bsi={self.score.binary_selected_instruments}&bpi={self.score.binary_play_all}",
-                'voices': self._playback_voices(),
-            }
+            parts = self._playback_parts()
+            midi = {'base': web_path, 'parts': parts, 'voices': self._playback_voices(parts)}
         # A score that is only a pickup bar keeps the go-to range inside the bars that exist.
         first_numbered = min(first_bar + 1, last_bar) if pickup == first_bar else first_bar
         return {
@@ -828,40 +817,24 @@ class HTMLTalkingScoreFormatter:
                 previous_ts = measure.getElementsByClass(meter.TimeSignature)[0]
             self.score.timeSigs[measure_num] = previous_ts
 
-    def _midi_urls(self, web_path, start_bar, end_bar):
-        selected_instruments_midis = {}
-        for ins in self.score.selected_instruments:
-            midis = self.score.generate_midi_filenames(
-                base_url=web_path, range_start=start_bar, range_end=end_bar, add_instruments=[ins])
-            selected_instruments_midis[ins] = {"ins": ins, "midi": midis[0], "midi_parts": midis[1]}
-        return {
-            'selected_instruments_midis': selected_instruments_midis,
-            'midi_all': self.score.generate_midi_filename_sel(web_path, start_bar, end_bar, sel="all"),
-            'midi_sel': self.score.generate_midi_filename_sel(web_path, start_bar, end_bar, sel="sel"),
-            'midi_un': self.score.generate_midi_filename_sel(web_path, start_bar, end_bar, sel="un"),
-        }
-
     def _trigger_midi_generation(self, start_bar, end_bar):
+        """Write the audio for one range of bars.
+
+        Writing an excerpt strips repeat marks from the parsed score, so this runs
+        only once the descriptions have been built from it.
+        """
         from lib.midiHandler import MidiHandler
 
         id_hash = os.path.basename(os.path.dirname(self.score.filepath))
         xml_filename = os.path.basename(self.score.filepath)
-        get_params = {
-            'start': str(start_bar), 'end': str(end_bar),
-            'bsi': str(self.score.binary_selected_instruments),
-            'bpi': str(self.score.binary_play_all),
-            'upfront_generate': 'true',
-        }
         try:
-            midi_handler = MidiHandler(SimpleNamespace(GET=get_params), id_hash, xml_filename)
+            midi_handler = MidiHandler(SimpleNamespace(GET={}), id_hash, xml_filename)
             midi_handler.score = self.score.score
-            midi_handler.make_midi_files()
+            midi_handler.make_midi_file(start_bar, end_bar)
         except Exception as exc:
-            logger.error(f"Failed to pre-generate MIDI files for bars {start_bar}-{end_bar}: {exc}", exc_info=True)
+            logger.error(f"Failed to write MIDI for bars {start_bar}-{end_bar}: {exc}", exc_info=True)
 
-    def _create_music_segment(self, start_bar, end_bar, web_path, is_pickup=False):
-        self._trigger_midi_generation(start_bar=start_bar, end_bar=end_bar)
-        midis = self._midi_urls(web_path, start_bar, end_bar)
+    def _create_music_segment(self, start_bar, end_bar, is_pickup=False):
         if is_pickup:
             label, anchor = "Pickup bar", "segment-pickup"
         elif start_bar == end_bar:
@@ -869,10 +842,7 @@ class HTMLTalkingScoreFormatter:
         else:
             label, anchor = f"Bars {start_bar} to {end_bar}", f"segment-{start_bar}"
         segment = SegmentDescription(
-            start_bar=start_bar, end_bar=end_bar, label=label, anchor=anchor, is_pickup=is_pickup,
-            midi_all=midis['midi_all'], midi_sel=midis['midi_sel'], midi_un=midis['midi_un'],
-            selected_instruments_midis=midis['selected_instruments_midis'],
-        )
+            start_bar=start_bar, end_bar=end_bar, label=label, anchor=anchor, is_pickup=is_pickup)
         pickup_bar = start_bar if is_pickup else None
         for ins in self.score.selected_instruments:
             instrument = InstrumentDescription(number=ins, name=self.score.part_instruments[ins][0])
@@ -888,7 +858,7 @@ class HTMLTalkingScoreFormatter:
             segment.instruments.append(instrument)
         return segment
 
-    def _handle_pickup_bar(self, music_segments, web_path):
+    def _handle_pickup_bar(self, music_segments):
         first_measure = self.score.score.parts[0].getElementsByClass('Measure')[0]
         start_bar_for_loop = first_measure.number
         active_ts = first_measure.timeSignature or self.score.timeSigs.get(first_measure.number)
@@ -896,11 +866,11 @@ class HTMLTalkingScoreFormatter:
             pickup_bar_num = first_measure.number
             self.score.timeSigs[pickup_bar_num] = active_ts
             music_segments.append(self._create_music_segment(
-                start_bar=pickup_bar_num, end_bar=pickup_bar_num, web_path=web_path, is_pickup=True))
+                start_bar=pickup_bar_num, end_bar=pickup_bar_num, is_pickup=True))
             start_bar_for_loop = pickup_bar_num + 1
         return start_bar_for_loop
 
-    def _generate_main_segments(self, start_bar_for_loop, music_segments, web_path):
+    def _generate_main_segments(self, start_bar_for_loop, music_segments):
         part = self.score.score.parts[0]
         total_measures = part.getElementsByClass('Measure')[-1].number
         step = max(1, int(self.settings.bars_at_a_time))
@@ -909,7 +879,7 @@ class HTMLTalkingScoreFormatter:
             if part.measure(bar_index) is None:
                 break
             music_segments.append(self._create_music_segment(
-                start_bar=bar_index, end_bar=end_bar_index, web_path=web_path))
+                start_bar=bar_index, end_bar=end_bar_index))
 
     # Facts
 

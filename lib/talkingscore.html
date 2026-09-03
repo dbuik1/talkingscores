@@ -25,7 +25,6 @@
     <script src="{{ static_js_url }}"></script>
     {% if score_data.midi %}
     <script src="{{ static_player_url }}" defer></script>
-    <script src="//www.midijs.net/lib/midi.js" defer></script>
     {% endif %}
     {% endif %}
 </head>
@@ -62,7 +61,7 @@
         <span class="sep"></span>
         <button class="btn" type="button" id="play-group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"></path></svg>Play this group</button>
         <button class="btn" type="button" id="stop-playback"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12"></rect></svg>Stop playback</button>
-        <label class="goto"><span>Speed</span><select class="input" id="speed"><option value="50">50 %</option><option value="100" selected>100 %</option><option value="150">150 %</option></select></label>
+        <label class="goto"><span>Speed</span><select class="input" id="speed"><option value="25">25 %</option><option value="50">50 %</option><option value="75">75 %</option><option value="100" selected>100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
         <p class="status" role="status" aria-live="polite"><b>Playback</b><span id="playback-status-text">Stopped.</span></p>
         {% endif %}
         <span class="sep"></span>
@@ -127,11 +126,17 @@
             <form class="panel" id="playback-settings-form" onsubmit="return false">
                 <div class="row">
                     {% if score_data.midi.voices|length > 1 %}
-                    <label class="goto"><span>Instruments to play</span><select class="input" id="setting-voice">{% for voice in score_data.midi.voices %}<option value="{{ voice.query }}">{{ voice.label }}</option>{% endfor %}</select></label>
+                    <label class="goto"><span>Instruments to play</span><select class="input" id="setting-voice">{% for voice in score_data.midi.voices %}<option value="{{ loop.index0 }}">{{ voice.label }}</option>{% endfor %}</select></label>
                     {% endif %}
-                    <label class="check"><input type="checkbox" id="setting-click">Metronome click</label>
+                    {% if score_data.midi.parts|length > 1 %}
+                    <label class="goto"><span>Balance</span><select class="input" id="setting-forward"><option value="">Every part level</option>{% for part in score_data.midi.parts %}<option value="{{ part.index }}">{{ part.label }} louder</option>{% endfor %}</select></label>
+                    {% endif %}
                 </div>
-                <p class="small muted">Applies from the next press of Play this group.</p>
+                <div class="row">
+                    <label class="check"><input type="checkbox" id="setting-click">Metronome click</label>
+                    <label class="check"><input type="checkbox" id="setting-repeat">Repeat this group</label>
+                </div>
+                <p class="small muted">A change while a group is playing restarts it.</p>
             </form>
         </details>
         {% endif %}

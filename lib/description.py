@@ -114,10 +114,6 @@ class SegmentDescription:
     anchor: str
     is_pickup: bool = False
     instruments: list = field(default_factory=list)
-    midi_all: str = ""
-    midi_sel: str = ""
-    midi_un: str = ""
-    selected_instruments_midis: dict = field(default_factory=dict)
 
     @property
     def bars(self):

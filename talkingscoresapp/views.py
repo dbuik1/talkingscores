@@ -105,39 +105,20 @@ def parse_selected_instruments(post_data, instrument_count):
 
 
 def validate_midi_query_params(query_params):
-    for required_param in ("bsi", "bpi"):
+    for required_param in ("start", "end"):
         if query_params.get(required_param) is None:
             raise forms.ValidationError(f"Missing MIDI parameter: {required_param}.")
 
-    integer_params = ("bsi", "bpi", "start", "end", "part", "ins")
-    for param in integer_params:
-        value = query_params.get(param)
-        if value is None:
-            continue
+    bars = {}
+    for param in ("start", "end"):
         try:
-            parsed_value = int(value)
+            bars[param] = int(query_params[param])
         except (TypeError, ValueError):
             raise forms.ValidationError(f"Invalid MIDI parameter: {param}.")
-        if parsed_value < 0:
+        if bars[param] < 0:
             raise forms.ValidationError(f"Invalid MIDI parameter: {param}.")
 
-    tempo_value = query_params.get("t")
-    if tempo_value is not None and tempo_value not in ("50", "100", "150"):
-        raise forms.ValidationError("Invalid MIDI tempo.")
-
-    click_value = query_params.get("c")
-    if click_value is not None and click_value not in ("n", "be"):
-        raise forms.ValidationError("Invalid MIDI click setting.")
-
-    selection_value = query_params.get("sel")
-    if selection_value is not None and selection_value not in ("all", "sel", "un"):
-        raise forms.ValidationError("Invalid MIDI selection.")
-
-    start_value = query_params.get("start")
-    end_value = query_params.get("end")
-    if (start_value is None) != (end_value is None):
-        raise forms.ValidationError("MIDI start and end parameters must be provided together.")
-    if start_value is not None and int(start_value) > int(end_value):
+    if bars["start"] > bars["end"]:
         raise forms.ValidationError("MIDI start parameter cannot be after end.")
 
 

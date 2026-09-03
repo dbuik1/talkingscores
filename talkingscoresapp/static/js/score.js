@@ -462,6 +462,8 @@
                 speed: document.getElementById("speed"),
                 voice: document.getElementById("setting-voice"),
                 click: document.getElementById("setting-click"),
+                forward: document.getElementById("setting-forward"),
+                repeat: document.getElementById("setting-repeat"),
                 rangeLabel: rangeLabel
             });
         } else if (playButton) {

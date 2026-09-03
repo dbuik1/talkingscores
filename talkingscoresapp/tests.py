@@ -53,8 +53,9 @@ def reader_context(**overrides):
         "meta_line": ["C major", "4 4", "Piano", "8 bars"],
         "score_data": {"key": "/midis/abc123/score.musicxml", "firstBar": 1, "firstNumberedBar": 1, "lastBar": 8, "totalBars": 8,
                        "pickupBar": None, "barsPerGroup": 2, "groupSizes": [1, 2, 4, 8],
-                       "midi": {"base": "/midis/abc123/score.musicxml", "query": "bsi=1&bpi=1",
-                                "voices": [{"query": "ins=1", "label": "Piano"}]}},
+                       "midi": {"base": "/midis/abc123/score.musicxml",
+                                "parts": [{"index": 0, "label": "Piano", "read": True}],
+                                "voices": [{"parts": [0], "label": "Piano"}]}},
         "music_segments": [],
         "settings": {},
         "style_name": "Musical terms",
@@ -323,7 +324,7 @@ class DownloadTests(TestCase):
 
         try:
             response = self.client.get(
-                reverse("midi", kwargs={"id": VALID_ID, "filename": "score.musicxml"}) + "?bsi=3&bpi=7&t=100&c=n"
+                reverse("midi", kwargs={"id": VALID_ID, "filename": "score.musicxml"}) + "?start=3&end=7"
             )
         finally:
             if "response" in locals():
@@ -348,11 +349,10 @@ class DownloadTests(TestCase):
     @patch("talkingscoresapp.views.MidiHandler.get_or_make_midi_file")
     def test_midi_rejects_invalid_query_params(self, mock_get_midi):
         invalid_urls = [
-            "?bsi=x&bpi=7&t=100&c=n",
-            "?bsi=3&bpi=7&start=8&end=4&t=100&c=n",
-            "?bsi=3&bpi=7&t=999&c=n",
-            "?bsi=3&bpi=7&t=100&c=bad",
-            "?bsi=3&bpi=7&sel=everything&t=100&c=n",
+            "?start=x&end=7",
+            "?start=8&end=4",
+            "?start=-1&end=7",
+            "?start=3&end=",
         ]
 
         for query_string in invalid_urls:
@@ -1396,14 +1396,18 @@ class ReaderPageTests(TestCase):
         self.assertEqual(data["barsPerGroup"], 3)
         self.assertEqual(data["groupSizes"], [1, 2, 3, 4, 8])
         self.assertEqual(data["midi"]["base"], "/midis/x/y.musicxml")
-        self.assertEqual(data["midi"]["voices"], [{"query": "ins=1", "label": "Instrument 1 (unnamed)"}])
+        self.assertEqual(data["midi"]["parts"], [{"index": 0, "label": "Instrument 1 (unnamed)", "read": True}])
+        self.assertEqual(data["midi"]["voices"], [{"parts": [0], "label": "Instrument 1 (unnamed)"}])
         self.assertIn('<div class="bar" id="bar-1" data-bar="1"', html)
         self.assertIn("<small>Bar</small> 1</h3>", html)
         self.assertNotIn("group-toggle", html)           # the script builds the group buttons
         self.assertIn('href="/score_options/x/y.musicxml"', html)
         self.assertIn('src="/static/js/player.js" defer', html)
         self.assertIn("Metronome click", html)
+        self.assertIn('id="setting-repeat"', html)
         self.assertNotIn('id="setting-voice"', html)     # one voice needs no choice
+        self.assertNotIn('id="setting-forward"', html)   # one part cannot be brought forward
+        self.assertNotIn("midijs.net", html)             # the page sounds the MIDI itself
 
     def test_the_meta_line_names_only_the_instruments_being_read(self):
         formatter = self._formatter({"style": "standard"})
@@ -1681,6 +1685,79 @@ class ReviewFixTests(TestCase):
                 self.assertFalse(glob.glob(data_path + ".lock.*.tmp"))
                 first.release_generation_lock()
                 self.assertFalse(os.path.exists(data_path + ".lock"))
+
+
+class MidiFileTests(TestCase):
+    """One MIDI file per range of bars, holding every part at its written speed."""
+
+    TWO_PART_SCORE = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Flute</part-name></score-part>
+    <score-part id="P2"><part-name>Cello</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1"><attributes><divisions>1</divisions><key><fifths>0</fifths></key>
+      <time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+      <direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>90</per-minute></metronome></direction-type></direction>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>whole</type></note></measure>
+    <measure number="2"><note><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><type>whole</type></note></measure>
+    <measure number="3"><note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><type>whole</type></note></measure>
+  </part>
+  <part id="P2">
+    <measure number="1"><attributes><divisions>1</divisions><key><fifths>0</fifths></key>
+      <time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>F</sign><line>4</line></clef></attributes>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>4</duration><type>whole</type></note></measure>
+    <measure number="2"><note><pitch><step>G</step><octave>2</octave></pitch><duration>4</duration><type>whole</type></note></measure>
+    <measure number="3"><note><pitch><step>C</step><octave>3</octave></pitch><duration>4</duration><type>whole</type></note></measure>
+  </part>
+</score-partwise>
+"""
+
+    def _handler_in(self, temp_dir, query=None):
+        from lib.midiHandler import MidiHandler
+
+        folder = os.path.join(temp_dir, VALID_ID)
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, "score.musicxml"), "w", encoding="utf-8") as score_file:
+            score_file.write(self.TWO_PART_SCORE)
+        request = Mock()
+        request.GET = query if query is not None else {}
+        return MidiHandler(request, VALID_ID, "score.musicxml")
+
+    @staticmethod
+    def _tracks_with_notes(path):
+        with open(path, "rb") as midi_file:
+            data = midi_file.read()
+        return data[:4], sum(1 for index in range(len(data) - 3) if data[index:index + 4] == b"MTrk")
+
+    def test_a_range_is_written_once_and_holds_every_part(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                handler = self._handler_in(temp_dir)
+                path = handler.make_midi_file(2, 3)
+                self.assertTrue(path.endswith("score.musicxmls2e3.mid"))
+                header, tracks = self._tracks_with_notes(path)
+                self.assertEqual(header, b"MThd")
+                self.assertGreaterEqual(tracks, 2)     # one track per part
+                self.assertFalse(glob.glob(path + ".*.partial"))
+
+                written_at = os.path.getmtime(path)
+                self.assertEqual(handler.make_midi_file(2, 3), path)
+                self.assertEqual(os.path.getmtime(path), written_at)
+
+    def test_the_requested_range_comes_from_the_query(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                handler = self._handler_in(temp_dir, {"start": "1", "end": "2"})
+                self.assertEqual(handler.requested_range(), (1, 2))
+                self.assertTrue(handler.get_or_make_midi_file().endswith("s1e2.mid"))
+
+    def test_the_whole_score_is_written_when_no_range_is_asked_for(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                handler = self._handler_in(temp_dir)
+                self.assertTrue(handler.make_midi_file().endswith("s1e3.mid"))
 
 
 def _raise_or_return(outcome):
