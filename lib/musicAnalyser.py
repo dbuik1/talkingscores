@@ -206,7 +206,8 @@ class AnalysePart:
                 # We only want to announce for immediately sequential bars
                 if current_bar == previous_bar + 1:
                     # Check for an exact match first (highest priority)
-                    if self.is_measure_used_at(self.measure_analyse_indexes_all, previous_bar, current_bar):
+                    if (self.is_measure_used_at(self.measure_analyse_indexes_all, previous_bar, current_bar)
+                            and self.measure_details.get(previous_bar) == self.measure_details.get(current_bar)):
                         context[current_bar] = {'type': 'exact', 'text': 'Same as previous bar.'}
                     # If not an exact match, check for a rhythm-only match
                     elif self.is_measure_used_at(self.measure_rhythm_analyse_indexes_all, previous_bar, current_bar):
@@ -315,6 +316,7 @@ class AnalysePart:
         self.rhythm_chord_dictionary = {}  # duration (in fractions of quarter notes) of chords, [event indexes]
 
         self.count_accidentals_in_measures = {}  # {measure number, number of accidentals in it}
+        self.measure_details = {}  # {measure number, what the indexes do not carry: spelling, ties, dynamics}
         self.count_gracenotes_in_measures = {}  # {measure number, number of accidentals in it}
         self.count_rests_in_measures = {}  # {measure number, number of accidentals in it}
 
@@ -1117,8 +1119,31 @@ class AnalysePart:
 
     # analyse each part
 
+    @staticmethod
+    def measure_detail_signature(measure):
+        """The parts of a bar the event indexes do not carry: spelling, ties and dynamics.
+
+        The indexes compare sounding pitch and duration, so two bars that differ
+        only in how a note is written, in where a tie runs, or in the dynamic over
+        them come out identical.
+        """
+        written = []
+        for element in measure.recurse().notesAndRests:
+            names = tuple(p.nameWithOctave for p in getattr(element, "pitches", ()))
+            tie = element.tie.type if getattr(element, "tie", None) else None
+            written.append((names, tie))
+        dynamics = tuple(
+            (float(element.offset), element.value)
+            for element in measure.recurse().getElementsByClass("Dynamic"))
+        return (tuple(written), dynamics)
+
+    def record_measure_details(self):
+        for measure in self.part.getElementsByClass("Measure"):
+            self.measure_details[measure.measureNumber] = self.measure_detail_signature(measure)
+
     def set_part(self, p):
         self.part = p
+        self.record_measure_details()
 
         event_index = 0
         previous_note_pitch = -1

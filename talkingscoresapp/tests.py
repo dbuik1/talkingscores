@@ -1532,6 +1532,17 @@ class ReviewedEngineTests(TestCase):
         self.assertIn("triplets quaver", text)
         self.assertEqual(text.count("end tuplet"), 1)
 
+    def test_a_bar_spelt_differently_is_not_collapsed_into_the_one_before(self):
+        from music21 import note
+        sharps = [note.Note("F#4") for _ in range(4)]
+        flats = [note.Note("G-4") for _ in range(4)]
+        score = self._score_of_bars([sharps, flats])
+        text = self._text(score, {"style": "standard", "repetition_mode": "learning", "bars_at_a_time": 2})
+        self.assertNotIn("Same as bar", text)
+        self.assertIn("G flat", text)
+        repeated = self._score_of_bars([sharps, [note.Note("F#4") for _ in range(4)]])
+        self.assertIn("Same as bar 1", self._text(repeated, {"style": "standard", "repetition_mode": "learning", "bars_at_a_time": 2}))
+
     def test_grace_notes_are_read_before_the_note_they_decorate(self):
         from music21 import note
         grace = note.Note("D5").getGrace()
