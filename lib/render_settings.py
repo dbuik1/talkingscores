@@ -21,24 +21,15 @@ STYLE_NAMES = {
     "reference": "Everything",
 }
 
-# What each style sounds like, in one line and in one bar of the same music, so
-# the set-up page can show a reader the difference rather than describe it. A
-# style without both is a style nobody can choose knowingly.
+# One line naming what a style does differently, shown beside a bar the engine
+# reads in that style. A style without both is a style nobody can choose
+# knowingly.
 STYLE_SUMMARIES = {
-    "plain": "No music jargon. One bar at a time.",
-    "standard": "Rhythm then pitch, one line per beat.",
-    "compact": "Pitch first, octave only when it changes.",
-    "braille40": "One bar fits a 40-cell line.",
-    "reference": "Every detail the file holds, one beat per line.",
-}
-
-STYLE_SAMPLES = {
-    "plain": "Bar 1. First note: hold a D for one beat. Then four quick notes: G, A, B, C.",
-    "standard": "Beat 1: crotchet, D above middle C. Beat 2: quaver, G; quaver, A. Beat 3: quaver, B; quaver, C.",
-    "compact": "D5 crotchet, G4 A B C5 quavers.",
-    "braille40": "Bar 1: Cr D hi, Qu G mid, Qu A, Qu B, Qu C hi",
-    "reference": ("Bar 1, beat 1: crotchet D5, stem down, beamed none. Beat 2: quaver G4, beam start; "
-                  "quaver A4, beam end. Beat 3: quaver B4, beam start; quaver C5, beam end."),
+    "plain": "Note lengths counted in beats, with no musical terms.",
+    "standard": "Rhythm then pitch, grouped by beat.",
+    "compact": "No beat numbers, octave numbers only when the octave changes.",
+    "braille40": "Abbreviated, pitch first, sized for a braille display.",
+    "reference": "Every note named in full, with intervals and beams.",
 }
 
 DEFAULT_STYLE = "standard"

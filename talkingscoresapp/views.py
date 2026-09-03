@@ -11,6 +11,7 @@ import json
 import logging
 import re
 import tempfile
+from functools import lru_cache
 from urllib.parse import urlparse
 from talkingscores.settings import BASE_DIR
 from lib.midiHandler import MidiHandler
@@ -19,8 +20,8 @@ import requests
 from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress
 from talkingscoresapp.models import RemoteAddressNotAllowed, RemoteHostNotFound, RemoteFetchRefused
 from talkingscoresapp.models import remove_file_quietly
-from lib.render_settings import (DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES, STYLE_SAMPLES,
-                                 STYLE_SUMMARIES)
+from lib.render_settings import DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES
+from lib.style_samples import style_samples
 
 
 def clean_style(value):
@@ -48,17 +49,22 @@ CHECKBOX_FIELDS = (
 )
 
 # The set-up page reads this rather than naming the styles itself, so a style
-# added to the engine reaches the page with the words that describe it.
-STYLE_CHOICES = [
-    {
-        "id": style_id,
-        "name": STYLE_NAMES[style_id],
-        "summary": STYLE_SUMMARIES[style_id],
-        "sample": STYLE_SAMPLES[style_id],
-        "mono": style_id == "braille40",
-    }
-    for style_id in STYLE_IDS
-]
+# added to the engine reaches the page with the words that describe it. The
+# samples are read out of the engine on first use, not at import, so starting
+# the site does not wait on a score being parsed five times.
+@lru_cache(maxsize=1)
+def style_choices():
+    samples = style_samples()
+    return [
+        {
+            "id": style_id,
+            "name": STYLE_NAMES[style_id],
+            "summary": STYLE_SUMMARIES[style_id],
+            "sample": samples.get(style_id, ""),
+            "mono": style_id == "braille40",
+        }
+        for style_id in STYLE_IDS
+    ]
 
 
 HEX_COLOUR_PATTERN = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
@@ -484,7 +490,7 @@ def options(request, id, filename):
         form = TalkingScoreGenerationOptionsForm(request.POST)
         if not form.is_valid():
             add_rhythm_colour_defaults(score_info)
-            context = {'form': form, 'score_info': score_info, 'style_choices': STYLE_CHOICES,
+            context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
                        'chosen_style': clean_style(request.POST.get('style', '')),
                        'submitted': submitted_settings(request.POST)}
             return render(request, 'options.html', context)
@@ -495,7 +501,7 @@ def options(request, id, filename):
             form.add_error(None, exc)
             add_rhythm_colour_defaults(score_info)
             # The part boxes are what the reader has to change, so they are marked as such.
-            context = {'form': form, 'score_info': score_info, 'style_choices': STYLE_CHOICES,
+            context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
                        'chosen_style': clean_style(request.POST.get('style', '')),
                        'submitted': submitted_settings(request.POST),
                        'instruments_invalid': True}
@@ -556,7 +562,7 @@ def options(request, id, filename):
         add_rhythm_colour_defaults(score_info)
 
         form = TalkingScoreGenerationOptionsForm()
-        context = {'form': form, 'score_info': score_info, 'style_choices': STYLE_CHOICES,
+        context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
                    'chosen_style': DEFAULT_STYLE}
         return render(request, 'options.html', context)
 

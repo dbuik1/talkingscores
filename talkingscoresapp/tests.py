@@ -1325,6 +1325,17 @@ class ReadingStyleTests(TestCase):
                 with open(os.path.join(self.GOLDEN_DIR, f"{style}.txt"), encoding="utf-8") as golden:
                     self.assertEqual(text, golden.read())
 
+    def test_the_set_up_page_samples_come_from_the_engine(self):
+        from lib.render_settings import STYLE_IDS
+        from lib.style_samples import style_samples
+        samples = style_samples()
+        for style in STYLE_IDS:
+            with self.subTest(style=style):
+                self.assertIn("D", samples[style])
+        # Each style words the same bar differently, so no two samples read alike.
+        self.assertEqual(len(set(samples.values())), len(STYLE_IDS))
+        self.assertNotIn("Bar 1", samples["standard"])
+
     def test_page_uses_colour_classes_not_inline_styles(self):
         from talkingscoreslib import HTMLTalkingScoreFormatter
         formatter = self._formatter({
