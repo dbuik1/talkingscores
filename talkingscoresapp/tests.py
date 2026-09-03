@@ -1583,6 +1583,15 @@ class ReviewedEngineTests(TestCase):
         self.assertIn("Bar 7", text)
         self.assertIn("Bar 8", text)
 
+    def test_drums_struck_together_are_read_and_do_not_stop_the_reading(self):
+        from music21 import note, percussion
+        struck = percussion.PercussionChord([note.Unpitched(), note.Unpitched()])
+        struck.quarterLength = 1.0
+        score = self._score_of_bars([[struck, note.Unpitched(quarterLength=3)]])
+        text = self._text(score, {"style": "standard"})
+        self.assertIn("crotchet 2 unpitched together", text)
+        self.assertIn("dotted minim unpitched", text)
+
     def test_grace_notes_are_read_before_the_note_they_decorate(self):
         from music21 import note
         grace = note.Note("D5").getGrace()

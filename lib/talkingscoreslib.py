@@ -525,6 +525,9 @@ class Music21TalkingScore(TalkingScoreBase):
             return TSRest()
         if element_type == 'Unpitched':
             return TSUnpitched()
+        if element_type == 'PercussionChord':
+            # Drums struck together carry no pitch to name, only how many there are.
+            return TSUnpitched(count=len(element.notes))
         if element_type == 'ChordSymbol':
             if not self.settings.chord_symbols:
                 return None

@@ -1280,7 +1280,9 @@ class AnalysePart:
                 self.total_chord_duration += d
                 self.chord_count += 1
             elif n.isChord == False:
-                if isinstance(n, note.Unpitched):
+                # A percussion chord is neither a chord nor a single note, and has
+                # no pitch to index.
+                if isinstance(n, note.Unpitched) or getattr(n, "pitch", None) is None:
                     ai.event_type = 'u'
                 else:
 
@@ -1333,7 +1335,7 @@ class AnalysePart:
                         self.rhythm_note_dictionary[d].append(event_index)
                     ai.rhythm_note_index = [d, len(self.rhythm_note_dictionary.get(d))-1]
 
-                if isinstance(n, note.Unpitched):
+                if getattr(n, "pitch", None) is None:
                     previous_note_pitch = -1
                 else:
                     previous_note_pitch = n.pitch.midi

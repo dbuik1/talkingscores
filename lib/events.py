@@ -81,6 +81,11 @@ class TSPitch:
 class TSUnpitched(TSEvent):
     kind = "unpitched"
 
+    def __init__(self, count=1):
+        super().__init__()
+        # More than one where several drums are struck together.
+        self.count = count
+
 
 class TSRest(TSEvent):
     kind = "rest"

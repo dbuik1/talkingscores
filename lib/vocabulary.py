@@ -242,7 +242,9 @@ class Vocabulary:
         return f'{duration} rest'.strip()
 
     def unpitched(self, event, beat_quarter_length=1.0):
-        return f'{self.duration(event, beat_quarter_length)} unpitched'.strip()
+        count = getattr(event, 'count', 1)
+        name = 'unpitched' if count == 1 else f'{count} unpitched together'
+        return f'{self.duration(event, beat_quarter_length)} {name}'.strip()
 
     def tie(self, tie_type):
         if self.settings.abbreviations:
