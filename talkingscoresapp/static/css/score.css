@@ -19,44 +19,48 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
+    min-height: 48px;
+    padding: 6px 0;
 }
 html:not(.js) .group-toggle { cursor: default; }
-.group-toggle .chev { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex: none; transition: transform 0.15s; }
+.group-toggle .chev { width: 0.8em; height: 0.8em; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex: none; transition: transform 0.15s; }
 html:not(.js) .group-toggle .chev { display: none; }
 .group-toggle[aria-expanded="true"] .chev { transform: rotate(90deg); }
 .group h2:focus-visible { outline: none; }
-.group:not(.current) h2 { font-size: 24px; font-weight: 400; }
-.group h2 .prev { color: var(--muted); font-family: var(--font-body); font-size: 17px; margin-left: auto; font-weight: 400; }
+.group:not(.current) h2 { font-size: 1.5rem; font-weight: 400; }
+.group h2 .prev { color: var(--muted); font-family: var(--font-body); font-size: 1.0625rem; margin-left: auto; font-weight: 400; }
 .group.current h2 .prev, html:not(.js) .prev { display: none; }
 html.js .group:not(.current) > .body { display: none; }
 
 .bar {
     display: grid;
-    grid-template-columns: 104px minmax(0, 1fr);
+    grid-template-columns: 6.5rem minmax(0, 1fr);
     gap: 0 24px;
     padding: 24px 0 32px;
-    border-top: 1px dashed var(--rule);
+    /* Where one bar stops and the next begins is the reader's main landmark, so
+       this rule has to be visible rather than a hairline. */
+    border-top: 1px dashed var(--edge);
 }
 .bar:first-child { border-top: 0; }
 .bar h3 {
     grid-column: 1;
     font-family: var(--font-heading);
-    font-size: 64px;
+    font-size: 4rem;
     font-weight: 400;
     line-height: 1;
     color: var(--ink);
     font-variant-numeric: lining-nums tabular-nums;
 }
-.bar h3 small { display: block; font-size: 16px; font-family: var(--font-body); color: var(--muted); margin-bottom: 6px; }
+.bar h3 small { display: block; font-size: 1rem; font-family: var(--font-body); color: var(--muted); margin-bottom: 6px; }
 /* "Pickup bar" is words rather than a number, so it outgrows the number column
    as soon as the reader widens the letter spacing. */
-.bar h3.words { font-size: 32px; line-height: 1.1; overflow-wrap: anywhere; }
+.bar h3.words { font-size: 2rem; line-height: 1.1; overflow-wrap: anywhere; }
 .bar .parts { grid-column: 2; display: flex; flex-direction: column; gap: 22px; }
-.part .label { font-weight: 700; font-size: 16px; color: var(--muted); margin-bottom: 6px; }
+.part .label { font-weight: 700; font-size: 1rem; color: var(--muted); margin-bottom: 6px; }
 .part .change { font-style: italic; margin: 4px 0; }
 .part .same {
     background: var(--panel);
-    border: 1px solid var(--rule);
+    border: 1px solid var(--edge);
     padding: 8px 14px;
     border-radius: 4px;
     font-weight: 700;
@@ -65,14 +69,17 @@ html.js .group:not(.current) > .body { display: none; }
     margin-bottom: 8px;
 }
 .part details { border: 0; }
-.part details > summary { font-size: 18px; min-height: 48px; }
+.part details > summary { font-size: 1.125rem; min-height: 48px; }
 
 .beats li {
     display: grid;
-    grid-template-columns: 6.4em minmax(0, 1fr);
-    gap: 0 20px;
+    /* The label column is measured in note text, so it has to hold the longest
+       beat label and no more: any slack becomes blank paper to cross between a
+       label and the notes it belongs to, and it widens with the text size. */
+    grid-template-columns: 3.6em minmax(0, 1fr);
+    gap: 0 16px;
     padding: 10px 0;
-    border-bottom: 1px solid var(--rule);
+    border-bottom: 1px solid var(--edge);
     font-size: var(--note);
     line-height: 1.4;
 }
@@ -91,10 +98,10 @@ html.stack .bar { grid-template-columns: minmax(0, 1fr); gap: 12px; }
    second track collapses the declared one to nothing and prints the bar number
    over the notes. */
 html.stack .bar h3, html.stack .bar .parts { grid-column: 1; }
-html.stack .bar h3 { display: flex; align-items: baseline; gap: 14px; font-size: 80px; }
-html.stack .bar h3 small { margin: 0; font-size: 18px; }
-html.stack .bar h3.words { font-size: 32px; }
-html[data-size="xlarge"] .bar h3 { font-size: 80px; }
+html.stack .bar h3 { display: flex; align-items: baseline; gap: 14px; font-size: 5rem; }
+html.stack .bar h3 small { margin: 0; font-size: 1.125rem; }
+html.stack .bar h3.words { font-size: 2rem; }
+html[data-size="xlarge"] .bar h3 { font-size: 5rem; }
 
 .endline {
     display: flex;
@@ -103,7 +110,7 @@ html[data-size="xlarge"] .bar h3 { font-size: 80px; }
     gap: 16px;
     flex-wrap: wrap;
     padding: 16px 0 24px;
-    border-top: 1px solid var(--rule);
+    border-top: 1px solid var(--edge);
 }
 
 /* Colour from the set-up page lands in a separate style block. High contrast is one colour on one
@@ -116,13 +123,12 @@ html[data-theme="contrast"] .colour-background [class*="colour-"] {
 }
 /* Phone */
 @media (max-width: 640px) {
-    :root { --note: 26px; }
-    html[data-size="large"] { --note: 36px; }
-    html[data-size="xlarge"] { --note: 48px; }
+    /* The text size stays as the reader set it: a narrow window is as often a
+       magnified one as it is a phone, and the note text is the reason to be here. */
     .bar { grid-template-columns: minmax(0, 1fr); gap: 8px; }
     /* Same single-column reset as the stacked layout. */
     .bar h3, .bar .parts { grid-column: 1; }
-    .bar h3 { display: flex; align-items: baseline; gap: 12px; font-size: 40px; }
+    .bar h3 { display: flex; align-items: baseline; gap: 12px; font-size: 2.5rem; }
     .bar h3 small { margin: 0; }
     .beats li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
     .beats li b { padding-top: 0; }

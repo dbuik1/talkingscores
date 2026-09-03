@@ -88,7 +88,7 @@ body {
     background: var(--paper);
     color: var(--ink);
     font-family: var(--font-body);
-    font-size: 20px;
+    font-size: 1.25rem;
     line-height: 1.5;
 }
 html[data-size="browser"] body { font-size: 1.25rem; }
@@ -97,9 +97,9 @@ a { color: var(--link); text-decoration: underline; text-underline-offset: 3px; 
 a:hover { color: var(--ink); }
 
 h1, h2, h3 { font-family: var(--font-heading); font-weight: 500; margin: 0; letter-spacing: -0.01em; }
-h1 { font-size: 30px; line-height: 1.15; }
-h2 { font-size: 28px; line-height: 1.2; }
-h3 { font-size: 24px; line-height: 1.25; }
+h1 { font-size: 1.875rem; line-height: 1.15; }
+h2 { font-size: 1.75rem; line-height: 1.2; }
+h3 { font-size: 1.5rem; line-height: 1.25; }
 p { margin: 0; }
 ul, ol { margin: 0; padding: 0; list-style: none; }
 
@@ -124,7 +124,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
     color: var(--paper);
     padding: 8px 12px;
     text-decoration: none;
-    font-size: 18px;
+    font-size: 1.125rem;
     z-index: 1;
 }
 .skip:focus { left: 16px; }
@@ -142,35 +142,35 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
     align-items: center;
     gap: 12px;
     font-family: var(--font-heading);
-    font-size: 19px;
+    font-size: 1.1875rem;
     font-weight: 600;
     text-decoration: none;
     color: var(--ink);
 }
 .brand svg { width: 28px; height: 28px; }
-.top nav { display: flex; gap: 24px; font-size: 17px; }
+.top nav { display: flex; gap: 24px; font-size: 1.0625rem; }
 
 .footer {
     border-top: 1px solid var(--rule);
     padding-top: 16px;
-    font-size: 16px;
+    font-size: 1rem;
     color: var(--muted);
     display: flex;
     gap: 24px;
     flex-wrap: wrap;
 }
 
-.meta { font-size: 17px; color: var(--muted); }
+.meta { font-size: 1.0625rem; color: var(--muted); }
 .meta b { color: var(--ink); font-weight: 700; }
 .muted { color: var(--muted); }
-.small { font-size: 17px; }
+.small { font-size: 1.0625rem; }
 
 .callout {
     border: 1px solid var(--rule);
     border-left: 6px solid var(--accent);
     background: var(--panel);
     padding: 16px 20px;
-    font-size: 18px;
+    font-size: 1.125rem;
 }
 
 /* Controls */
@@ -187,13 +187,15 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
     background: var(--paper);
     color: var(--ink);
     font: inherit;
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 700;
     cursor: pointer;
     text-decoration: none;
 }
-.btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-.btn:disabled { opacity: 0.5; cursor: default; }
+.btn svg { width: 1.25em; height: 1.25em; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+/* A downloaded page opens with playback turned off, so the disabled state is the
+   one these buttons are most often read in and it keeps a legible ink. */
+.btn:disabled { color: var(--muted); border-color: var(--rule); background: var(--panel); cursor: default; }
 
 .input, select.input {
     min-height: 48px;
@@ -203,7 +205,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
     color: var(--ink);
     padding: 0 14px;
     font: inherit;
-    font-size: 18px;
+    font-size: 1.125rem;
 }
 input.input { width: 6em; }
 select.input { padding-right: 10px; }
@@ -222,14 +224,15 @@ select.input { padding-right: 10px; }
     padding: 12px 0;
     border-top: 1px solid var(--rule);
     border-bottom: 1px solid var(--rule);
-    font-size: 18px;
+    font-size: 1.125rem;
 }
 .toolbar .sep { width: 1px; align-self: stretch; background: var(--rule); margin: 0 4px; }
 .pos { font-weight: 700; }
-.status { display: flex; flex-direction: column; gap: 2px; font-size: 16px; }
+.status { display: flex; flex-direction: column; gap: 2px; font-size: 1rem; }
 .status b { font-weight: 700; }
-.error { color: var(--error); font-weight: 700; }
-.error:empty { display: none; }
+/* The message takes a line of its own whether or not there is one to show, so a
+   rejected bar number does not move every button after it. */
+.error { color: var(--error); font-weight: 700; flex-basis: 100%; }
 
 /* Disclosures */
 
@@ -245,7 +248,7 @@ summary {
     font-weight: 700;
 }
 summary::-webkit-details-marker { display: none; }
-summary .chev { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex: none; transition: transform 0.15s; }
+summary .chev { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex: none; transition: transform 0.15s; }
 details[open] > summary .chev { transform: rotate(90deg); }
 /* The summary carries the heading a reader jumps between, so the heading sits
    inside the control and takes the control's own type rather than a title's. */
@@ -253,7 +256,7 @@ summary h2 { font: inherit; margin: 0; letter-spacing: normal; }
 
 .disc-row { display: flex; flex-wrap: wrap; gap: 8px 24px; }
 .disc-row > details { border: 0; }
-.disc-row > details > summary { min-height: 48px; font-size: 17px; font-weight: 400; }
+.disc-row > details > summary { min-height: 48px; font-size: 1.0625rem; font-weight: 400; }
 .disc-row > details[open] { flex-basis: 100%; }
 
 .panel {
@@ -267,7 +270,7 @@ summary h2 { font: inherit; margin: 0; letter-spacing: normal; }
     margin-top: 8px;
 }
 .panel .row { display: flex; gap: 16px 28px; align-items: center; flex-wrap: wrap; }
-.panel h2 { font-family: var(--font-body); font-size: 20px; font-weight: 700; }
+.panel h2 { font-family: var(--font-body); font-size: 1.25rem; font-weight: 700; }
 
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field > legend, .field > .legend { font-weight: 700; padding: 0; }
@@ -288,7 +291,7 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 }
 .size:has(input:checked), .size.checked { border-color: var(--accent); background: var(--panel2); }
 .size input { width: 28px; height: 28px; margin: 4px 0 0; accent-color: var(--accent); }
-.size .name { font-weight: 700; font-size: 20px; }
+.size .name { font-weight: 700; font-size: 1.25rem; }
 /* The sample is set at the size it is describing, so at extra large a single
    word is wider than the panel and has to be allowed to break. */
 .size .demo { grid-column: 2; line-height: 1.35; overflow-wrap: anywhere; }
@@ -296,16 +299,17 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .check { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; cursor: pointer; }
 .check input { width: 26px; height: 26px; margin: 0; accent-color: var(--accent); }
 
-.contents li { padding: 6px 0; border-bottom: 1px solid var(--rule); display: flex; gap: 16px; flex-wrap: wrap; align-items: baseline; }
+.contents li { border-bottom: 1px solid var(--edge); display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.contents li a { display: inline-flex; align-items: center; min-height: 44px; }
 .contents li:last-child { border-bottom: 0; }
-.contents .prev { color: var(--muted); font-size: 17px; }
+.contents .prev { color: var(--muted); font-size: 1.0625rem; }
 
 .facts { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 6px 24px; margin: 0; }
 .facts dt { font-weight: 700; }
 .facts dt, .facts dd { overflow-wrap: anywhere; }
 .facts dd { margin: 0; }
 .about { display: flex; flex-direction: column; gap: 16px; }
-.about h3 { font-family: var(--font-body); font-size: 18px; font-weight: 700; margin-top: 8px; }
+.about h3 { font-family: var(--font-body); font-size: 1.125rem; font-weight: 700; margin-top: 8px; }
 .links { display: flex; flex-wrap: wrap; gap: 12px; }
 
 .live { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
@@ -313,7 +317,6 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 /* Phone */
 @media (max-width: 640px) {
     .wrap { padding: 20px 16px 48px; gap: 20px; }
-    .top nav { display: none; }
     .toolbar .btn { flex: 1 1 auto; }
 }
 
