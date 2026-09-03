@@ -1558,6 +1558,15 @@ class ReviewedEngineTests(TestCase):
         self.assertIn("C tied to next E G", bar_one)
         self.assertIn("C E G tied to next", bar_two)
 
+    def test_a_hairpin_ends_after_the_note_it_closes_on(self):
+        from music21 import dynamics, note
+        notes = [note.Note("C4"), note.Note("D4"), note.Note("E4"), note.Note("F4")]
+        score = self._score_of_bars([notes])
+        score.parts[0].insert(0, dynamics.Crescendo(notes[0], notes[2]))
+        text = self._text(score, {"style": "standard"})
+        self.assertIn("crescendo starts, crotchet mid C", text)
+        self.assertIn("E, crescendo ends", text)
+
     def test_grace_notes_are_read_before_the_note_they_decorate(self):
         from music21 import note
         grace = note.Note("D5").getGrace()

@@ -399,13 +399,17 @@ class DescriptionBuilder:
         """
         One moment in the bar: dynamics and chord symbols lead, grace notes come
         next, and only the notes that sound together are joined with "together with".
+        A hairpin's ending follows the note it closes on.
         """
-        leading = [event for event in events if event.kind in LEADING_KINDS]
+        leading = [event for event in events
+                   if event.kind in LEADING_KINDS and not getattr(event, "trailing", False)]
+        trailing = [event for event in events if getattr(event, "trailing", False)]
         graces = [event for event in events if event.kind not in LEADING_KINDS and event.grace]
         sounding = [event for event in events if event.kind not in LEADING_KINDS and not event.grace]
         only_event = len(sounding) == 1
         rendered = []
-        for group, joiner in ((leading, IN_BEAT_SEPARATOR), (graces, IN_BEAT_SEPARATOR), (sounding, TOGETHER)):
+        for group, joiner in ((leading, IN_BEAT_SEPARATOR), (graces, IN_BEAT_SEPARATOR),
+                              (sounding, TOGETHER), (trailing, IN_BEAT_SEPARATOR)):
             group_fragments = []
             for event in group:
                 fragments = self.render_event(event, state, beat_ql, only_event_on_beat=only_event)

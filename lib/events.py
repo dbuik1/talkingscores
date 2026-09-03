@@ -39,6 +39,9 @@ class TSDynamic(TSEvent):
         super().__init__()
         self.long_name = long_name
         self.short_name = short_name
+        # A hairpin closes on its last note, so its ending is read after that note
+        # rather than before it.
+        self.trailing = False
 
 
 class TSChordSymbol(TSEvent):

@@ -445,6 +445,7 @@ class Music21TalkingScore(TalkingScoreBase):
                 # The hairpin closes on its last note, so the ending is read with that note.
                 # A wedge the file never closes has nothing to end.
                 event = TSDynamic(long_name=end_name)
+                event.trailing = True
                 event.start_offset = last.offset
                 event.beat = last.beat
                 intermediate_events.setdefault(last.measureNumber, {}).setdefault(
