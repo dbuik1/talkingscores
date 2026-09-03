@@ -9,7 +9,7 @@
     <h1 style="margin-top: 8px;">Preparing your score</h1>
 </div>
 
-<p id="processing-status" role="status" aria-live="polite">Starting to read the file</p>
+<p id="processing-status" role="status">Starting to read the file</p>
 
 <div id="processing-next" tabindex="-1" hidden>
     <p id="processing-next-message"></p>
@@ -33,7 +33,8 @@
     const pollDeadline = Date.now() + 15 * 60 * 1000;
 
     function setProcessingStatus(message) {
-        if (processingStatus && message) {
+        // Writing the same text again re-announces it, so an unchanged poll is silent.
+        if (processingStatus && message && processingStatus.textContent !== message) {
             processingStatus.textContent = message;
         }
     }

@@ -34,7 +34,7 @@ html[data-theme="dark"] {
 }
 
 @media (prefers-color-scheme: dark) {
-    html:not([data-theme="light"]):not([data-theme="contrast"]) {
+    html:not([data-theme="light"]):not([data-theme="dark"]):not([data-theme="contrast"]) {
         --paper: #1b1a18;
         --ink: #ece7dd;
         --muted: #b3aca0;
@@ -97,7 +97,7 @@ h3 { font-size: 24px; line-height: 1.25; }
 p { margin: 0; }
 ul, ol { margin: 0; padding: 0; list-style: none; }
 
-:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 3px var(--paper); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 6px var(--paper); }
 
 .wrap {
     max-width: 880px;
@@ -237,6 +237,9 @@ summary {
 summary::-webkit-details-marker { display: none; }
 summary .chev { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex: none; transition: transform 0.15s; }
 details[open] > summary .chev { transform: rotate(90deg); }
+/* The summary carries the heading a reader jumps between, so the heading sits
+   inside the control and takes the control's own type rather than a title's. */
+summary h2 { font: inherit; margin: 0; letter-spacing: normal; }
 
 .disc-row { display: flex; flex-wrap: wrap; gap: 8px 24px; }
 .disc-row > details { border: 0; }
@@ -258,6 +261,7 @@ details[open] > summary .chev { transform: rotate(90deg); }
 
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field > legend, .field > .legend { font-weight: 700; padding: 0; }
+.legend.prompt { font-weight: 400; margin-bottom: 12px; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 
 .sizes { display: flex; flex-direction: column; gap: 12px; }
@@ -277,7 +281,7 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .size .name { font-weight: 700; font-size: 20px; }
 .size .demo { grid-column: 2; line-height: 1.35; }
 
-.check { display: flex; gap: 12px; align-items: center; cursor: pointer; }
+.check { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; cursor: pointer; }
 .check input { width: 26px; height: 26px; margin: 0; accent-color: var(--accent); }
 
 .contents li { padding: 6px 0; border-bottom: 1px solid var(--rule); display: flex; gap: 16px; flex-wrap: wrap; align-items: baseline; }
@@ -336,12 +340,12 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 /* The pages either side of the reading page: opening a score, setting it up,
    waiting for it and being told when it could not be read. */
 
-main { display: flex; flex-direction: column; gap: 32px; }
+body:not(.reader) main { display: flex; flex-direction: column; gap: 32px; }
 
 .lead { font-size: 22px; margin-top: 12px; }
 
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.btn.big, .btn.primary { min-height: 60px; padding: 0 28px; font-size: 22px; }
+.btn.primary { min-height: 60px; padding: 0 28px; font-size: 22px; }
 
 .form { display: flex; flex-direction: column; gap: 24px; }
 .form > .btn { align-self: flex-start; }
@@ -350,9 +354,6 @@ main { display: flex; flex-direction: column; gap: 32px; }
 
 .error-callout { border-left-color: var(--error); }
 
-/* The file a reader has chosen sits next to the button that chose it. */
-.chosen { font-weight: 700; }
-.chosen:empty { display: none; }
 input[type="file"] { font: inherit; font-size: 18px; }
 input[type="file"]::file-selector-button {
     min-height: 48px;
@@ -379,10 +380,12 @@ input[type="url"].input { width: 100%; max-width: 520px; }
     border-radius: 8px;
     padding: 16px 20px;
     background: var(--paper);
-    cursor: pointer;
 }
 .card:has(input:checked) { border-color: var(--accent); background: var(--panel); }
 .card input { width: 28px; height: 28px; margin: 4px 0 0; accent-color: var(--accent); }
+/* The sample sits outside the label, so the name and the line describing the
+   style are the whole click target and the whole spoken name of the choice. */
+.card label { cursor: pointer; }
 .card .name { font-weight: 700; font-size: 22px; }
 .card .who { color: var(--muted); font-size: 17px; display: block; }
 .card .sample {
@@ -406,16 +409,11 @@ input[type="url"].input { width: 100%; max-width: 520px; }
 .box-set > legend { font-weight: 700; padding: 0 8px; }
 .setting { display: flex; align-items: center; gap: 8px; }
 
-/* What has been done and what is still to do while a score is being written. */
-.stages { display: flex; flex-direction: column; gap: 10px; font-size: 22px; }
-.stages li { display: flex; gap: 14px; align-items: center; }
-.stages svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-.stages .todo { color: var(--muted); }
 
 .noscript { border: 1px solid var(--rule); padding: 12px 16px; font-size: 18px; background: var(--panel); }
 
 @media (max-width: 640px) {
-    main { gap: 20px; }
+    body:not(.reader) main { gap: 20px; }
     .lead { font-size: 20px; }
     .card { grid-template-columns: 28px minmax(0, 1fr); padding: 14px 16px; }
 }
@@ -429,7 +427,4 @@ input[type="url"].input { width: 100%; max-width: 520px; }
 .entry:last-child { border-bottom: 0; padding-bottom: 0; }
 .entry h2 { font-size: 20px; color: var(--muted); font-family: var(--font-body); font-weight: 700; }
 
-legend, .legend { font-weight: 700; padding: 0; }
-.box-set > legend { padding: 0 8px; }
 input[type="color"] { width: 56px; height: 40px; padding: 2px; border: 2px solid var(--muted); border-radius: 6px; background: var(--paper); }
-.check { flex-wrap: wrap; }

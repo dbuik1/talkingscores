@@ -19,7 +19,7 @@
                 if (saved.theme && saved.theme !== "system") {
                     document.documentElement.setAttribute("data-theme", saved.theme);
                 }
-                if (saved.size) {
+                if (["large", "xlarge", "browser"].indexOf(saved.size) !== -1) {
                     document.documentElement.setAttribute("data-size", saved.size);
                 }
             } catch (error) {

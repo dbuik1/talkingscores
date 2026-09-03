@@ -69,12 +69,15 @@ env_csrf_trusted_origins = [
 
 CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(DEFAULT_CSRF_TRUSTED_ORIGINS + env_csrf_trusted_origins))
 
-# Scripts come from this origin. The site pages read the stored colours and text
-# size from an inline script before the page paints, so 'unsafe-inline' stays on
-# script-src until that moves to a static file. The score page carries its colour
-# palette as an inline style block and loads its typefaces from Google Fonts. The
-# player fetches its MIDI files from this origin and sounds them itself, so no
-# other host is named, and it needs neither a worker nor a media element to do it.
+# Scripts come from this origin. 'unsafe-inline' is still on script-src because
+# several scripts are inline: the settings the site pages read before painting,
+# the set-up and processing pages, the reading page's own script, and the
+# onsubmit handlers in its forms. A nonce would not cover those handlers, so
+# dropping 'unsafe-inline' means moving all of them out first. Styles are inline
+# in the same way: the score page's colour palette is written into the page, and
+# its typefaces come from Google Fonts. The player fetches its MIDI files from
+# this origin and sounds them itself, so no other host is named, and it needs
+# neither a worker nor a media element to do it.
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline'; "

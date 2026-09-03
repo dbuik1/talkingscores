@@ -10,48 +10,33 @@
 </div>
 
 {% if form.errors %}
-<div role="alert">
+<div id="setup-errors" tabindex="-1">
+    <h2 class="legend">The reading was not generated</h2>
     {% for error in form.non_field_errors %}<p class="callout error-callout">{{ error }}</p>{% endfor %}
-    {% for field in form %}{% for error in field.errors %}<p class="callout error-callout">{{ error }}</p>{% endfor %}{% endfor %}
+    {% for field in form %}{% for error in field.errors %}<p class="callout error-callout">{{ field.label }}: {{ error }}</p>{% endfor %}{% endfor %}
 </div>
+{{ submitted|json_script:"rejected-settings" }}
 {% endif %}
 
 <form class="form" method="post" id="setup">
     {% csrf_token %}
 
     <fieldset>
-        <legend class="legend" style="font-weight: 400; margin-bottom: 12px;">Pick a style. Each one shows the same bar written its way.</legend>
+        <legend class="legend prompt">Pick a style. Each one shows the same bar written its way.</legend>
         <div class="cards">
-            <label class="card">
-                <input type="radio" name="style" value="plain">
-                <span><span class="name">Everyday words</span><span class="who">No music jargon. One bar at a time.</span></span>
-                <span class="sample">Bar 1. First note: hold a D for one beat. Then four quick notes: G, A, B, C.</span>
-            </label>
-            <label class="card">
-                <input type="radio" name="style" value="standard" checked>
-                <span><span class="name">Musical terms</span><span class="who">Rhythm then pitch, one line per beat.</span></span>
-                <span class="sample">Beat 1: crotchet, D above middle C. Beat 2: quaver, G; quaver, A. Beat 3: quaver, B; quaver, C.</span>
-            </label>
-            <label class="card">
-                <input type="radio" name="style" value="compact">
-                <span><span class="name">Short</span><span class="who">Pitch first, octave only when it changes.</span></span>
-                <span class="sample">D5 crotchet, G4 A B C5 quavers.</span>
-            </label>
-            <label class="card">
-                <input type="radio" name="style" value="braille40">
-                <span><span class="name">Braille display</span><span class="who">One bar fits a 40-cell line.</span></span>
-                <span class="sample mono">Bar 1: Cr D hi, Qu G mid, Qu A, Qu B, Qu C hi</span>
-            </label>
-            <label class="card">
-                <input type="radio" name="style" value="reference">
-                <span><span class="name">Everything</span><span class="who">Every detail the file holds, one beat per line.</span></span>
-                <span class="sample">Bar 1, beat 1: crotchet D5, stem down, beamed none. Beat 2: quaver G4, beam start; quaver A4, beam end. Beat 3: quaver B4, beam start; quaver C5, beam end.</span>
-            </label>
+            {% for choice in style_choices %}
+            <div class="card">
+                <input type="radio" name="style" value="{{ choice.id }}" id="style-{{ choice.id }}"
+                       aria-describedby="sample-{{ choice.id }}"{% if choice.id == chosen_style %} checked{% endif %}>
+                <label for="style-{{ choice.id }}"><span class="name">{{ choice.name }}</span><span class="who">{{ choice.summary }}</span></label>
+                <span class="sample{% if choice.mono %} mono{% endif %}" id="sample-{{ choice.id }}">{{ choice.sample }}</span>
+            </div>
+            {% endfor %}
         </div>
     </fieldset>
 
-    <details>
-        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Customise the words, parts, playback, colour and layout</summary>
+    <details{% if form.errors %} open{% endif %}>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Customise the words, parts, playback, colour and layout</h2></summary>
         <div class="panel">
             <p class="small muted">Only the Musical terms style follows the wording set here. Every other style fixes its own wording; the parts, playback, colour and layout apply to all of them.</p>
 
@@ -133,9 +118,9 @@
             <fieldset class="box-set">
                 <legend>Parts</legend>
                 <p class="small muted" id="parts-help">At least one part has to be written out.</p>
-                <div class="row" aria-describedby="parts-help">
+                <div class="row">
                     {% for instrument in score_info.instruments %}
-                    <label class="check"><input type="checkbox" name="instruments" value="{{ forloop.counter }}" checked> {{ instrument }}</label>
+                    <label class="check"><input type="checkbox" name="instruments" value="{{ forloop.counter }}" aria-describedby="parts-help"{% if instruments_invalid %} aria-invalid="true"{% endif %} checked> {{ instrument }}</label>
                     {% endfor %}
                 </div>
             </fieldset>
@@ -161,7 +146,7 @@
                     <span class="small muted">The colour name is always written next to the word.</span>
                 </div>
                 <details class="plain" id="colour-detail">
-                    <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Choose the colours</summary>
+                    <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Choose the colours</h2></summary>
                     <div style="display: flex; flex-direction: column; gap: 16px; padding: 12px 0 4px;">
                         <label class="check"><input type="checkbox" name="chk_colourPitch" value="checked" checked> Colour by pitch</label>
                         <fieldset class="field">
@@ -280,15 +265,9 @@
         return saved;
     }
 
-    function restore() {
-        var saved;
-        try {
-            saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "null");
-        } catch (error) {
-            saved = null;
-        }
+    function restore(saved, tickRemember) {
         if (!saved) { return; }
-        remember.checked = true;
+        if (tickRemember) { remember.checked = true; }
         Array.prototype.forEach.call(form.elements, function (control) {
             if (!(control.name in saved)) { return; }
             if (control.type === "checkbox") {
@@ -318,8 +297,29 @@
         }
     });
 
-    restore();
+    function stored() {
+        try {
+            return JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "null");
+        } catch (error) {
+            return null;
+        }
+    }
+
+    // A rejected submission comes back with what the reader had set, so only the
+    // one control named in the error needs changing. Otherwise the page opens on
+    // whatever was kept from the last score.
+    var rejected = document.getElementById("rejected-settings");
+    if (rejected) {
+        restore(JSON.parse(rejected.textContent), false);
+    } else {
+        restore(stored(), true);
+    }
     reflect();
+
+    // The page comes back with what went wrong at the top, so the reader is put
+    // there rather than at the start of a form they have already filled in.
+    var errors = document.getElementById("setup-errors");
+    if (errors) { errors.focus(); }
 })();
 </script>
 {% endblock %}

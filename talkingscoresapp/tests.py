@@ -240,7 +240,8 @@ class BasicFunctionalityTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'aria-live="polite"')
+        # role="status" is a polite live region in its own right.
+        self.assertContains(response, 'role="status"')
         self.assertContains(response, "Starting to read the file")
         mock_start.assert_called_once()
 
@@ -495,7 +496,7 @@ class DownloadTests(TestCase):
         self.assertNotIn("/download/", html)
         self.assertNotIn("/score_options/", html)
         self.assertNotIn('id="play-group"', html)
-        self.assertIn('<html lang="en" data-theme="dark">', html)
+        self.assertIn('<html lang="en-GB" data-theme="dark">', html)
         self.assertIn("/* reader */", html)
         self.assertIn("Print every bar", html)
     def test_export_template_can_inline_css(self):
@@ -565,6 +566,83 @@ class DownloadTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], reverse("process", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
         mock_clear.assert_called_once()
+
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_every_control_the_set_up_page_offers_reaches_the_stored_options(
+            self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        """The page is the only description of the form, so submitting what it
+        renders has to produce a complete set of options. A control dropped from
+        the template would otherwise go unnoticed until a reading came out wrong."""
+        info = {
+            "title": "Score",
+            "composer": "Composer",
+            "instruments": ["Flute", "Cello"],
+            "rhythm_range": ["crotchet", "quaver"],
+            "beat_division_options": ["1", "2", "4"],
+            "octave_range": ["4", "5"],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_path = os.path.join(temp_dir, "score.musicxml")
+            mock_data_path.return_value = data_path
+            mock_info.return_value = info
+
+            url = reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
+            content = self.client.get(url).content.decode("utf-8")
+            posted = self._submitted_defaults(content)
+
+            # Nothing is typed in: the page's own defaults are what a reader sends.
+            response = self.client.post(url, posted)
+            self.assertEqual(response.status_code, 302)
+
+            with open(data_path + ".opts") as options_file:
+                stored = json.load(options_file)
+
+        self.assertEqual(stored["style"], "standard")
+        self.assertEqual(stored["instruments"], [1, 2])
+        for key in ("bars_at_a_time", "beat_division", "pitch_description", "rhythm_description",
+                    "octave_description", "octave_position", "dot_position", "accidental_style",
+                    "repetition_mode", "colour_position", "key_signature_accidentals",
+                    "figureNoteColours"):
+            self.assertIn(key, stored)
+        self.assertEqual(len(stored["figureNoteColours"]), 7)
+
+    @staticmethod
+    def _submitted_defaults(html):
+        """What a browser would send from the rendered page with nothing changed."""
+        posted = {}
+        for tag in re.findall(r"<(?:input|select|option)\b[^>]*>", html):
+            name = re.search(r'name="([^"]+)"', tag)
+            value = re.search(r'value="([^"]*)"', tag)
+            if tag.startswith("<select"):
+                current_select = name.group(1) if name else None
+                posted.setdefault(current_select, None)
+                continue
+            if not name:
+                continue
+            kind = re.search(r'type="([^"]+)"', tag)
+            kind = kind.group(1) if kind else "text"
+            if kind in ("checkbox", "radio") and "checked" not in tag:
+                continue
+            if kind == "checkbox" and name.group(1) == "instruments":
+                posted.setdefault(name.group(1), []).append(value.group(1))
+                continue
+            posted[name.group(1)] = value.group(1) if value else "on"
+
+        # A select posts its selected option, or its first when none is marked.
+        for block in re.findall(r"<select\b[^>]*>.*?</select>", html, re.S):
+            name = re.search(r'name="([^"]+)"', block)
+            if not name:
+                continue
+            options = re.findall(r'<option value="([^"]*)"([^>]*)>', block)
+            if not options:
+                posted.pop(name.group(1), None)
+                continue
+            chosen = next((v for v, rest in options if "selected" in rest), options[0][0])
+            posted[name.group(1)] = chosen
+        return {key: value for key, value in posted.items() if value is not None}
 
     @patch("talkingscoresapp.views.TSScore.info")
     @patch("talkingscoresapp.views.TSScore.get_data_file_path")
@@ -1307,12 +1385,14 @@ class ReviewedEngineTests(TestCase):
         response = self.client.get(reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
         content = response.content.decode("utf-8")
 
-        # The style choice is the page; everything else is folded away behind it.
-        self.assertLess(content.index('name="style"'), content.index("<details"))
-        self.assertEqual(content.count("<details"), 2)
+        # The style choice is the page; every other setting is folded away behind it.
+        first_disclosure = content.index("<details")
+        self.assertLess(content.index('name="style"'), first_disclosure)
         self.assertIn("Generate the reading", content)
-        for field in ("bars_at_a_time", "colour_style", "chk_include_rests", "colorProfile"):
-            self.assertIn(f'name="{field}"', content)
+
+        form = content[content.index('<form class="form"'):]
+        outside = re.findall(r'name="([^"]+)"', form[:form.index("<details")])
+        self.assertEqual(sorted(set(outside)), ["csrfmiddlewaretoken", "style"])
 
     def test_unpitched_parts_are_described_instead_of_failing(self):
         from music21 import note
@@ -1568,7 +1648,7 @@ class ReaderPageTests(TestCase):
         html = self._render(self._formatter({"style": "standard"}), web_path="/midis/x/y.musicxml",
                             download_html_url="/download/html/x/y", options_url="/score_options/x/y",
                             export_mode=True, export_theme="dark")
-        self.assertIn('<html lang="en" data-theme="dark">', html)
+        self.assertIn('<html lang="en-GB" data-theme="dark">', html)
         self.assertNotIn("<link ", html)
         self.assertNotIn("<script src=", html)
         self.assertNotIn("/download/", html)
