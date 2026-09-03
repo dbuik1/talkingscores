@@ -1119,8 +1119,26 @@ class AnalysePart:
 
     # analyse each part
 
+    def wedge_edges(self):
+        """{bar number: the hairpin ends written in it}, as (offset, name, start or stop).
+
+        A crescendo or diminuendo is a spanner held by the part, not something
+        inside the bar, so a bar carrying one looks identical to a bar without.
+        """
+        edges = {}
+        for spanner in self.part.spanners.stream():
+            name = type(spanner).__name__
+            if name not in ("Crescendo", "Diminuendo"):
+                continue
+            for element, edge in ((spanner.getFirst(), "start"), (spanner.getLast(), "stop")):
+                if element is None or element.measureNumber is None:
+                    continue
+                edges.setdefault(element.measureNumber, []).append(
+                    (float(element.offset), name, edge))
+        return {number: tuple(sorted(marks)) for number, marks in edges.items()}
+
     @staticmethod
-    def measure_detail_signature(measure):
+    def measure_detail_signature(measure, wedges=()):
         """The parts of a bar the event indexes do not carry: spelling, ties and dynamics.
 
         The indexes compare sounding pitch and duration, so two bars that differ
@@ -1139,11 +1157,14 @@ class AnalysePart:
         dynamics = tuple(
             (float(element.offset), element.value)
             for element in measure.recurse().getElementsByClass("Dynamic"))
-        return (tuple(written), dynamics)
+        return (tuple(written), dynamics, tuple(wedges))
 
     def record_measure_details(self):
+        wedges = self.wedge_edges()
         for measure in self.part.getElementsByClass("Measure"):
-            self.measure_details[measure.measureNumber] = self.measure_detail_signature(measure)
+            number = measure.measureNumber
+            self.measure_details[number] = self.measure_detail_signature(
+                measure, wedges.get(number, ()))
 
     def set_part(self, p):
         self.part = p

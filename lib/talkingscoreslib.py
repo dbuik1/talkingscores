@@ -113,12 +113,22 @@ def repeat_expression_text(expression):
 
 
 def mark_tuplet_brackets(measure_stream):
-    """Work out where each tuplet begins and ends, for scores that do not say.
+    """Work out where each tuplet begins and ends, for bars that do not say.
 
     A tuplet is written with a bracket or number over it, but the file need only
     carry the time modification on each note; without a start and a stop nothing
     in the bar is read as a tuplet at all.
+
+    Where the bar does say, the file is left alone: the working out groups from
+    the first note's length, so two triplets a bar apart in length would be run
+    together as one group the file never wrote. The bar is also worked on in
+    place, and music21 shares its measures between the score and every copy
+    taken of it, so a rewrite here would outlast this reading.
     """
+    tuplets = [tuplet for element in measure_stream.recurse().notesAndRests
+               for tuplet in element.duration.tuplets]
+    if not tuplets or any(tuplet.type for tuplet in tuplets):
+        return
     try:
         makeNotation.makeTupletBrackets(measure_stream, inPlace=True)
     except Exception:
@@ -646,8 +656,6 @@ class Music21TalkingScore(TalkingScoreBase):
                 event.tie = ties.pop()
                 for pitch in event.pitches:
                     pitch.tie = None
-            elif element.tie and not ties - {None}:
-                event.tie = element.tie.type
             event.expressions = [exp.name for exp in element.expressions if getattr(exp, 'name', None)]
             return event
         if element_type == 'Dynamic':

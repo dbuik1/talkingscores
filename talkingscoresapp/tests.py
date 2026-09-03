@@ -1557,6 +1557,31 @@ class ReviewedEngineTests(TestCase):
         self.assertIn("triplets quaver", text)
         self.assertEqual(text.count("end tuplet"), 1)
 
+    def test_two_bracketed_tuplets_in_a_bar_stay_two_groups(self):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        # The fixture brackets a triplet crotchet plus quaver, then three triplet
+        # quavers. Working the groups out from the notes would run them together.
+        formatter = HTMLTalkingScoreFormatter(
+            Music21TalkingScore(os.path.join(os.getcwd(), "test_scores", "two-triplet-groups.musicxml")),
+            options={"style": "standard"})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            text = formatter.render_text()
+        self.assertEqual(text.count("triplets"), 2)
+        self.assertEqual(text.count("end tuplet"), 2)
+
+    def test_a_bar_a_hairpin_runs_through_is_not_collapsed_into_the_one_before(self):
+        from music21 import dynamics, note
+        bars = [[note.Note("C4") for _ in range(4)] for _ in range(3)]
+        score = self._score_of_bars(bars)
+        part = score.parts[0]
+        measures = list(part.getElementsByClass("Measure"))
+        part.insert(0, dynamics.Crescendo(measures[1].notes[0], measures[1].notes[-1]))
+        text = self._text(score, {"style": "standard", "repetition_mode": "learning", "bars_at_a_time": 3})
+        # The crescendo is the only thing telling bar 2 from bar 1, and it is held
+        # by the part rather than written inside the bar.
+        self.assertIn("crescendo", text)
+        self.assertNotIn("Bar 2\nSame as bar 1", text)
+
     def test_a_bar_spelt_differently_is_not_collapsed_into_the_one_before(self):
         from music21 import note
         sharps = [note.Note("F#4") for _ in range(4)]
