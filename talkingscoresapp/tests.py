@@ -1520,6 +1520,18 @@ class ReviewedEngineTests(TestCase):
         text = self._text(score, {"style": "standard", "key_signature_accidentals": "applied"})
         self.assertEqual(text.count("F natural"), 2)
 
+    def test_a_tuplet_is_read_when_the_file_leaves_the_bracket_out(self):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        # The fixture carries the time modification on each note and no bracket,
+        # which is all a file has to write.
+        formatter = HTMLTalkingScoreFormatter(
+            Music21TalkingScore(os.path.join(os.getcwd(), "test_scores", "triplet-without-brackets.musicxml")),
+            options={"style": "standard"})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            text = formatter.render_text()
+        self.assertIn("triplets quaver", text)
+        self.assertEqual(text.count("end tuplet"), 1)
+
     def test_grace_notes_are_read_before_the_note_they_decorate(self):
         from music21 import note
         grace = note.Note("D5").getGrace()

@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from jinja2 import Environment, FileSystemLoader
 from music21 import converter, duration, environment, key, meter, stream
 from music21 import pitch as pitch_module
+from music21.stream import makeNotation
 from django.conf import settings as django_settings
 
 from lib.braille import text_to_brf
@@ -43,6 +44,19 @@ logger = logging.getLogger("TSScore")
 UNTITLED = "Untitled work"
 UNKNOWN_COMPOSER = "Unknown composer"
 NOT_GIVEN = "not given"
+
+
+def mark_tuplet_brackets(measure_stream):
+    """Work out where each tuplet begins and ends, for scores that do not say.
+
+    A tuplet is written with a bracket or number over it, but the file need only
+    carry the time modification on each note; without a start and a stop nothing
+    in the bar is read as a tuplet at all.
+    """
+    try:
+        makeNotation.makeTupletBrackets(measure_stream, inPlace=True)
+    except Exception:
+        pass
 
 
 def alter_name(alter):
@@ -451,6 +465,7 @@ class Music21TalkingScore(TalkingScoreBase):
     def update_events_for_measure(self, measure_stream, events, voice=1, state=None):
         if state is None:
             state = {}
+        mark_tuplet_brackets(measure_stream)
         for element in measure_stream.elements:
             event = self._create_event_from_element(element, state)
             if event is None:
@@ -536,9 +551,9 @@ class Music21TalkingScore(TalkingScoreBase):
         event.grace = bool(element.duration.isGrace)
         if element.duration.tuplets:
             tuplet = element.duration.tuplets[0]
-            if tuplet.type == "start":
+            if tuplet.type in ("start", "startStop"):
                 event.tuplet_start = (tuplet.fullName, tuplet.tupletActual[0], tuplet.tupletNormal[0])
-            elif tuplet.type == "stop":
+            if tuplet.type in ("stop", "startStop"):
                 event.tuplet_stop = True
         beams = getattr(element, 'beams', None)
         if beams is not None and beams.beamsList:
