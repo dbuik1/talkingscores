@@ -63,6 +63,14 @@ $env:DJANGO_DEBUG = "true"
 python .\manage.py test
 ```
 
+The player that sounds a range of bars runs in the browser, so its own tests run
+under Node rather than Django. The Django suite runs them too when `node` is on
+the path; to run them alone:
+
+```
+node --test talkingscoresapp/static/js/tests/player.test.mjs
+```
+
 In production, set:
 
 ```powershell
