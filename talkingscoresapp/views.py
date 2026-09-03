@@ -273,7 +273,7 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     accidental_style = forms.CharField(widget=forms.Select, required=False)
     key_signature_accidentals = forms.CharField(widget=forms.Select, required=False)
 
-    colour_style = forms.CharField(widget=forms.Select, required=False)
+    chk_colourWords = forms.BooleanField(required=False)
     chk_colourPitch = forms.BooleanField(required=False)
     chk_colourRhythm = forms.BooleanField(required=False)
     chk_colourOctave = forms.BooleanField(required=False)
@@ -530,7 +530,7 @@ def options(request, id, filename):
             "include_dynamics": "chk_include_dynamics" in request.POST,
             "accidental_style": request.POST.get("accidental_style", "words"),
             "repetition_mode": request.POST.get("repetition_mode", "learning"),
-            "colour_position": request.POST.get("colour_style", "none"),
+            "colour_position": "words" if "chk_colourWords" in request.POST else "none",
             "colour_pitch": "chk_colourPitch" in request.POST,
             "rhythm_colour_mode": request.POST.get("rhythm_colour_mode", "none"),
             "octave_colour_mode": request.POST.get("octave_colour_mode", "none"),

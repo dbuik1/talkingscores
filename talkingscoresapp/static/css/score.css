@@ -117,6 +117,8 @@ html[data-size="xlarge"] .bar h3 { font-size: 5rem; }
 
 /* Colour from the set-up page lands in a separate style block. High contrast is one colour on one
    ground, so it overrides those rules and the print block does the same. */
+/* Scores set up before the colour became a plate carry the older body classes. */
+html[data-theme="contrast"] .colour-words [class*="colour-"],
 html[data-theme="contrast"] .colour-text [class*="colour-"],
 html[data-theme="contrast"] .colour-background [class*="colour-"] {
     color: inherit !important;

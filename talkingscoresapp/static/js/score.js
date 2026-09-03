@@ -413,7 +413,14 @@
             }
             wire("read-again", "click", function () {
                 var group = groups[current];
-                announce(rangeLabel(group.start, group.end, true) + ". " + readableText(group.body).replace(/\s+/g, " ").trim());
+                // A group runs to hundreds of characters, and a live region reads
+                // them out in one piece that cannot be paused or skipped. The
+                // button puts the reader at the top of the group's text instead,
+                // so the reading stays under their own commands.
+                group.body.setAttribute("tabindex", "-1");
+                group.body.focus();
+                group.section.scrollIntoView({block: "start", behavior: reducedMotion() ? "auto" : "smooth"});
+                announce(rangeLabel(group.start, group.end, true) + ".");
             });
         }
 

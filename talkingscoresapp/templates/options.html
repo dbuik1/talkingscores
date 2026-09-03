@@ -141,13 +141,8 @@
             <fieldset class="box-set">
                 <legend>Colour</legend>
                 <div class="row">
-                    <span class="setting"><label for="colour_style">Colour the words</label>
-                        <select class="input" name="colour_style" id="colour_style">
-                            <option value="none" selected>Off</option>
-                            <option value="text">Colour the text</option>
-                            <option value="background">Colour behind the text</option>
-                        </select></span>
-                    <span class="small muted">The colour name is always written next to the word.</span>
+                    <label class="check"><input type="checkbox" name="chk_colourWords" id="colour_words" value="checked"> Colour the words</label>
+                    <span class="small muted">The colour goes behind the word so it reads on any background, and the colour name is always written next to it.</span>
                 </div>
                 <details class="plain" id="colour-detail">
                     <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Choose the colours</h2></summary>
@@ -243,7 +238,7 @@
     // The colours only apply once the words are coloured, and the pickers only
     // matter once something is set to use them.
     function reflect() {
-        var colouring = form.colour_style.value !== "none";
+        var colouring = form.chk_colourWords.checked;
         document.getElementById("colour-detail").hidden = !colouring;
         show("pitch-colours", colouring && form.chk_colourPitch.checked
             && form.colorProfile.value === "custom");

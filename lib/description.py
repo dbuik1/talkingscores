@@ -151,17 +151,31 @@ class ScoreFacts:
     parts: list = field(default_factory=list)      # per part: name and a list of Fact
 
 
-def contrast_colour(hex_colour):
-    """Black or white, whichever reads better on the given colour."""
+def relative_luminance(hex_colour):
+    """The WCAG relative luminance of a hex colour, or None if it is not one."""
     try:
         value = hex_colour.lstrip("#")
         if len(value) == 3:
             value = "".join(ch * 2 for ch in value)
-        red, green, blue = (int(value[i:i + 2], 16) for i in (0, 2, 4))
+        channels = [int(value[i:i + 2], 16) / 255 for i in (0, 2, 4)]
     except (ValueError, AttributeError, TypeError):
+        return None
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def contrast_colour(hex_colour):
+    """Black or white, whichever has the higher contrast ratio against the colour.
+
+    Perceived brightness and contrast ratio disagree around the middle of the
+    range, and it is the ratio that decides whether the word can be read.
+    """
+    luminance = relative_luminance(hex_colour)
+    if luminance is None:
         return "white"
-    luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255
-    return "black" if luminance > 0.5 else "white"
+    against_black = (luminance + 0.05) / 0.05
+    against_white = 1.05 / (luminance + 0.05)
+    return "black" if against_black >= against_white else "white"
 
 
 def slugify_colour_key(value):
@@ -173,7 +187,7 @@ class Palette:
 
     def __init__(self, settings):
         self.settings = settings
-        self.active = settings.colour_position in ("text", "background")
+        self.active = settings.colour_position not in ("none", "", None)
         self.pitch_colours = {k.upper(): v for k, v in (settings.pitch_colours or {}).items() if v}
         self.rhythm_colours = {slugify_colour_key(k): v for k, v in (settings.rhythm_colours or {}).items() if v}
         self.octave_colours = {k.lower(): v for k, v in (settings.octave_colours or {}).items() if v}
@@ -182,7 +196,7 @@ class Palette:
     def root_class(self):
         if not self.active:
             return ""
-        return f"colour-{self.settings.colour_position}"
+        return "colour-words"
 
     def pitch_class(self, step):
         if self.active and self.settings.colour_pitch and step in self.pitch_colours:
@@ -213,13 +227,14 @@ class Palette:
         if not self.active:
             return ""
         rules = []
-        background = self.settings.colour_position == "background"
 
         def rule(selector, colour):
-            if background:
-                rules.append(f".colour-background {selector} {{ background-color: {colour}; color: {contrast_colour(colour)}; padding: 0 0.15em; border-radius: 0.2em; }}")
-            else:
-                rules.append(f".colour-text {selector} {{ color: {colour}; }}")
+            # The colour goes behind the word rather than into it: a palette that
+            # keeps its meaning across themes cannot also meet 4.5:1 as ink on both
+            # a cream page and a black one, and the ink here is chosen to.
+            rules.append(
+                f".colour-words {selector} {{ background-color: {colour}; "
+                f"color: {contrast_colour(colour)}; padding: 0 0.15em; border-radius: 0.2em; }}")
 
         if self.settings.colour_pitch:
             for step, colour in self.pitch_colours.items():

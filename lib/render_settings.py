@@ -90,7 +90,9 @@ class RenderSettings:
     play_unselected: bool = False
 
     # Colour
-    colour_position: str = "none"        # none, text, background
+    # none or words. Scores set up before the colour became a plate behind the
+    # word carry "text" or "background"; both mean words.
+    colour_position: str = "none"
     colour_pitch: bool = False
     rhythm_colour_mode: str = "none"     # none, inherit, custom
     octave_colour_mode: str = "none"     # none, inherit, custom

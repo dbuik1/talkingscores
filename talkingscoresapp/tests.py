@@ -1328,13 +1328,14 @@ class ReadingStyleTests(TestCase):
     def test_page_uses_colour_classes_not_inline_styles(self):
         from talkingscoreslib import HTMLTalkingScoreFormatter
         formatter = self._formatter({
-            "style": "standard", "colour_position": "text", "colour_pitch": True,
+            "style": "standard", "colour_position": "words", "colour_pitch": True,
             "pitch_colours": {"C": "#ff0000", "D": "javascript:alert(1)"},
         })
         with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
             html = formatter.generateHTML(web_path="/midis/x/y")
-        self.assertIn('<body class="reader colour-text">', html)
-        self.assertIn(".colour-text .colour-pitch-c { color: #ff0000; }", html)
+        self.assertIn('<body class="reader colour-words">', html)
+        # The palette colour goes behind the word, with an ink that reads on it.
+        self.assertIn(".colour-words .colour-pitch-c { background-color: #ff0000; color: black;", html)
         self.assertNotIn("javascript:", html)
         self.assertNotIn("style='color", html)
         self.assertIn('<span class="colour-pitch-c">C</span>', html)
@@ -1479,7 +1480,7 @@ class ReviewedEngineTests(TestCase):
         self.assertEqual(cleaned, {"d": "#00ff00"})
         formatter = HTMLTalkingScoreFormatter(
             Music21TalkingScore(os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml")),
-            options={"style": "standard", "colour_position": "text", "colour_pitch": True,
+            options={"style": "standard", "colour_position": "words", "colour_pitch": True,
                      "octave_colour_mode": "custom",
                      "pitch_colours": {"C</style><script>alert(1)</script>": "#ff0000"},
                      "octave_colours": {"high{}body{display:none}": "#ff0000"}})
