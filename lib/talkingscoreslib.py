@@ -31,6 +31,12 @@ from lib.vocabulary import AMERICAN_DURATIONS, BRITISH_DURATIONS, DOT_WORDS, Voc
 
 us = environment.UserSettings()
 us['warnings'] = 0
+# music21 caches every parsed score as a pickle and reads those pickles back. In
+# a world-writable temporary directory that cache is a way into this process, so
+# it is kept beside the scores instead.
+_scratch = os.path.join(django_settings.MEDIA_ROOT, "music21")
+os.makedirs(_scratch, exist_ok=True)
+us['directoryScratch'] = _scratch
 logger = logging.getLogger("TSScore")
 
 UNTITLED = "Untitled work"

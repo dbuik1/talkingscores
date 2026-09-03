@@ -7,10 +7,20 @@ import tempfile
 
 from music21 import converter, stream, tempo
 
+from pathvalidate import sanitize_filename
+
 from talkingscores.settings import MEDIA_ROOT
 from talkingscoreslib import Music21TalkingScore
 
 logger = logging.getLogger("TSScore")
+
+
+def safe_media_name(filename):
+    """A file name that cannot leave the directory it is joined to."""
+    cleaned = sanitize_filename(os.path.basename(filename or ""))
+    if not cleaned or cleaned in (".", ".."):
+        raise ValueError("The file name is not usable.")
+    return cleaned
 
 
 class MidiHandler:
@@ -24,18 +34,21 @@ class MidiHandler:
     """
 
     def __init__(self, request, folder, filename):
-        self.queryString = request
+        self.request = request
         self.folder = folder
-        self.filename = filename[:-4] if filename.lower().endswith(".mid") else filename
-        # A caller that has already parsed the score passes it in to save the reparse.
+        # Everything the file name reaches is built by joining it onto the media
+        # directory, so it is reduced to a bare name here rather than trusting the
+        # URL to have kept it inside.
+        self.filename = safe_media_name(filename)
+        # Set by a caller that has already parsed the score, to save the reparse.
         self.score = None
 
     def midi_path(self, start, end):
         return os.path.join(MEDIA_ROOT, self.folder, f"{self.filename}s{start}e{end}.mid")
 
     def requested_range(self):
-        start = self.queryString.GET.get("start")
-        end = self.queryString.GET.get("end")
+        start = self.request.GET.get("start")
+        end = self.request.GET.get("end")
         if start is None or end is None:
             return None, None
         return int(start), int(end)

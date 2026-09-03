@@ -842,10 +842,11 @@ class CacheAndMaintenanceTests(TestCase):
 
     @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
     @patch("talkingscoresapp.models.Music21TalkingScore")
-    @patch("talkingscoresapp.models.requests.get")
+    @patch("talkingscoresapp.models.requests.Session.get")
     def test_from_url_streams_remote_file_with_timeout(self, mock_get, mock_music21, mock_dns):
         class FakeResponse:
             status_code = 200
+            headers = {}
 
             def raise_for_status(self):
                 pass
@@ -861,8 +862,11 @@ class CacheAndMaintenanceTests(TestCase):
             with patch.object(TSScore, "get_data_file_path", return_value=destination_path):
                 score = TSScore.from_url("https://example.com/score.musicxml")
 
+        # The request goes to the address that was checked, and still names the
+        # host it was asked for, so the certificate is checked against that name.
         mock_get.assert_called_once_with(
-            "https://example.com/score.musicxml",
+            "https://93.184.216.34/score.musicxml",
+            headers={"Host": "example.com"},
             timeout=score_models.REMOTE_FETCH_TIMEOUT,
             stream=True,
             allow_redirects=False,
@@ -872,10 +876,11 @@ class CacheAndMaintenanceTests(TestCase):
         mock_music21.assert_called()
 
     @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
-    @patch("talkingscoresapp.models.requests.get")
+    @patch("talkingscoresapp.models.requests.Session.get")
     def test_from_url_rejects_oversized_remote_file(self, mock_get, mock_dns):
         class FakeResponse:
             status_code = 200
+            headers = {}
 
             def raise_for_status(self):
                 pass
@@ -889,11 +894,56 @@ class CacheAndMaintenanceTests(TestCase):
             with self.assertRaises(ValueError):
                 TSScore.from_url("https://example.com/score.musicxml")
 
+    @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
+    @patch("talkingscoresapp.models.requests.Session.get")
+    def test_from_url_gives_up_on_a_server_that_trickles(self, mock_get, mock_dns):
+        class FakeResponse:
+            status_code = 200
+            headers = {}
+
+            def raise_for_status(self):
+                pass
+
+            def iter_content(self, chunk_size=65536):
+                while True:
+                    yield b"x"
+
+        mock_get.return_value = FakeResponse()
+
+        with patch.object(score_models, "REMOTE_FETCH_DEADLINE_SECONDS", 0):
+            with self.assertRaises(score_models.RemoteFetchRefused):
+                TSScore.from_url("https://example.com/score.musicxml")
+
+    @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
+    @patch("talkingscoresapp.models.requests.Session.get")
+    def test_from_url_refuses_a_declared_size_over_the_limit(self, mock_get, mock_dns):
+        class FakeResponse:
+            status_code = 200
+            headers = {"Content-Length": str(11 * 1024 * 1024)}
+
+            def raise_for_status(self):
+                pass
+
+            def iter_content(self, chunk_size=65536):
+                raise AssertionError("The body should not be read.")
+
+        mock_get.return_value = FakeResponse()
+
+        with self.assertRaises(score_models.RemoteFetchRefused):
+            TSScore.from_url("https://example.com/score.musicxml")
+
+    def test_info_refuses_a_score_that_was_never_uploaded(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch.object(score_settings, "MEDIA_ROOT", temp_dir):
+                with self.assertRaises(FileNotFoundError):
+                    TSScore(id=VALID_ID, filename="score.musicxml").info()
+            self.assertEqual(os.listdir(temp_dir), [])
+
     def test_from_url_rejects_unsupported_scheme(self):
         with self.assertRaises(ValueError):
             TSScore.from_url("file:///C:/temp/score.musicxml")
 
-    @patch("talkingscoresapp.models.requests.get")
+    @patch("talkingscoresapp.models.requests.Session.get")
     def test_from_url_rejects_hosts_on_private_networks(self, mock_get):
         private_addresses = [
             "127.0.0.1", "10.1.2.3", "192.168.0.5", "169.254.169.254", "::1", "::ffff:10.0.0.1", "0.0.0.0",
@@ -906,7 +956,7 @@ class CacheAndMaintenanceTests(TestCase):
                     TSScore.from_url("http://scores.example/score.musicxml")
         mock_get.assert_not_called()
 
-    @patch("talkingscoresapp.models.requests.get")
+    @patch("talkingscoresapp.models.requests.Session.get")
     def test_from_url_checks_every_redirect_hop(self, mock_get):
         class Redirect:
             status_code = 302
@@ -927,7 +977,7 @@ class CacheAndMaintenanceTests(TestCase):
         mock_get.assert_called_once()
 
     @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
-    @patch("talkingscoresapp.models.requests.get")
+    @patch("talkingscoresapp.models.requests.Session.get")
     def test_from_url_rejects_a_redirect_without_a_location(self, mock_get, mock_dns):
         class Redirect:
             status_code = 302
@@ -1022,18 +1072,25 @@ class CacheAndMaintenanceTests(TestCase):
 
     def test_cleanup_media_dry_run_and_delete(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            old_dir = os.path.join(temp_dir, "old-score")
-            new_dir = os.path.join(temp_dir, "new-score")
+            old_dir = os.path.join(temp_dir, "a" * 64)
+            new_dir = os.path.join(temp_dir, "b" * 64)
+            # Named as neither a score is, so the command has to leave it alone.
+            other_dir = os.path.join(temp_dir, "music21")
             os.makedirs(old_dir)
             os.makedirs(new_dir)
+            os.makedirs(other_dir)
             old_file = os.path.join(old_dir, "score.musicxml")
             new_file = os.path.join(new_dir, "score.musicxml")
+            other_file = os.path.join(other_dir, "cache.p")
             with open(old_file, "w", encoding="utf-8") as file:
                 file.write("old")
             with open(new_file, "w", encoding="utf-8") as file:
                 file.write("new")
+            with open(other_file, "w", encoding="utf-8") as file:
+                file.write("cache")
             old_time = time.time() - (40 * 24 * 60 * 60)
             os.utime(old_file, (old_time, old_time))
+            os.utime(other_file, (old_time, old_time))
 
             out = StringIO()
             with patch.object(cleanup_media, "MEDIA_ROOT", temp_dir):
@@ -1045,6 +1102,7 @@ class CacheAndMaintenanceTests(TestCase):
 
             self.assertFalse(os.path.exists(old_dir))
             self.assertTrue(os.path.exists(new_dir))
+            self.assertTrue(os.path.exists(other_file))
 
 
 class GenerationLockTests(TestCase):
@@ -1766,7 +1824,7 @@ class ReviewFixTests(TestCase):
 
         self.assertContains(response, "could not be downloaded")
 
-    @patch("talkingscoresapp.models.requests.get")
+    @patch("talkingscoresapp.models.requests.Session.get")
     def test_from_url_rejects_tunnelled_private_addresses(self, mock_get):
         # 6to4 and Teredo addresses carry an IPv4 address inside them.
         for address in ("2002:c0a8:101::", "2001:0:4136:e378:8000:63bf:3fff:fdd2"):
@@ -1776,7 +1834,7 @@ class ReviewFixTests(TestCase):
                     TSScore.from_url("http://scores.example/score.musicxml")
         mock_get.assert_not_called()
 
-    @patch("talkingscoresapp.models.requests.get")
+    @patch("talkingscoresapp.models.requests.Session.get")
     def test_from_url_reports_an_unknown_host(self, mock_get):
         with patch("talkingscoresapp.models.socket.getaddrinfo", side_effect=socket.gaierror):
             with self.assertRaises(score_models.RemoteHostNotFound):
@@ -1923,6 +1981,17 @@ class MidiFileTests(TestCase):
         request = Mock()
         request.GET = query if query is not None else {}
         return MidiHandler(request, VALID_ID, "score.musicxml")
+
+    def test_the_file_name_cannot_leave_the_score_folder(self):
+        from lib.midiHandler import MidiHandler, safe_media_name
+
+        handler = MidiHandler(Mock(), VALID_ID, "../../../../tmp/evil")
+        folder = os.path.join(score_settings.MEDIA_ROOT, VALID_ID)
+        self.assertEqual(os.path.dirname(os.path.abspath(handler.midi_path(1, 1))), os.path.abspath(folder))
+        with self.assertRaises(ValueError):
+            safe_media_name("..")
+        with self.assertRaises(ValueError):
+            safe_media_name("")
 
     @staticmethod
     def _tracks_with_notes(path):

@@ -1,10 +1,14 @@
 import os
+import re
 import shutil
 import time
 
 from django.core.management.base import BaseCommand
 
 from talkingscores.settings import MEDIA_ROOT
+
+# A score folder is named for the score id: 64 lower-case hex digits.
+SCORE_FOLDER_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class Command(BaseCommand):
@@ -37,7 +41,9 @@ class Command(BaseCommand):
 
         for name in os.listdir(MEDIA_ROOT):
             path = os.path.join(MEDIA_ROOT, name)
-            if not os.path.isdir(path):
+            # Only score folders are removed; the media root also holds the log
+            # and music21's own cache, which this command does not own.
+            if not os.path.isdir(path) or not SCORE_FOLDER_PATTERN.match(name):
                 skipped += 1
                 continue
 

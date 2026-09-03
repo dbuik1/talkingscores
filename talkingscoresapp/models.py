@@ -5,6 +5,7 @@ import re
 import requests
 import json
 import logging
+import logging.handlers
 import socket
 from talkingscores.settings import MEDIA_ROOT
 from urllib.parse import urlparse, urljoin, quote
@@ -19,6 +20,9 @@ import uuid
 from contextlib import contextmanager
 
 REMOTE_FETCH_TIMEOUT = 20
+# The socket timeout only limits one read, so a server that dribbles a byte at a
+# time can hold a worker for as long as it likes. This is the whole fetch.
+REMOTE_FETCH_DEADLINE_SECONDS = 30
 MAX_REMOTE_SCORE_BYTES = 10 * 1024 * 1024
 MAX_REMOTE_REDIRECTS = 5
 
@@ -32,7 +36,9 @@ GENERATION_HEARTBEAT_SECONDS = 15
 
 # Sizes for the pieces of a compressed .mxl archive that are read into memory.
 MAX_CONTAINER_MANIFEST_BYTES = 64 * 1024
-MAX_EXTRACTED_SCORE_BYTES = 50 * 1024 * 1024
+# An archive may not expand to more than a plain file is allowed to be, so a
+# small upload cannot become a large parse.
+MAX_EXTRACTED_SCORE_BYTES = MAX_REMOTE_SCORE_BYTES
 
 # NAT64 prefixes translate an IPv6 address into an IPv4 one, so a "public"
 # IPv6 address in one of these ranges can reach a private IPv4 host.
@@ -83,12 +89,12 @@ def is_public_ip(address):
 
 
 def check_url_targets_public_host(url):
-    """Raise unless every address the URL's host resolves to is a public internet address.
+    """Return the parsed URL and one checked address, or raise.
 
-    The lookup here and the lookup inside the HTTP request are separate, so a
-    host whose DNS answer changes between them (DNS rebinding) is not caught.
-    Closing that gap needs the request pinned to the checked address, which
-    the HTTP client does not support without replacing its connection pool.
+    Every address the host resolves to has to be a public internet address. The
+    address returned is the one the request is then pinned to: resolving again
+    inside the HTTP client would let a host whose DNS answer changes between the
+    two lookups reach a private address after passing this check.
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
@@ -106,39 +112,80 @@ def check_url_targets_public_host(url):
     for address in addresses:
         if not is_public_ip(address):
             raise RemoteAddressNotAllowed(f"The host {host} is not a public internet address.")
-    return parsed
+    return parsed, sorted(addresses)[0]
+
+
+class PinnedHostAdapter(requests.adapters.HTTPAdapter):
+    """Connects to a checked address while still presenting the real host name.
+
+    The URL handed to requests carries the address, so no second DNS lookup can
+    take place; the certificate is still checked against the name the person
+    typed, and the Host header still names it.
+    """
+
+    def __init__(self, hostname, secure, **kwargs):
+        self.hostname = hostname
+        self.secure = secure
+        super().__init__(**kwargs)
+
+    def init_poolmanager(self, *args, **kwargs):
+        # Both settings belong to a TLS connection; a plain one refuses them.
+        if self.secure:
+            kwargs["server_hostname"] = self.hostname
+            kwargs["assert_hostname"] = self.hostname
+        return super().init_poolmanager(*args, **kwargs)
+
+
+def pinned_url(parsed, address):
+    """The URL rewritten to connect to one address, keeping everything else."""
+    host = f"[{address}]" if ":" in address else address
+    netloc = f"{host}:{parsed.port}" if parsed.port else host
+    return parsed._replace(netloc=netloc).geturl()
 
 
 def fetch_remote_score(url):
     """Download a score over HTTP, checking every redirect hop against the public-host rule."""
     current_url = url
+    deadline = time.monotonic() + REMOTE_FETCH_DEADLINE_SECONDS
     for _ in range(MAX_REMOTE_REDIRECTS + 1):
-        check_url_targets_public_host(current_url)
-        response = requests.get(
-            current_url,
-            timeout=REMOTE_FETCH_TIMEOUT,
-            stream=True,
-            allow_redirects=False,
-            proxies=NO_PROXIES,
-        )
-        if 300 <= response.status_code < 400:
-            location = response.headers.get("Location")
-            response.close()
-            if not location:
-                raise RemoteFetchRefused("The link redirected without saying where to.")
-            current_url = urljoin(current_url, location)
-            continue
-        response.raise_for_status()
-        file_chunks = []
-        total_bytes = 0
-        for chunk in response.iter_content(chunk_size=65536):
-            if not chunk:
+        parsed, address = check_url_targets_public_host(current_url)
+        session = requests.Session()
+        session.trust_env = False
+        session.mount(f"{parsed.scheme}://", PinnedHostAdapter(parsed.hostname, parsed.scheme == "https"))
+        try:
+            response = session.get(
+                pinned_url(parsed, address),
+                headers={"Host": parsed.netloc},
+                timeout=REMOTE_FETCH_TIMEOUT,
+                stream=True,
+                allow_redirects=False,
+                proxies=NO_PROXIES,
+            )
+            if 300 <= response.status_code < 400:
+                location = response.headers.get("Location")
+                response.close()
+                if not location:
+                    raise RemoteFetchRefused("The link redirected without saying where to.")
+                current_url = urljoin(current_url, location)
                 continue
-            total_bytes += len(chunk)
-            if total_bytes > MAX_REMOTE_SCORE_BYTES:
+            response.raise_for_status()
+            declared = response.headers.get("Content-Length")
+            if declared and declared.isdigit() and int(declared) > MAX_REMOTE_SCORE_BYTES:
                 raise RemoteFetchRefused("The file at that link is larger than 10 MB.")
-            file_chunks.append(chunk)
-        return b"".join(file_chunks), current_url
+            file_chunks = []
+            total_bytes = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                if time.monotonic() > deadline:
+                    raise RemoteFetchRefused("The file at that link took too long to arrive.")
+                if not chunk:
+                    continue
+                total_bytes += len(chunk)
+                if total_bytes > MAX_REMOTE_SCORE_BYTES:
+                    raise RemoteFetchRefused("The file at that link is larger than 10 MB.")
+                file_chunks.append(chunk)
+            return b"".join(file_chunks), current_url
+        finally:
+            session.close()
     raise RemoteFetchRefused("The link redirected too many times.")
 
 
@@ -151,7 +198,10 @@ def configure_score_logger():
 
     console_handler = logging.StreamHandler()
     os.makedirs(MEDIA_ROOT, exist_ok=True)
-    file_handler = logging.FileHandler(os.path.join(MEDIA_ROOT, "log1.txt"))
+    # The log is on the same disk as the scores, so it is capped rather than
+    # left to grow until there is no room to write one.
+    file_handler = logging.handlers.RotatingFileHandler(
+        os.path.join(MEDIA_ROOT, "log1.txt"), maxBytes=5 * 1024 * 1024, backupCount=3)
     console_handler.setLevel(logging.DEBUG)
     file_handler.setLevel(logging.INFO)
     console_format = logging.Formatter("Ln %(lineno)d - %(message)s")
@@ -170,6 +220,13 @@ logger = configure_score_logger()
 def remove_file_quietly(path):
     try:
         os.remove(path)
+    except OSError:
+        pass
+
+
+def remove_directory_if_empty(path):
+    try:
+        os.rmdir(path)
     except OSError:
         pass
 
@@ -326,8 +383,13 @@ class TSScore(object):
             return TSScoreState.PROCESSED
 
     def info(self):
+        # A score that was never uploaded has no file. Returning placeholder
+        # information for one would let a made-up address write options and
+        # create a directory for a score that does not exist.
+        data_filepath = self.get_data_file_path()
+        if not data_filepath or not os.path.isfile(data_filepath):
+            raise FileNotFoundError(data_filepath or "no score path")
         try:
-            data_filepath = self.get_data_file_path()
             score = Music21TalkingScore(data_filepath)
             
             beat_options = score.get_beat_division_options()
@@ -734,11 +796,14 @@ class TSScore(object):
                 for chunk in uploaded_file.chunks():
                     destination.write(chunk)
         
-        # Validate the final file
+        # A file that turns out not to be a score is not kept: it would otherwise
+        # sit in the media directory for ever, since nothing reaches it again.
         try:
             Music21TalkingScore(destination_path)
         except Exception as e:
             logger.exception(f"Uploaded file failed validation at final destination: {destination_path}")
+            remove_file_quietly(destination_path)
+            remove_directory_if_empty(os.path.dirname(destination_path))
             raise e
 
         return score
