@@ -44,6 +44,7 @@ def reader_context(**overrides):
         "export_theme": None,
         "inline_css": "",
         "inline_js": "",
+        "static_icon_url": "/static/img/icon.svg",
         "static_site_css_url": "/static/css/site.css",
         "static_css_url": "/static/css/score.css",
         "static_js_url": "/static/js/score.js",
@@ -514,6 +515,7 @@ class DownloadTests(TestCase):
         html = template.render(reader_context())
 
         self.assertIn('href="/static/css/site.css"', html)
+        self.assertIn('href="/static/img/icon.svg"', html)
         self.assertIn('href="/static/css/score.css"', html)
         self.assertIn('src="/static/js/score.js"', html)
         self.assertIn('src="/static/js/player.js"', html)

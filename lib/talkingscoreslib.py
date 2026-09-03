@@ -644,6 +644,7 @@ class HTMLTalkingScoreFormatter:
             'inline_css': (self._read_static("css", "site.css") + self._read_static("css", "score.css")
                            if export_mode else ""),
             'inline_js': self._read_static("js", "score.js") if export_mode else "",
+            'static_icon_url': f"{django_settings.STATIC_URL}img/icon.svg",
             'static_site_css_url': f"{django_settings.STATIC_URL}css/site.css",
             'static_css_url': f"{django_settings.STATIC_URL}css/score.css",
             'static_js_url': f"{django_settings.STATIC_URL}js/score.js",
