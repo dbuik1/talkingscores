@@ -84,18 +84,24 @@ $env:DJANGO_ALLOWED_HOSTS = "www.example.com,127.0.0.1"
 If you deploy this repo on Railway:
 
 1. Use the `master` branch.
-2. Set these environment variables:
-   ```powershell
-   DJANGO_SECRET_KEY=replace-this
+2. Set these environment variables on the service, before the first deploy. Without
+   `DJANGO_SECRET_KEY` the container starts, raises, and restarts in a loop:
+   ```text
+   DJANGO_SECRET_KEY=${{ secret(64) }}
    DJANGO_DEBUG=false
    DJANGO_ALLOWED_HOSTS=your-domain.com,talkingscores.davidbuik.com
    DJANGO_CSRF_TRUSTED_ORIGINS=https://your-domain.com,https://talkingscores.davidbuik.com
    ```
-3. Attach persistent storage and point `MEDIA_ROOT` at it if you want uploaded files, generated HTML, and MIDI files to survive restarts.
-4. Let Railway use the `Procfile` in the repo root, which collects static assets, applies migrations, and starts Gunicorn:
+   Railway resolves `${{ secret(64) }}` once, to a random value it then keeps. To
+   supply your own instead:
    ```text
-   python manage.py collectstatic --noinput && python manage.py migrate && gunicorn talkingscores.wsgi:application --bind 0.0.0.0:$PORT
+   python -c "import secrets; print(secrets.token_urlsafe(64))"
    ```
+   Changing the key later signs every visitor out and invalidates open forms.
+3. Attach persistent storage and point `MEDIA_ROOT` at it if you want uploaded files, generated HTML, and MIDI files to survive restarts.
+4. Let Railway use the `Procfile` in the repo root, which collects static assets,
+   applies migrations, and starts Gunicorn. All three steps load the settings, so
+   all three fail while the secret key is missing.
 5. Static files are served by WhiteNoise, so Railway does not need a separate static-file service.
 
 If you need the app to keep generated files reliably, do not use an ephemeral filesystem only.
