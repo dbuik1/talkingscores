@@ -303,6 +303,66 @@
         };
     }
 
+    /* A page saved to a device has no server to ask for a range, so the whole score
+       travels inside the page and the open group is cut out of it here. */
+
+    var BAR_TOLERANCE = 0.001;
+
+    function bytesFromBase64(text) {
+        var binary = window.atob(text);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+
+    function sliceMusic(music, from, to) {
+        var length = Math.max(0, to - from);
+        return {
+            parts: music.parts.map(function (notes) {
+                return notes.filter(function (note) {
+                    return note.end > from + BAR_TOLERANCE && note.start < to - BAR_TOLERANCE;
+                }).map(function (note) {
+                    // A note tied in from an earlier bar is struck again at the top of
+                    // the range, which is what the server's own excerpt of it does.
+                    return {
+                        start: Math.max(0, note.start - from),
+                        end: Math.min(length, note.end - from),
+                        note: note.note,
+                        velocity: note.velocity,
+                        percussion: note.percussion
+                    };
+                });
+            }),
+            clicks: music.clicks.filter(function (click) {
+                return click.start > from - BAR_TOLERANCE && click.start < to - BAR_TOLERANCE;
+            }).map(function (click) {
+                return { start: Math.max(0, click.start - from), strong: click.strong };
+            }),
+            duration: length,
+            matches: music.matches
+        };
+    }
+
+    function readEmbedded(midi, expectedParts, offsets) {
+        var parsed = parseMidi(bytesFromBase64(midi));
+        var seconds = tempoMap(parsed);
+        var at = {};
+        Object.keys(offsets || {}).forEach(function (bar) {
+            at[bar] = seconds(offsets[bar] * parsed.division);
+        });
+        return { music: collect(parsed, expectedParts), at: at };
+    }
+
+    function embeddedRange(carried, start, end) {
+        var from = carried.at[start];
+        var to = carried.at[end + 1];
+        return sliceMusic(carried.music,
+            from === undefined ? 0 : from,
+            to === undefined ? carried.music.duration : to);
+    }
+
     /* Sounding the notes.
 
        A piano is a struck string, not a held tone: it is loudest at the moment the
@@ -548,6 +608,7 @@
         var pianoLoading = null;
         var pianoRefused = false;
         var pianoTold = false;
+        var carried = null;
         var partGains = [];
         var scores = {};
         var order = [];
@@ -802,6 +863,18 @@
         }
 
         function fetchRange(start, end) {
+            if (data.midi.embedded) {
+                try {
+                    if (!carried) {
+                        carried = readEmbedded(data.midi.embedded, data.midi.parts.length,
+                            data.midi.barOffsets);
+                    }
+                    return Promise.resolve(embeddedRange(carried, start, end));
+                } catch (error) {
+                    error.arrived = true;
+                    return Promise.reject(error);
+                }
+            }
             var key = start + "-" + end;
             if (scores[key]) {
                 return scores[key];
@@ -936,6 +1009,13 @@
     };
     // Reading a file and laying its tracks against the parts is checked on its own.
     window.TalkingScoresPlayer.reading = { parseMidi: parseMidi, collect: collect };
+    // Cutting a range out of a score the page carries, which needs no server to check.
+    window.TalkingScoresPlayer.carried = {
+        bytesFromBase64: bytesFromBase64,
+        sliceMusic: sliceMusic,
+        readEmbedded: readEmbedded,
+        embeddedRange: embeddedRange
+    };
     // The numbers behind the sounded note, which no browser is needed to check.
     window.TalkingScoresPlayer.voice = { pianoVoice: pianoVoice };
     // Which recording a note is played from, which no browser is needed to check.

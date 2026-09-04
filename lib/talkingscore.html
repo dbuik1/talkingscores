@@ -20,6 +20,11 @@
     {% if palette_css %}<style>{{ palette_css|safe }}</style>{% endif %}
     <script type="application/json" id="score-data">{{ score_data|tojson }}</script>
     {% if export_mode %}
+    {% if inline_player_js %}
+    <script>
+{{ inline_player_js|safe }}
+    </script>
+    {% endif %}
     <script>
 {{ inline_js|safe }}
     </script>
@@ -143,11 +148,13 @@
                     <label class="check"><input type="checkbox" id="setting-click">Metronome click</label>
                     <label class="check"><input type="checkbox" id="setting-repeat">Repeat this group</label>
                 </div>
+                {% if score_data.midi.piano %}
                 <div class="row">
                     <label class="check"><input type="checkbox" id="setting-piano">Recorded piano</label>
                 </div>
                 <p class="small muted">The recorded piano sounds parts written for struck instruments from recordings of a real one. It downloads about 700 kilobytes the first time you play with it on. Recordings from FluidR3 GM by Frank Wen, under <a href="https://creativecommons.org/licenses/by/3.0/" rel="license">CC BY 3.0</a>.</p>
-                <p class="small muted">These choices and the speed are kept on this device. Changing the instruments, the balance, the click or the piano while a group is playing starts it again.</p>
+                {% endif %}
+                <p class="small muted">These choices and the speed are kept on this device. Changing the instruments, the balance{% if score_data.midi.piano %}, the click or the piano{% else %} or the click{% endif %} while a group is playing starts it again.</p>
             </form>
         </details>
         {% endif %}
@@ -158,10 +165,10 @@
                     {% if download_html_url %}<a class="btn" href="{{ download_html_url }}">Download as a web page</a>{% endif %}
                     {% if download_text_url %}<a class="btn" href="{{ download_text_url }}">Download as text</a>{% endif %}
                     {% if download_braille_url %}<a class="btn" href="{{ download_braille_url }}">Download as braille</a>{% endif %}
-                    {% if score_data.midi %}<a class="btn" id="download-midi" href="{{ score_data.midi.base }}?start={{ score_data.firstBar }}&amp;end={{ score_data.firstBar }}" download>Download as MIDI</a>{% endif %}
+                    {% if score_data.midi and score_data.midi.base %}<a class="btn" id="download-midi" href="{{ score_data.midi.base }}?start={{ score_data.firstBar }}&amp;end={{ score_data.firstBar }}" download>Download as MIDI</a>{% endif %}
                     <button class="btn" type="button" id="print-score">Print every bar</button>
                 </div>
-                {% if not export_mode %}<p class="small muted">The web page works offline and keeps these reading settings. The braille file is uncontracted text for a 40-cell display or embosser.{% if score_data.midi %} The MIDI file holds the group on screen, not the whole score.{% endif %}</p>{% endif %}
+                {% if not export_mode %}<p class="small muted">The web page works offline, plays the score and keeps these reading settings. The braille file is uncontracted text for a 40-cell display or embosser.{% if score_data.midi and score_data.midi.base %} The MIDI file holds the group on screen, not the whole score.{% endif %}</p>{% endif %}
             </div>
         </details>
     </div>

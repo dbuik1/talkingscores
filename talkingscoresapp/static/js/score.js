@@ -604,7 +604,7 @@
             }
             var statusText = document.getElementById("playback-status-text");
             if (statusText) {
-                statusText.textContent = "A downloaded page cannot play the score. Open it on the Talking Scores website to hear these bars.";
+                statusText.textContent = "The player did not load, so these bars cannot be sounded. Reload the page and try again.";
             }
         }
 

@@ -22,6 +22,7 @@ import subprocess
 import glob
 import os
 import time
+import base64
 import json
 import re
 import runpy
@@ -2055,9 +2056,41 @@ class ReaderPageTests(TestCase):
         self.assertNotIn("<script src=", html)
         self.assertNotIn("/download/", html)
         self.assertNotIn("/score_options/", html)
-        self.assertIn('"midi": null', html)
         self.assertIn("talkingscores.reader", html)      # the reader script is inlined
         self.assertIn("--note: 28px", html)              # so is the stylesheet
+        self.assertNotIn('id="download-midi"', html)     # a saved file needs a server
+        self.assertNotIn('id="setting-piano"', html)     # so do the piano recordings
+
+    def test_reading_a_group_leaves_the_score_writable_as_audio(self):
+        """Bars are read from the score itself, so reading must not spoil it for the audio."""
+        from music21 import meter, stream
+        from talkingscoreslib import HTMLTalkingScoreFormatter
+        formatter = self._formatter({"style": "standard", "bars_at_a_time": 2})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            formatter.build("", "/midis/x/y.musicxml")
+        for part in formatter.score.score.parts:
+            written = [id(signature) for measure in part.getElementsByClass(stream.Measure)
+                       for signature in measure.getElementsByClass(meter.TimeSignature)]
+            # One signature object standing in several bars is a stream music21
+            # refuses to write, so no range of the score could be played.
+            self.assertEqual(len(written), len(set(written)))
+
+    def test_the_downloaded_page_carries_the_score_it_plays(self):
+        html = self._render(self._formatter({"style": "standard", "bars_at_a_time": 3}),
+                            web_path="/midis/x/y.musicxml", export_mode=True)
+        data = json.loads(re.search(r'id="score-data">(.*?)</script>', html, re.S).group(1))
+        midi = data["midi"]
+        self.assertNotIn("base", midi)
+        self.assertTrue(base64.b64decode(midi["embedded"]).startswith(b"MThd"))
+        # Every bar has a place in the file, and so does the end of the last one.
+        self.assertEqual(midi["barOffsets"]["1"], 0.0)
+        self.assertEqual(sorted(int(bar) for bar in midi["barOffsets"]),
+                         list(range(1, data["lastBar"] + 2)))
+        self.assertEqual(midi["parts"],
+                         [{"index": 0, "label": "Instrument 1 (unnamed)", "read": True,
+                           "sustains": False}])
+        self.assertIn("TalkingScoresPlayer", html)       # the player is inlined as well
+        self.assertIn('id="play-group"', html)
 
 class PlaybackVoiceTests(TestCase):
     """Which voice a part is sounded with, since the audio carries no instrument."""

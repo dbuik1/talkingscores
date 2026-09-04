@@ -6,6 +6,7 @@ turns those facts into the score page, the text download and the braille downloa
 using the reading settings stored beside the score.
 """
 
+import base64
 import copy
 import json
 import logging
@@ -628,6 +629,23 @@ class Music21TalkingScore(TalkingScoreBase):
         """The bar's number as the page prints it."""
         return self.bar_labels.get(bar_number, str(bar_number))
 
+    def bar_offsets(self):
+        """{bar number: quarter notes from the start of the score}, past the last bar as well.
+
+        The page holding the whole score's audio needs to know where each bar begins
+        in it, and the file itself carries no bar numbers.
+        """
+        offsets = {}
+        if not self.score.parts:
+            return offsets
+        measures = list(self.score.parts[0].getElementsByClass(stream.Measure))
+        for measure in measures:
+            offsets[measure.number] = round(float(measure.offset), 6)
+        if measures:
+            last = measures[-1]
+            offsets[last.number + 1] = round(float(last.offset) + float(last.duration.quarterLength), 6)
+        return offsets
+
     def printed_bar_number(self, bar_number):
         """The number the page prints on the bar, for a box a reader types into."""
         digits = re.match(r"-?\d+", self.bar_label(bar_number))
@@ -678,7 +696,10 @@ class Music21TalkingScore(TalkingScoreBase):
             first = measures.measure(start_bar)
             if (first is not None and not first.getElementsByClass(meter.TimeSignature)
                     and start_bar in self.timeSigs and self.timeSigs[start_bar] is not None):
-                first.insert(0, self.timeSigs[start_bar])
+                # Excerpting hands back the score's own bars, so this lands in the score
+                # itself. One shared object in many bars is a stream music21 refuses to
+                # write as MIDI, so each bar gets its own copy of the signature.
+                first.insert(0, copy.deepcopy(self.timeSigs[start_bar]))
 
         self.slur_edges = self._slur_edges(part_index) if self.settings.slurs else {}
 
@@ -1004,13 +1025,14 @@ class HTMLTalkingScoreFormatter:
         # A downloaded page has no server behind it, so it carries no links back and no player.
         if export_mode:
             download_html_url = download_text_url = download_braille_url = options_url = ""
+        score_data = self._score_data(web_path, export_mode)
         return template.render({
             'settings': self.settings,
             'style_name': self.settings.style_name,
             'basic_information': self._get_basic_information(),
             'facts': self.facts,
             'meta_line': self._meta_line(),
-            'score_data': self._score_data(web_path, export_mode),
+            'score_data': score_data,
             'music_segments': self.segments,
             'download_html_url': download_html_url,
             'download_text_url': download_text_url,
@@ -1021,6 +1043,8 @@ class HTMLTalkingScoreFormatter:
             'inline_css': (self._read_static("css", "site.css") + self._read_static("css", "score.css")
                            if export_mode else ""),
             'inline_js': self._read_static("js", "score.js") if export_mode else "",
+            'inline_player_js': (self._read_static("js", "player.js")
+                                 if export_mode and score_data['midi'] else ""),
             'static_icon_url': f"{django_settings.STATIC_URL}img/icon.svg",
             'static_site_css_url': f"{django_settings.STATIC_URL}css/site.css",
             'static_css_url': f"{django_settings.STATIC_URL}css/score.css",
@@ -1091,6 +1115,28 @@ class HTMLTalkingScoreFormatter:
             voices.append({'parts': every, 'label': "Every instrument"})
         return voices
 
+    def _embedded_midi(self):
+        """The whole score written into the page, so a saved page can still play the bars.
+
+        A downloaded page has no server to cut a range from, so it carries the notes
+        itself and the browser cuts the open group out of them.
+        """
+        from lib.midiHandler import MidiHandler
+
+        id_hash = os.path.basename(os.path.dirname(self.score.filepath))
+        xml_filename = os.path.basename(self.score.filepath)
+        try:
+            midi_handler = MidiHandler(SimpleNamespace(GET={}), id_hash, xml_filename)
+            midi_handler.score = self.score.score
+            with open(midi_handler.make_midi_file(), 'rb') as written:
+                notes = base64.b64encode(written.read()).decode('ascii')
+        except Exception as exc:
+            logger.error(f"Failed to write the audio into the downloaded page: {exc}", exc_info=True)
+            return None
+        parts = self._playback_parts()
+        return {'embedded': notes, 'barOffsets': self.score.bar_offsets(),
+                'parts': parts, 'voices': self._playback_voices(parts)}
+
     def _score_data(self, web_path, export_mode):
         """What the reader script needs: the bar range, the grouping and where the audio lives."""
         pickup = next((segment.start_bar for segment in self.segments if segment.is_pickup), None)
@@ -1098,7 +1144,9 @@ class HTMLTalkingScoreFormatter:
         last_bar = self.segments[-1].end_bar if self.segments else first_bar
         bars_per_group = max(1, int(self.settings.bars_at_a_time))
         midi = None
-        if web_path and not export_mode:
+        if export_mode:
+            midi = self._embedded_midi()
+        elif web_path:
             parts = self._playback_parts()
             midi = {'base': web_path, 'parts': parts, 'voices': self._playback_voices(parts),
                     'piano': f"{django_settings.STATIC_URL}audio/piano/"}

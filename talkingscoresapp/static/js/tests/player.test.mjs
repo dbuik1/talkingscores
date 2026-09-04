@@ -272,3 +272,52 @@ test("a note off the ends of the keyboard is played from the nearest recording",
     assert.equal(nearestSample(20), 21);
     assert.equal(nearestSample(127), 108);
 });
+
+/* A page saved to a device carries the whole score and cuts the group out of it. */
+
+scope.window.atob = atob;
+const { bytesFromBase64, readEmbedded, embeddedRange } =
+    scope.window.TalkingScoresPlayer.carried;
+
+// Four bars of three crotchets each at one beat a second, one note a bar.
+const FOUR_BARS = (() => {
+    const conductor = tempo(1000000).concat(timeSignature(3, 2));
+    let events = [];
+    for (let bar = 0; bar < 4; bar++) {
+        events = events.concat(noteOn(bar ? DIVISION * 2 : 0, 60 + bar), noteOff(DIVISION, 60 + bar));
+    }
+    return file([conductor, events]);
+})();
+const BAR_OFFSETS = { 1: 0, 2: 3, 3: 6, 4: 9, 5: 12 };
+
+function base64(buffer) {
+    return Buffer.from(new Uint8Array(buffer)).toString("base64");
+}
+
+test("a score written into the page is read back byte for byte", () => {
+    const bytes = new Uint8Array(bytesFromBase64(base64(FOUR_BARS)));
+    assert.deepEqual([...bytes], [...new Uint8Array(FOUR_BARS)]);
+});
+
+test("a group is cut out of the carried score at its own bar lines", () => {
+    const carried = readEmbedded(base64(FOUR_BARS), 1, BAR_OFFSETS);
+    const second = embeddedRange(carried, 2, 3);
+    assert.equal(Math.round(second.duration), 6);
+    assert.deepEqual(second.parts[0].map(note => note.note), [61, 62]);
+    // The group is played from its own start, not from the start of the score.
+    assert.deepEqual(second.parts[0].map(note => Math.round(note.start)), [0, 3]);
+});
+
+test("the click of the carried score counts from the group's first beat", () => {
+    const carried = readEmbedded(base64(FOUR_BARS), 1, BAR_OFFSETS);
+    const second = embeddedRange(carried, 2, 2);
+    assert.deepEqual(second.clicks.map(click => Math.round(click.start)), [0, 1, 2]);
+    assert.deepEqual(second.clicks.map(click => click.strong), [true, false, false]);
+});
+
+test("a group reaching past the last bar stops at the end of the score", () => {
+    const carried = readEmbedded(base64(FOUR_BARS), 1, BAR_OFFSETS);
+    const past = embeddedRange(carried, 4, 40);
+    assert.deepEqual(past.parts[0].map(note => note.note), [63]);
+    assert.ok(past.duration > 0);
+});
