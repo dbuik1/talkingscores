@@ -1100,7 +1100,8 @@ class HTMLTalkingScoreFormatter:
         midi = None
         if web_path and not export_mode:
             parts = self._playback_parts()
-            midi = {'base': web_path, 'parts': parts, 'voices': self._playback_voices(parts)}
+            midi = {'base': web_path, 'parts': parts, 'voices': self._playback_voices(parts),
+                    'piano': f"{django_settings.STATIC_URL}audio/piano/"}
         # A score that is only a pickup bar keeps the go-to range inside the bars that exist.
         first_numbered = min(first_bar + 1, last_bar) if pickup == first_bar else first_bar
         return {

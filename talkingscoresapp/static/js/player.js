@@ -426,6 +426,87 @@
         ring(shapes.strike, voice.level * voice.strikeLevel, voice.strikeRing, 0);
     }
 
+    /* A recorded piano, for a reader who wants the instrument rather than a
+       likeness of it. One recording every three semitones covers the keyboard, and
+       a note between two of them is the nearer recording played a semitone faster
+       or slower, which is close enough that the join cannot be heard. The
+       recordings are fetched rather than played from an audio element, so they
+       arrive under the connection rule the site already sets. */
+
+    var SAMPLE_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+    var SAMPLE_STEP = 3;
+    var LOWEST_SAMPLE = 21;
+    var HIGHEST_SAMPLE = 108;
+
+    function sampleName(number) {
+        return SAMPLE_NAMES[number % 12] + (Math.floor(number / 12) - 1);
+    }
+
+    function nearestSample(number) {
+        var sampled = LOWEST_SAMPLE + Math.round((number - LOWEST_SAMPLE) / SAMPLE_STEP) * SAMPLE_STEP;
+        return Math.min(HIGHEST_SAMPLE, Math.max(LOWEST_SAMPLE, sampled));
+    }
+
+    function decode(context, bytes) {
+        return new Promise(function (resolve, reject) {
+            // Older decoders answer through callbacks rather than returning a promise.
+            var answered = context.decodeAudioData(bytes, resolve, reject);
+            if (answered && typeof answered.then === "function") {
+                answered.then(resolve, reject);
+            }
+        });
+    }
+
+    function loadPiano(context, base) {
+        var wanted = [];
+        for (var number = LOWEST_SAMPLE; number <= HIGHEST_SAMPLE; number += SAMPLE_STEP) {
+            wanted.push(number);
+        }
+        return Promise.all(wanted.map(function (number) {
+            return fetch(base + sampleName(number) + ".mp3").then(function (response) {
+                if (!response.ok) {
+                    throw new Error("a recording is missing");
+                }
+                return response.arrayBuffer();
+            }).then(function (bytes) {
+                return decode(context, bytes);
+            }).then(function (buffer) {
+                return [number, buffer];
+            });
+        })).then(function (pairs) {
+            var buffers = {};
+            pairs.forEach(function (pair) {
+                buffers[pair[0]] = pair[1];
+            });
+            return buffers;
+        });
+    }
+
+    function sampleNote(context, destination, piano, note, start, end) {
+        var sampled = nearestSample(note.note);
+        var buffer = piano[sampled];
+        if (!buffer) {
+            synthNote(context, destination, note, start, end);
+            return;
+        }
+        var force = Math.min(1, Math.max(0, note.velocity / 127));
+        var level = 0.12 + force * 0.5;
+        // The recording carries its own ring, so all that is written on it is how
+        // hard the note was struck and the damper landing at the end of it.
+        var stopAt = end + DAMPER;
+        var gain = context.createGain();
+        gain.gain.setValueAtTime(level, start);
+        gain.gain.setValueAtTime(level, end);
+        gain.gain.exponentialRampToValueAtTime(level * INAUDIBLE, stopAt);
+        gain.connect(destination);
+        var source = context.createBufferSource();
+        source.buffer = buffer;
+        source.playbackRate.value = Math.pow(2, (note.note - sampled) / 12);
+        source.connect(gain);
+        source.start(start);
+        source.stop(stopAt + 0.02);
+    }
+
     /* Percussion has no pitch to sound, so it is struck as a short tap that keeps
        the written rhythm audible. A higher note number taps higher. */
     function makeTap(context, destination, note, start) {
@@ -463,6 +544,10 @@
         var context = null;
         var master = null;
         var limiter = null;
+        var piano = null;
+        var pianoLoading = null;
+        var pianoRefused = false;
+        var pianoTold = false;
         var partGains = [];
         var scores = {};
         var order = [];
@@ -590,6 +675,34 @@
             partGains = [];
         }
 
+        function pianoWanted() {
+            return Boolean(data.midi.piano && controls.piano && controls.piano.checked);
+        }
+
+        /* The recordings are several hundred kilobytes, so they are fetched only once
+           the reader has asked for them, and only once for the life of the page. */
+        function pianoIfWanted() {
+            if (!pianoWanted() || pianoRefused) {
+                return Promise.resolve(null);
+            }
+            if (piano) {
+                return Promise.resolve(piano);
+            }
+            if (!pianoLoading) {
+                pianoLoading = loadPiano(context, data.midi.piano).then(function (buffers) {
+                    piano = buffers;
+                    return buffers;
+                }, function () {
+                    // Recordings that will not load are not worth refusing to play
+                    // over: the written sound stands in and the reader is told once.
+                    pianoRefused = true;
+                    pianoLoading = null;
+                    return null;
+                });
+            }
+            return pianoLoading;
+        }
+
         function openGains() {
             var voice = chosenVoice();
             var forward = forwardPart();
@@ -625,6 +738,8 @@
                             makeTap(context, partGains[part], note, Math.max(start, now));
                         } else if (sustaining[part]) {
                             sustainNote(context, partGains[part], note, Math.max(start, now), end);
+                        } else if (piano && pianoWanted()) {
+                            sampleNote(context, partGains[part], piano, note, Math.max(start, now), end);
                         } else {
                             synthNote(context, partGains[part], note, Math.max(start, now), end);
                         }
@@ -721,12 +836,12 @@
             }
         }
 
-        function start(parsed) {
+        function start(parsed, said) {
             music = parsed;
             playing = true;
             origin = context.currentTime + 0.15;
             restart();
-            report("Playing " + label(group) + ".");
+            report((said || "") + "Playing " + label(group) + ".");
         }
 
         // A note said before the state is a note the next message would wipe out, so
@@ -744,11 +859,16 @@
             var loaded = fetchRange(group.start, group.end);
             // The browser holds the audio clock until a gesture releases it, so
             // playback waits for the resume as well as for the file.
-            Promise.all([loaded, context.resume()]).then(function (results) {
+            Promise.all([loaded, context.resume(), pianoIfWanted()]).then(function (results) {
                 if (!pending || wanted !== group) {
                     return;
                 }
                 pending = false;
+                var sounding = "";
+                if (pianoRefused && !pianoTold) {
+                    pianoTold = true;
+                    sounding = "The recorded piano did not load, so the built-in sound is playing instead. ";
+                }
                 if (context.state !== "running") {
                     report("The audio has not started. Press Play this group again.");
                     return;
@@ -763,7 +883,7 @@
                     report("The audio for " + label(group) + " does not match this score. Reload the page and try again.");
                     return;
                 }
-                start(results[0]);
+                start(results[0], sounding);
             }, function (error) {
                 pending = false;
                 if (error && error.refused) {
@@ -791,7 +911,7 @@
         if (controls.stop) {
             controls.stop.addEventListener("click", function () { stop(true); });
         }
-        [controls.speed, controls.voice, controls.forward, controls.click].forEach(function (control) {
+        [controls.speed, controls.voice, controls.forward, controls.click, controls.piano].forEach(function (control) {
             if (control) {
                 control.addEventListener("change", replayIfPlaying);
             }
@@ -818,4 +938,6 @@
     window.TalkingScoresPlayer.reading = { parseMidi: parseMidi, collect: collect };
     // The numbers behind the sounded note, which no browser is needed to check.
     window.TalkingScoresPlayer.voice = { pianoVoice: pianoVoice };
+    // Which recording a note is played from, which no browser is needed to check.
+    window.TalkingScoresPlayer.samples = { sampleName: sampleName, nearestSample: nearestSample };
 })();

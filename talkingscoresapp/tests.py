@@ -1962,6 +1962,7 @@ class ReaderPageTests(TestCase):
                          [{"index": 0, "label": "Instrument 1 (unnamed)", "read": True,
                            "sustains": False}])
         self.assertEqual(data["midi"]["voices"], [{"parts": [0], "label": "Instrument 1 (unnamed)"}])
+        self.assertTrue(data["midi"]["piano"].endswith("audio/piano/"))
         self.assertIn('<div class="bar" id="bar-1" data-bar="1"', html)
         self.assertIn("<small>Bar</small> 1</h3>", html)
         self.assertNotIn("group-toggle", html)           # the script builds the group buttons

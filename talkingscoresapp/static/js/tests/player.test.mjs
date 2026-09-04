@@ -246,3 +246,29 @@ test("every note has an attack short enough to be heard as a strike", () => {
 test("the top of the keyboard is still quieter above than the bottom", () => {
     assert.ok(pianoVoice(96, 90).strikeLevel < pianoVoice(36, 90).strikeLevel);
 });
+
+const { sampleName, nearestSample } = scope.window.TalkingScoresPlayer.samples;
+
+test("a recording is named as the note it holds", () => {
+    assert.equal(sampleName(21), "A0");
+    assert.equal(sampleName(60), "C4");
+    assert.equal(sampleName(108), "C8");
+    // The files are named with flats, so a black key has one spelling only.
+    assert.equal(sampleName(61), "Db4");
+    assert.equal(sampleName(66), "Gb4");
+});
+
+test("a note is played from a recording no more than a semitone away", () => {
+    for (let number = 21; number <= 108; number++) {
+        const sampled = nearestSample(number);
+        assert.ok(Math.abs(number - sampled) <= 1,
+            `note ${number} would be played from ${sampled}`);
+        assert.equal((sampled - 21) % 3, 0);
+    }
+});
+
+test("a note off the ends of the keyboard is played from the nearest recording", () => {
+    assert.equal(nearestSample(0), 21);
+    assert.equal(nearestSample(20), 21);
+    assert.equal(nearestSample(127), 108);
+});
