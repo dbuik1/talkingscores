@@ -552,7 +552,7 @@ def options(request, id, filename):
             "colour_pitch": "chk_colourPitch" in request.POST,
             "rhythm_colour_mode": request.POST.get("rhythm_colour_mode", "none"),
             "octave_colour_mode": request.POST.get("octave_colour_mode", "none"),
-            "key_signature_accidentals": request.POST.get("key_signature_accidentals", "applied"),
+            "key_signature_accidentals": request.POST.get("key_signature_accidentals", "sounding"),
             "advanced_rhythm_colours": clean_colours({slugify(key.replace('color_rhythm_', '')): value for key, value in request.POST.items() if key.startswith('color_rhythm_')}),
             "advanced_octave_colours": clean_colours({key.replace('color_octave_', ''): value for key, value in request.POST.items() if key.startswith('color_octave_')}),
             "figureNoteColours": clean_colours(figure_note_colours)

@@ -188,13 +188,14 @@ class Vocabulary:
         mode = self.settings.key_signature_accidentals
         if not pitch.accidental_name:
             return False
-        if mode == 'standard':
+        if mode == 'printed':
             return bool(pitch.accidental_displayed)
-        if mode in ('on_change', 'onChange'):
+        if mode == 'on_change':
             return bool(pitch.accidental_changed)
-        # Sharps and flats are always read; a natural only where the key signature
-        # would otherwise alter the letter.
-        return pitch.accidental_name != 'natural' or pitch.differs_from_key
+        # Every sharp and flat that sounds is read. Nothing is ever read as
+        # natural: a letter on its own is the note that letter names, so there
+        # is nothing for a natural to undo.
+        return pitch.accidental_name != 'natural'
 
     def octave(self, pitch, previous_pitch=None):
         naming = self.settings.octave_naming

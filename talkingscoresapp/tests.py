@@ -1524,26 +1524,43 @@ class ReviewedEngineTests(TestCase):
         bar_two = text.split("Bar 2")[1]
         self.assertIn("F sharp", bar_two)
 
-    def test_a_natural_is_read_when_it_undoes_the_key_signature(self):
-        from music21 import note, key
-        sharp, natural = note.Note("F#4"), note.Note("F4")
-        natural.pitch.accidental = "natural"
-        score = self._score_of_bars([[key.KeySignature(1), sharp, natural, note.Note("G4"), note.Note("A4")]])
-        text = self._text(score, {"style": "standard", "key_signature_accidentals": "applied"})
-        self.assertIn("F sharp", text)
-        self.assertIn("F natural", text)
-        c_major = self._score_of_bars([[note.Note("F#4"), natural, note.Note("G4"), note.Note("A4")]])
-        self.assertNotIn("F natural", self._text(c_major, {"style": "standard", "key_signature_accidentals": "applied"}))
-
-    def test_a_natural_kept_from_earlier_in_the_bar_is_still_read(self):
+    def test_a_note_is_named_by_the_pitch_it_sounds(self):
         from music21 import note, key
         first, cancelled = note.Note("F#4"), note.Note("F4")
         cancelled.pitch.accidental = "natural"
-        # The fourth note is written as a bare F: the natural earlier in the bar
-        # still applies to it, so it sounds a semitone below the key signature.
+        # D major, so the key sharpens F. The third note is written as a bare F:
+        # the natural before it still applies, so it sounds F natural too.
         score = self._score_of_bars([[key.KeySignature(2), first, cancelled, note.Note("F4"), note.Note("F#4")]])
-        text = self._text(score, {"style": "standard", "key_signature_accidentals": "applied"})
-        self.assertEqual(text.count("F natural"), 2)
+        text = self._text(score, {"style": "standard"})
+        beats = [line for line in text.splitlines() if line.startswith("Beat")][0]
+        self.assertEqual(beats, "Beat 1 crotchet mid F sharp, Beat 2 F, Beat 3 F, Beat 4 F sharp")
+        # Nothing is read as natural: a letter on its own is the note it names.
+        self.assertNotIn("natural", text)
+
+    def test_an_unusual_spelling_is_read_as_the_plainer_note(self):
+        from music21 import note
+        score = self._score_of_bars([[note.Note("C-4"), note.Note("E#4"), note.Note("F##4"), note.Note("G#4")]])
+        beats = [line for line in self._text(score, {"style": "standard"}).splitlines()
+                 if line.startswith("Beat")][0]
+        # C flat sounds a B, and an octave lower than the letter suggests.
+        self.assertEqual(beats, "Beat 1 crotchet low B, Beat 2 mid F, Beat 3 G, Beat 4 G sharp")
+
+    def test_the_printed_mode_reads_every_accidental_the_music_prints(self):
+        from music21 import note
+        sharp, natural = note.Note("F#4"), note.Note("F4")
+        natural.pitch.accidental = "natural"
+        score = self._score_of_bars([[sharp, natural, note.Note("G4"), note.Note("A4")]])
+        text = self._text(score, {"style": "standard", "key_signature_accidentals": "printed"})
+        # The natural cancels the sharp earlier in the bar, and the page prints it.
+        self.assertIn("F sharp", text)
+        self.assertIn("F natural", text)
+
+    def test_an_older_options_file_still_names_an_accidental_mode(self):
+        from lib.render_settings import RenderSettings
+        self.assertEqual(RenderSettings.from_options(
+            {"key_signature_accidentals": "applied"}).key_signature_accidentals, "sounding")
+        self.assertEqual(RenderSettings.from_options(
+            {"key_signature_accidentals": "standard"}).key_signature_accidentals, "printed")
 
     def test_a_tuplet_is_read_when_the_file_leaves_the_bracket_out(self):
         from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter

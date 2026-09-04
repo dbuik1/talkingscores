@@ -604,8 +604,7 @@ class Music21TalkingScore(TalkingScoreBase):
         state["key"] = alters
         return state
 
-    @staticmethod
-    def _make_pitch(pitch, state):
+    def _make_pitch(self, pitch, state):
         accidental = pitch.accidental
         name = accidental.name if accidental is not None else None
         displayed = bool(accidental.displayStatus) if accidental is not None else False
@@ -613,6 +612,17 @@ class Music21TalkingScore(TalkingScoreBase):
         changed = last_alter is None or pitch.alter != last_alter
         state[pitch.step] = pitch.alter
         differs_from_key = (pitch.alter or 0) != state.get("key", {}).get(pitch.step, 0)
+        if self.settings.key_signature_accidentals == "sounding":
+            # The note is named by the pitch it sounds, so nothing has to be
+            # carried in the reader's head: not the key signature, not an
+            # accidental earlier in the bar. A spelling that has a plainer name
+            # for the same sound takes it: C flat is read as B, F double sharp
+            # as G.
+            sounding = pitch.simplifyEnharmonic()
+            return TSPitch(sounding.step, sounding.octave, sounding.alter, sounding.ps,
+                           accidental_name=alter_name(sounding.alter) if sounding.alter else None,
+                           accidental_displayed=displayed, accidental_changed=changed,
+                           differs_from_key=differs_from_key)
         if name is None and differs_from_key:
             # A note carrying an alteration set earlier in the same bar is written
             # without an accidental of its own, so the letter alone would be read

@@ -53,7 +53,7 @@ class RenderSettings:
     # Pitch
     pitch_names: str = "letters"         # letters, phonetic, colours, none
     accidental_style: str = "words"      # words, symbols
-    key_signature_accidentals: str = "applied"  # applied, standard, on_change
+    key_signature_accidentals: str = "sounding"  # sounding, printed, on_change
     word_order: str = "rhythm_first"     # rhythm_first, pitch_first
 
     # Octaves
@@ -149,6 +149,10 @@ class RenderSettings:
                 continue
             overrides[key] = value
 
+        mode = overrides.get("key_signature_accidentals")
+        if mode in ACCIDENTAL_MODE_ALIASES:
+            overrides["key_signature_accidentals"] = ACCIDENTAL_MODE_ALIASES[mode]
+
         if "bars_at_a_time" in overrides:
             try:
                 overrides["bars_at_a_time"] = max(1, int(overrides["bars_at_a_time"]))
@@ -216,6 +220,15 @@ STYLE_PRESETS = {
         beams=True,
         repetition_mode="detailed",
     ),
+}
+
+
+# Older option files name the accidental modes differently; each names the same
+# reading as one of the three the engine has now.
+ACCIDENTAL_MODE_ALIASES = {
+    "applied": "sounding",
+    "standard": "printed",
+    "onChange": "on_change",
 }
 
 
