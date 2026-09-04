@@ -120,14 +120,33 @@
             return parseInt(bar.getAttribute("data-bar"), 10);
         }
 
+        // Bars are counted in the order they are written, so a number always reaches
+        // one bar; what the page prints is what the reader sees and types, and both
+        // halves of a repeat ending print the same number.
+        var printedNumbers = {};
+        var countedForPrinted = {};
+        bars.forEach(function (bar) {
+            var counted = barNumber(bar);
+            var printed = bar.getAttribute("data-printed") || String(counted);
+            printedNumbers[counted] = printed;
+            var typed = parseInt(printed, 10);
+            if (!isNaN(typed) && !(typed in countedForPrinted)) {
+                countedForPrinted[typed] = counted;
+            }
+        });
+
+        function printedNumber(counted) {
+            return printedNumbers[counted] || String(counted);
+        }
+
         function rangeLabel(start, end, capital) {
             if (start === data.pickupBar && end === data.pickupBar) {
                 return capital ? "Pickup bar" : "pickup bar";
             }
             if (start === end) {
-                return (capital ? "Bar " : "bar ") + start;
+                return (capital ? "Bar " : "bar ") + printedNumber(start);
             }
-            return (capital ? "Bars " : "bars ") + start + " to " + end;
+            return (capital ? "Bars " : "bars ") + printedNumber(start) + " to " + printedNumber(end);
         }
 
         function buildGroups(size) {
@@ -325,10 +344,14 @@
         }
 
         function goToTypedBar() {
-            var number = parseInt(gotoInput.value, 10);
-            var index = isNaN(number) ? -1 : groupIndexForBar(number);
+            var typed = parseInt(gotoInput.value, 10);
+            // A number typed here is the one printed on the page. Where two bars print
+            // it, as the two halves of a repeat ending do, the first one is opened.
+            var number = isNaN(typed) ? NaN : countedForPrinted[typed];
+            var index = number === undefined || isNaN(number) ? -1 : groupIndexForBar(number);
             if (index < 0) {
-                var message = "Enter a bar number from " + data.firstBar + " to " + data.lastBar + ".";
+                var message = "Enter a bar number from " + data.firstPrintedBar
+                    + " to " + data.lastPrintedBar + ".";
                 gotoError.textContent = message;
                 gotoInput.setAttribute("aria-invalid", "true");
                 if (document.activeElement === gotoInput) {

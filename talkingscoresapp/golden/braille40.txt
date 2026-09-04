@@ -2,7 +2,7 @@ Title: Untitled work
 Composer: Unknown composer
 Key: C major (no sharps or flats)
 Time signature: 3 4
-Bars: 24
+Bars: 25
 Instruments: Instrument 1 (unnamed)
 Octave numbers follow scientific pitch notation: middle C is C4.
 
@@ -43,18 +43,21 @@ Bar 12
 rhythm = bar 11
 b1 F 5 cr st, b2 F st, b3 F st
 
-Bars 13 to 16
+Bars 13 to 15
 Bar 13
 b1 F 5 mn sl, b3 E cr end sl
+Bar 13, second time
+rhythm = bar 13
+b1 G 5 mn, b3 B 4 cr
 Bar 14
 b1 C 5 cr sl, b2 D, b3 E end sl
 Bar 15
 rhythm = bar 14
 b1 F 5 cr st, b2 F st, b3 E st
+
+Bars 16 to 19
 Bar 16
 b1 E 5 cr sl, b2 D qv end sl, crescendo starts, D st, b3 E st, F st
-
-Bars 17 to 20
 Bar 17
 b1 f, G 5 mn, b3 E qv sl, C end sl
 Bar 18
@@ -62,10 +65,10 @@ b1 F 5 cr sl, b2 D, b3 B end sl
 Bar 19
 rhythm = bar 18
 b1 C 5 cr st, b2 D st, b3 E st
+
+Bars 20 to 23
 Bar 20
 b1 F 5 cr st, b2 D st, b3 cr r
-
-Bars 21 to 24
 Bar 21
 b1 G 5 mn, b3 E qv sl, C end sl
 Bar 22
@@ -73,6 +76,7 @@ b1 F 5 cr sl, b2 D, b3 B end sl
 Bar 23
 rhythm = bar 22
 b1 C 5 cr sl, b2 E end sl, b3 D st
+
 Bar 24
 b1 C 5 dmn
 Repeat ends

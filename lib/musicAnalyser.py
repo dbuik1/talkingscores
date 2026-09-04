@@ -80,7 +80,8 @@ class MusicAnalyser:
                 instrument_len = ts.part_instruments[ins][2]
                 for part_index in range(start_part, start_part+instrument_len):
                     self.analyse_parts.append(AnalysePart())
-                    self.analyse_parts[analyse_index].set_part(self.score.parts[part_index])
+                    self.analyse_parts[analyse_index].set_part(
+                        self.score.parts[part_index], ts.bar_labels)
                     summary = self.analyse_parts[analyse_index].describe_summary()
                     summary += self.analyse_parts[analyse_index].describe_repetition_summary()
                     self.repetition_in_contexts[part_index] = (self.analyse_parts[analyse_index].describe_repetition_in_context())
@@ -129,7 +130,7 @@ class MusicAnalyser:
                     elif (changes_name == "tempo"):
                         changes += self.ts.describe_tempo(ch)
 
-                    changes += " at bar " + str(ch.measureNumber)
+                    changes += " at bar " + self.ts.bar_label(ch.measureNumber)
                     if index == numchanges-1:
                         changes += " and "
                     elif index < numchanges-1:
@@ -195,6 +196,10 @@ class AnalysePart:
         0.0625: 'hemi-demi-semi-quavers',
         0.0: 'grace notes',
     }
+
+    def bar_label(self, bar_number):
+        """The bar's number as the page prints it, which repeat endings share."""
+        return self.bar_labels.get(bar_number, str(bar_number))
 
     def describe_immediate_repetition(self):
         context = {}
@@ -279,6 +284,7 @@ class AnalysePart:
         return to_return
 
     def __init__(self):
+        self.bar_labels = {}  # {bar number: the number the page prints, where they differ}
         self.analyse_indexes_list = []  # a list of AnalyseIndex - each unique event}
         self.analyse_indexes_dictionary = {}  # {index of event, [List of event indexes]
         self.analyse_indexes_all = {}  # {event index, [index from analyse_indexes_list, index from analyse_indexes_dictionary]}
@@ -795,7 +801,7 @@ class AnalysePart:
         for key, ms in measures_dictionary.items():
             percent_usage = len(ms) / len(self.measure_indexes)*100
             if percent_usage > 33:
-                repetition += "The " + description + " in bar " + str(key) + " is used "
+                repetition += "The " + description + " in bar " + self.bar_label(key) + " is used "
                 repetition += self.describe_percentage(percent_usage)
                 repetition += " of the way through.  "
         return repetition
@@ -806,9 +812,9 @@ class AnalysePart:
             group_repetition_percent = ((group[0][1]-group[0][0]+1)*len(group)/len(self.measure_indexes))*100
             if group_repetition_percent > 33:
                 if (group[0][1]-group[0][0] == 1):  # x and y or x to y.
-                    repetition += "The " + description + " in bars " + str(group[0][0]) + " and " + str(group[0][1])
+                    repetition += "The " + description + " in bars " + self.bar_label(group[0][0]) + " and " + self.bar_label(group[0][1])
                 else:
-                    repetition += "The " + description + " in bars " + str(group[0][0]) + " to " + str(group[0][1])
+                    repetition += "The " + description + " in bars " + self.bar_label(group[0][0]) + " to " + self.bar_label(group[0][1])
                 repetition += " are used "
                 repetition += self.describe_repetition_percentage(group_repetition_percent)
                 repetition += " of the way through.  "
@@ -846,7 +852,7 @@ class AnalysePart:
             for check in check_rhythm_match:
                 percent_usage = (len(check) / len(self.measure_indexes))*100
                 if percent_usage > 33:
-                    repetition += "The rhythm in bar " + str(check[0]) + " is used "
+                    repetition += "The rhythm in bar " + self.bar_label(check[0]) + " is used "
                     repetition += self.describe_percentage(percent_usage)
                     repetition += " of the way through.  "
                 else:
@@ -858,7 +864,7 @@ class AnalysePart:
             for check in check_intervals_match:
                 percent_usage = (len(check) / len(self.measure_indexes))*100
                 if percent_usage > 33:
-                    repetition += "The intervals in bar " + str(check[0]) + " is used "
+                    repetition += "The intervals in bar " + self.bar_label(check[0]) + " is used "
                     repetition += self.describe_percentage(percent_usage)
                     repetition += " of the way through.  "
                 else:
@@ -953,12 +959,12 @@ class AnalysePart:
             temp = ""
             for index, usage in enumerate(group):
                 if index >= 1:
-                    temp = repeat_what + str(usage[0]) + and_or_through + str(usage[1])
-                    temp += " were first used at " + str(group[0][0])
+                    temp = repeat_what + self.bar_label(usage[0]) + and_or_through + self.bar_label(usage[1])
+                    temp += " were first used at " + self.bar_label(group[0][0])
                     if index >= 2:
-                        temp += " and lately used at " + str(group[index-1][0])
+                        temp += " and lately used at " + self.bar_label(group[index-1][0])
                 else:
-                    temp = "Bars " + str(usage[0]) + and_or_through + str(usage[1])
+                    temp = "Bars " + self.bar_label(usage[0]) + and_or_through + self.bar_label(usage[1])
                     temp += " are used " + (str(len(group)-1)) + " more times.  "
 
                 self.insert_or_plus_equals(repetition_in_context, usage[0], temp + ".  ")
@@ -971,14 +977,14 @@ class AnalysePart:
     # modifies the repetition_in_context dictionary
     def describe_measure_usage_in_context(self, repeated_measures_not_in_groups_dictionary, repeat_what, repetition_in_context):
         for key, ms in repeated_measures_not_in_groups_dictionary.items():
-            temp = repeat_what + str(key) + " is used " + str(len(ms)) + " more times.  "
+            temp = repeat_what + self.bar_label(key) + " is used " + str(len(ms)) + " more times.  "
             self.insert_or_plus_equals(repetition_in_context, key, temp)
 
             for index, m in enumerate(ms):
-                temp = repeat_what + str(m)
-                temp += " was first used at " + str(key)
+                temp = repeat_what + self.bar_label(m)
+                temp += " was first used at " + self.bar_label(key)
                 if index >= 1:
-                    temp += " and lately used at " + str(ms[index-1])
+                    temp += " and lately used at " + self.bar_label(ms[index-1])
 
                 self.insert_or_plus_equals(repetition_in_context, m, temp + ".  ")
 
@@ -1012,36 +1018,36 @@ class AnalysePart:
                 group_repetition_percent = ((group[0][1]-group[0][0]+1)*len(group)/len(self.measure_indexes))*100
                 if group_repetition_percent > 50:
                     if (group[0][1]-group[0][0] == 1):  # x and y or x to y.
-                        repetition += "Bars " + str(group[0][0]) + " and " + str(group[0][1])
+                        repetition += "Bars " + self.bar_label(group[0][0]) + " and " + self.bar_label(group[0][1])
                     else:
-                        repetition += "Bars " + str(group[0][0]) + " to " + str(group[0][1])
+                        repetition += "Bars " + self.bar_label(group[0][0]) + " to " + self.bar_label(group[0][1])
                     repetition += " are used "
                     repetition += self.describe_repetition_percentage(group_repetition_percent)
                     repetition += " of the way through.  "
                 else:
                     # just describe where the group is repeated
                     if (group[0][1]-group[0][0] == 1):  # x and y or x to y.
-                        repetition += "Bars " + str(group[0][0]) + " and " + str(group[0][1])
+                        repetition += "Bars " + self.bar_label(group[0][0]) + " and " + self.bar_label(group[0][1])
                     else:
-                        repetition += "Bars " + str(group[0][0]) + " to " + str(group[0][1])
+                        repetition += "Bars " + self.bar_label(group[0][0]) + " to " + self.bar_label(group[0][1])
                     repetition += " are used at "
                     for index, ms in enumerate(group[1:]):
                         if index == len(group)-2 and index > 0:
                             repetition += " and "
                         elif index < len(group)-1 and index > 0:
                             repetition += ", "
-                        repetition += str(ms[0])
+                        repetition += self.bar_label(ms[0])
                     repetition += ".  "
 
         # individual bars repeated
         for key, ms in self.repeated_measures_not_in_groups_dictionary.items():
-            repetition += "Bar " + str(key) + " is used at "
+            repetition += "Bar " + self.bar_label(key) + " is used at "
             for index, m in enumerate(ms):
                 if index == len(ms)-1 and index > 0:
                     repetition += " and "
                 elif index < len(ms)-1 and index > 0:
                     repetition += ", "
-                repetition += str(m)
+                repetition += self.bar_label(m)
             repetition += ".  "
 
         if repetition == "":
@@ -1052,9 +1058,9 @@ class AnalysePart:
         if len(self.measure_rhythm_not_full_match_groups_list) > 0:
             for group in self.measure_rhythm_not_full_match_groups_list:
                 if (group[0][1]-group[0][0] == 1):  # x and y or x to y.
-                    rhythm_repetition += "The rhythm in bars " + str(group[0][0]) + " and " + str(group[0][1])
+                    rhythm_repetition += "The rhythm in bars " + self.bar_label(group[0][0]) + " and " + self.bar_label(group[0][1])
                 else:
-                    rhythm_repetition += "The rhythm in bars " + str(group[0][0]) + " to " + str(group[0][1])
+                    rhythm_repetition += "The rhythm in bars " + self.bar_label(group[0][0]) + " to " + self.bar_label(group[0][1])
                 rhythm_repetition += " are used at "
                 for index, ms in enumerate(group[1:]):
                     if index == len(group)-1 and index > 0:
@@ -1062,18 +1068,18 @@ class AnalysePart:
                     elif index < len(group)-1 and index > 0:
                         rhythm_repetition += ", "
 
-                    rhythm_repetition += str(ms[0])
+                    rhythm_repetition += self.bar_label(ms[0])
                 rhythm_repetition += ".  "
 
         # individual measures with repeated rhythm
         for key, ms in self.repeated_rhythm_measures_not_full_match_not_in_groups_dictionary.items():
-            rhythm_repetition += "The rhythm in bar " + str(key) + " is used at "
+            rhythm_repetition += "The rhythm in bar " + self.bar_label(key) + " is used at "
             for index, m in enumerate(ms):
                 if index == len(ms)-1 and index > 0:
                     rhythm_repetition += " and "
                 elif index < len(ms)-1 and index > 0:
                     rhythm_repetition += ", "
-                rhythm_repetition += str(m)
+                rhythm_repetition += self.bar_label(m)
             rhythm_repetition += ".  "
 
         if rhythm_repetition == "":
@@ -1086,9 +1092,9 @@ class AnalysePart:
         if len(self.measure_intervals_not_full_match_groups_list) > 0:
             for group in self.measure_intervals_not_full_match_groups_list:
                 if (group[0][1]-group[0][0] == 1):  # x and y or x to y.
-                    interval_repetition += "The intervals in bars " + str(group[0][0]) + " and " + str(group[0][1])
+                    interval_repetition += "The intervals in bars " + self.bar_label(group[0][0]) + " and " + self.bar_label(group[0][1])
                 else:
-                    interval_repetition += "The intervals in bars " + str(group[0][0]) + " to " + str(group[0][1])
+                    interval_repetition += "The intervals in bars " + self.bar_label(group[0][0]) + " to " + self.bar_label(group[0][1])
                 interval_repetition += " are used at "
                 for index, ms in enumerate(group[1:]):
                     if index == len(group)-1 and index > 0:
@@ -1096,18 +1102,18 @@ class AnalysePart:
                     elif index < len(group)-1 and index > 0:
                         interval_repetition += ", "
 
-                    interval_repetition += str(ms[0])
+                    interval_repetition += self.bar_label(ms[0])
                 interval_repetition += ".  "
 
         # individual measures with repeated intervals
         for key, ms in self.repeated_intervals_measures_not_full_match_not_in_groups_dictionary.items():
-            interval_repetition += "The intervals in bar " + str(key) + " are used at "
+            interval_repetition += "The intervals in bar " + self.bar_label(key) + " are used at "
             for index, m in enumerate(ms):
                 if index == len(ms)-1 and index > 0:
                     interval_repetition += " and "
                 elif index < len(ms)-1 and index > 0:
                     interval_repetition += ", "
-                interval_repetition += str(m)
+                interval_repetition += self.bar_label(m)
             interval_repetition += ".  "
 
         if interval_repetition == "":
@@ -1166,8 +1172,9 @@ class AnalysePart:
             self.measure_details[number] = self.measure_detail_signature(
                 measure, wedges.get(number, ()))
 
-    def set_part(self, p):
+    def set_part(self, p, bar_labels=None):
         self.part = p
+        self.bar_labels = bar_labels or {}
         self.record_measure_details()
 
         event_index = 0

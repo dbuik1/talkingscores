@@ -2,7 +2,7 @@ Title: Untitled work
 Composer: Unknown composer
 Key: C major (no sharps or flats)
 Time signature: 3 4
-Bars: 24
+Bars: 25
 Instruments: Instrument 1 (unnamed)
 Mid means the octave from middle C up to the B above it. High is the octave above that, low the octave below.
 
@@ -43,18 +43,21 @@ Bar 12
 Same rhythm as bar 11
 Beat 1 crotchet high F staccato, Beat 2 F staccato, Beat 3 F staccato
 
-Bars 13 to 16
+Bars 13 to 15
 Bar 13
 Beat 1 minim high F slur starts, Beat 3 crotchet E slur ends
+Bar 13, second time
+Same rhythm as bar 13
+Beat 1 minim high G, Beat 3 crotchet mid B
 Bar 14
 Beat 1 crotchet high C slur starts, Beat 2 D, Beat 3 E slur ends
 Bar 15
 Same rhythm as bar 14
 Beat 1 crotchet high F staccato, Beat 2 F staccato, Beat 3 E staccato
+
+Bars 16 to 19
 Bar 16
 Beat 1 crotchet high E slur starts, Beat 2 quaver D slur ends, crescendo starts, D staccato, Beat 3 E staccato, F staccato
-
-Bars 17 to 20
 Bar 17
 Beat 1 forte, minim high G, Beat 3 quaver E slur starts, C slur ends
 Bar 18
@@ -62,10 +65,10 @@ Beat 1 crotchet high F slur starts, Beat 2 D, Beat 3 mid B slur ends
 Bar 19
 Same rhythm as bar 18
 Beat 1 crotchet high C staccato, Beat 2 D staccato, Beat 3 E staccato
+
+Bars 20 to 23
 Bar 20
 Beat 1 crotchet high F staccato, Beat 2 D staccato, Beat 3 crotchet rest
-
-Bars 21 to 24
 Bar 21
 Beat 1 minim high G, Beat 3 quaver E slur starts, C slur ends
 Bar 22
@@ -73,6 +76,7 @@ Beat 1 crotchet high F slur starts, Beat 2 D, Beat 3 mid B slur ends
 Bar 23
 Same rhythm as bar 22
 Beat 1 crotchet high C slur starts, Beat 2 E slur ends, Beat 3 D staccato
+
 Bar 24
 Beat 1 dotted minim high C
 Repeat ends

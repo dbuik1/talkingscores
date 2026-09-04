@@ -1680,6 +1680,25 @@ class ReviewedEngineTests(TestCase):
         self.assertIn("crotchet Closed Hi-Hat", text)
         self.assertNotIn("unpitched", text)
 
+    def test_both_halves_of_a_repeat_ending_are_read_and_addressable(self):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        score = Music21TalkingScore(os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml"))
+        formatter = HTMLTalkingScoreFormatter(score, options={"style": "standard", "bars_at_a_time": 4})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            text = formatter.render_text()
+        # The file prints 13 on both halves of a first- and second-time ending; each
+        # is counted as a bar of its own so the second is read rather than dropped.
+        self.assertIn("Bar 13\nBeat 1 minim high F", text)
+        self.assertIn("Bar 13, second time\n", text)
+        self.assertIn("Beat 1 minim high G, Beat 3 crotchet mid B", text)
+        self.assertEqual(score.bar_label(13), "13")
+        self.assertEqual(score.bar_label(14), "13, second time")
+        # The counted number reaches one bar and only one, so the second-time bar
+        # can be played on its own.
+        events = score.get_events_for_bar_range(14, 14, 0)
+        self.assertEqual(sorted(events.keys()), [14])
+        self.assertTrue(events[14])
+
     def test_slurs_and_articulations_are_read_with_the_notes_they_mark(self):
         from music21 import articulations, note, spanner
         notes = [note.Note("C4"), note.Note("D4"), note.Note("E4"), note.Note("F4")]
@@ -1873,8 +1892,10 @@ class ReaderPageTests(TestCase):
         html = self._render(self._formatter({"style": "standard", "bars_at_a_time": 3}),
                             web_path="/midis/x/y.musicxml", options_url="/score_options/x/y.musicxml")
         data = json.loads(re.search(r'id="score-data">(.*?)</script>', html, re.S).group(1))
+        # The fixture prints 24 bar numbers; the last is printed twice, for a first-
+        # and second-time ending, and both halves are read.
         self.assertEqual((data["firstBar"], data["firstNumberedBar"], data["lastBar"], data["totalBars"]),
-                         (1, 1, 24, 24))
+                         (1, 1, 25, 25))
         self.assertIsNone(data["pickupBar"])
         self.assertEqual(data["barsPerGroup"], 3)
         self.assertEqual(data["groupSizes"], [1, 2, 3, 4, 8])
@@ -1926,9 +1947,18 @@ class ReaderPageTests(TestCase):
         }
         formatter.score.selected_instruments = [1, 2, 3, 4, 5, 6, 7]
         line = formatter._meta_line()
-        self.assertEqual(line[-6:], ["Flute", "Oboe", "Horn", "Cello", "and 1 more", "24 bars"])
+        self.assertEqual(line[-6:], ["Flute", "Oboe", "Horn", "Cello", "and 1 more", "25 bars"])
         formatter.score.selected_instruments = [4]
-        self.assertEqual(formatter._meta_line()[-2:], ["Oboe", "24 bars"])
+        self.assertEqual(formatter._meta_line()[-2:], ["Oboe", "25 bars"])
+
+    def test_the_page_labels_a_repeat_ending_by_its_printed_number(self):
+        html = self._render(self._formatter({"style": "standard", "bars_at_a_time": 4}))
+        data = json.loads(re.search(r'id="score-data">(.*?)</script>', html, re.S).group(1))
+        # The go-to box takes the number printed on the page, which stops one short of
+        # the bar count when a repeat ending prints its number twice.
+        self.assertEqual((data["firstPrintedBar"], data["lastPrintedBar"]), (1, 24))
+        self.assertIn('data-bar="14" data-printed="13, second time"', html)
+        self.assertIn("<small>Bar</small> 13, second time</h3>", html)
 
     def test_a_pickup_bar_keeps_go_to_bar_on_numbered_bars(self):
         from talkingscoreslib import HTMLTalkingScoreFormatter

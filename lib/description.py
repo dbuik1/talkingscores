@@ -115,6 +115,7 @@ class SegmentDescription:
     anchor: str
     is_pickup: bool = False
     instruments: list = field(default_factory=list)
+    bar_labels: dict = field(default_factory=dict)   # {number: what the page prints}
 
     @property
     def bars(self):
@@ -134,7 +135,9 @@ class SegmentDescription:
                         entries.append({"label": part.name if label_parts else "", "bar": bar})
                         break
             # A bar no part describes still takes its place, so the numbering never jumps.
-            bars.append({"number": number, "label": "Pickup bar" if self.is_pickup else f"Bar {number}",
+            printed = self.bar_labels.get(number, str(number))
+            bars.append({"number": number, "printed": printed,
+                         "label": "Pickup bar" if self.is_pickup else f"Bar {printed}",
                          "is_pickup": self.is_pickup, "parts": entries})
         return bars
 
@@ -284,7 +287,7 @@ class PartState:
 
 class DescriptionBuilder:
     def __init__(self, settings, time_and_keys=None, bar_endings=None,
-                 immediate_repetitions=None, detailed_repetitions=None):
+                 immediate_repetitions=None, detailed_repetitions=None, bar_labels=None):
         self.settings = settings
         self.vocabulary = Vocabulary(settings)
         self.palette = Palette(settings)
@@ -292,6 +295,7 @@ class DescriptionBuilder:
         self.bar_endings = bar_endings or {}
         self.immediate_repetitions = immediate_repetitions or {}
         self.detailed_repetitions = detailed_repetitions or {}
+        self.bar_labels = bar_labels or {}
 
     # Bars
 
@@ -366,7 +370,11 @@ class DescriptionBuilder:
     def bar_label(self, bar_number, is_pickup):
         if is_pickup:
             return "Pickup bar"
-        return f"Bar {bar_number}"
+        return f"Bar {self.printed_number(bar_number)}"
+
+    def printed_number(self, bar_number):
+        """The bar's number as the page prints it, which repeat endings share."""
+        return self.bar_labels.get(bar_number, str(bar_number))
 
     def _add_repeat_notes(self, bar, part_index, bar_number):
         mode = self.settings.repetition_mode
@@ -377,10 +385,10 @@ class DescriptionBuilder:
             bar.repeat_type = immediate.get("type", "")
             previous = bar_number - 1
             if bar.repeat_type == "exact":
-                bar.repeat_note = self.vocabulary.same_as_bar(previous)
+                bar.repeat_note = self.vocabulary.same_as_bar(self.printed_number(previous))
                 bar.collapsed = mode == "learning"
             elif bar.repeat_type == "rhythm":
-                bar.repeat_note = self.vocabulary.same_rhythm_as_bar(previous)
+                bar.repeat_note = self.vocabulary.same_rhythm_as_bar(self.printed_number(previous))
         if mode == "detailed":
             detail = self.detailed_repetitions.get(part_index, {}).get(bar_number)
             if detail:

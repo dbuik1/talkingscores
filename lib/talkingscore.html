@@ -52,7 +52,7 @@
     <noscript><p class="callout noscript">Every bar is on this page. Use your browser's find command or the headings list to move between bars. Playback and the group controls need JavaScript.</p></noscript>
 
     <div class="toolbar" id="toolbar" role="group" aria-label="Score controls" hidden>
-        <label class="goto"><span>Bar number</span><input class="input" type="number" id="goto-bar" min="{{ score_data.firstBar }}" max="{{ score_data.lastBar }}" value="{{ score_data.firstBar }}" aria-describedby="goto-error"></label>
+        <label class="goto"><span>Bar number</span><input class="input" type="number" id="goto-bar" min="{{ score_data.firstPrintedBar }}" max="{{ score_data.lastPrintedBar }}" value="{{ score_data.firstPrintedBar }}" aria-describedby="goto-error"></label>
         <button class="btn" type="button" id="goto-go">Go to bar</button>
         <p class="error" id="goto-error"></p>
         <button class="btn" type="button" id="previous-group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Previous group</button>
@@ -171,11 +171,11 @@
             <h2>{{ segment.label }}</h2>
             <div class="body" id="group-{{ segment.start_bar }}-body">
             {% for bar in segment.bars %}
-                <div class="bar" id="bar-{{ bar.number }}" data-bar="{{ bar.number }}">
+                <div class="bar" id="bar-{{ bar.number }}" data-bar="{{ bar.number }}" data-printed="{{ bar.printed }}">
                     {% if bar.is_pickup %}
                     <h3 class="words">Pickup bar</h3>
                     {% else %}
-                    <h3><small>Bar</small> {{ bar.number }}</h3>
+                    <h3><small>Bar</small> {{ bar.printed }}</h3>
                     {% endif %}
                     <div class="parts">
                     {% if not bar.parts %}<p class="muted">Nothing is written for this bar.</p>{% endif %}

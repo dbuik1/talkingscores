@@ -2,7 +2,7 @@ Title: Untitled work
 Composer: Unknown composer
 Key: C major (no sharps or flats)
 Time signature: 3 4
-Bars: 24
+Bars: 25
 Instruments: Instrument 1 (unnamed)
 Middle means the octave from middle C up to the B above it. High is the octave above that, low the octave below.
 
@@ -43,18 +43,21 @@ Bar 12
 Same rhythm as bar 11
 Beat 1 high F 1 beat staccato, Beat 2 F 1 beat staccato, Beat 3 F 1 beat staccato
 
-Bars 13 to 16
+Bars 13 to 15
 Bar 13
 Beat 1 high F 2 beats slur starts, Beat 3 E 1 beat slur ends
+Bar 13, second time
+Same rhythm as bar 13
+Beat 1 high G 2 beats, Beat 3 middle B 1 beat
 Bar 14
 Beat 1 high C 1 beat slur starts, Beat 2 D 1 beat, Beat 3 E 1 beat slur ends
 Bar 15
 Same rhythm as bar 14
 Beat 1 high F 1 beat staccato, Beat 2 F 1 beat staccato, Beat 3 E 1 beat staccato
+
+Bars 16 to 19
 Bar 16
 Beat 1 high E 1 beat slur starts, Beat 2 D half a beat slur ends, crescendo starts, D half a beat staccato, Beat 3 E half a beat staccato, F half a beat staccato
-
-Bars 17 to 20
 Bar 17
 Beat 1 forte, high G 2 beats, Beat 3 E half a beat slur starts, C half a beat slur ends
 Bar 18
@@ -62,10 +65,10 @@ Beat 1 high F 1 beat slur starts, Beat 2 D 1 beat, Beat 3 middle B 1 beat slur e
 Bar 19
 Same rhythm as bar 18
 Beat 1 high C 1 beat staccato, Beat 2 D 1 beat staccato, Beat 3 E 1 beat staccato
+
+Bars 20 to 23
 Bar 20
 Beat 1 high F 1 beat staccato, Beat 2 D 1 beat staccato, Beat 3 rest for 1 beat
-
-Bars 21 to 24
 Bar 21
 Beat 1 high G 2 beats, Beat 3 E half a beat slur starts, C half a beat slur ends
 Bar 22
@@ -73,6 +76,7 @@ Beat 1 high F 1 beat slur starts, Beat 2 D 1 beat, Beat 3 middle B 1 beat slur e
 Bar 23
 Same rhythm as bar 22
 Beat 1 high C 1 beat slur starts, Beat 2 E 1 beat slur ends, Beat 3 D 1 beat staccato
+
 Bar 24
 Beat 1 high C 3 beats
 Repeat ends

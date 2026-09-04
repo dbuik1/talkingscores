@@ -2,7 +2,7 @@ Title: Untitled work
 Composer: Unknown composer
 Key: C major (no sharps or flats)
 Time signature: 3 4
-Bars: 24
+Bars: 25
 Instruments: Instrument 1 (unnamed)
 Octave numbers follow scientific pitch notation: middle C is C4.
 
@@ -43,18 +43,21 @@ Bar 12
 Same rhythm as bar 11
 crotchet F 5 staccato, F staccato, F staccato
 
-Bars 13 to 16
+Bars 13 to 15
 Bar 13
 minim F 5 slur starts, crotchet E slur ends
+Bar 13, second time
+Same rhythm as bar 13
+minim G 5, crotchet B 4
 Bar 14
 crotchet C 5 slur starts, D, E slur ends
 Bar 15
 Same rhythm as bar 14
 crotchet F 5 staccato, F staccato, E staccato
+
+Bars 16 to 19
 Bar 16
 crotchet E 5 slur starts, quaver D slur ends, crescendo starts, D staccato, E staccato, F staccato
-
-Bars 17 to 20
 Bar 17
 forte, minim G 5, quaver E slur starts, C slur ends
 Bar 18
@@ -62,10 +65,10 @@ crotchet F 5 slur starts, D, B 4 slur ends
 Bar 19
 Same rhythm as bar 18
 crotchet C 5 staccato, D staccato, E staccato
+
+Bars 20 to 23
 Bar 20
 crotchet F 5 staccato, D staccato, crotchet rest
-
-Bars 21 to 24
 Bar 21
 minim G 5, quaver E slur starts, C slur ends
 Bar 22
@@ -73,6 +76,7 @@ crotchet F 5 slur starts, D, B 4 slur ends
 Bar 23
 Same rhythm as bar 22
 crotchet C 5 slur starts, E slur ends, D staccato
+
 Bar 24
 dotted minim C 5
 Repeat ends

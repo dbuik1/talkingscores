@@ -67,6 +67,9 @@ CLEF_NAMES = {
 
 ORDINALS = {1: "1st", 2: "2nd", 3: "3rd"}
 
+# A bar number the file prints twice belongs to a repeat ending.
+TIME_WORDS = {2: "second", 3: "third", 4: "fourth"}
+
 # A metronome mark is often written with a note drawn by a music font, one letter
 # to a note, so the letter alone would be read as a letter.
 GLYPH_DURATIONS = {"w": "whole", "h": "half", "q": "quarter", "e": "eighth", "x": "16th"}
@@ -180,6 +183,7 @@ class Music21TalkingScore(TalkingScoreBase):
         self.slur_edges = {}
         self.unpitched_names = self._read_unpitched_names()
         self.current_part_index = None
+        self.bar_labels = self._renumber_bars()
         self.use_settings(settings or RenderSettings())
         super().__init__()
 
@@ -468,6 +472,48 @@ class Music21TalkingScore(TalkingScoreBase):
                 pickup.insert(0, ts)
         measures.append(pickup)
         return measures
+
+    def _renumber_bars(self):
+        """Number every bar by its place in the part, and keep what the file printed.
+
+        A file numbers both halves of a first- and second-time ending 13, and may
+        skip a number entirely. Addressing a bar by its printed number then reaches
+        one of two bars or none, so the second-time bar is never read and never
+        played. Bars are counted in the order they are written instead, and the
+        printed number is what the reading says.
+
+        Returns {bar number: the label to read} for every bar whose printed number
+        is not its counted one.
+        """
+        labels = {}
+        for part in self.score.parts:
+            measures = list(part.getElementsByClass('Measure'))
+            if not measures:
+                continue
+            assigned = measures[0].number
+            seen = {}
+            for index, measure in enumerate(measures):
+                printed = measure.number
+                if index:
+                    assigned += 1
+                    measure.number = assigned
+                seen[printed] = seen.get(printed, 0) + 1
+                label = str(printed)
+                if seen[printed] > 1:
+                    # Both halves of a repeat ending carry the one number on the page.
+                    label = f"{printed}, {TIME_WORDS.get(seen[printed], str(seen[printed]) + 'th')} time"
+                if label != str(assigned):
+                    labels.setdefault(assigned, label)
+        return labels
+
+    def bar_label(self, bar_number):
+        """The bar's number as the page prints it."""
+        return self.bar_labels.get(bar_number, str(bar_number))
+
+    def printed_bar_number(self, bar_number):
+        """The number the page prints on the bar, for a box a reader types into."""
+        digits = re.match(r"-?\d+", self.bar_label(bar_number))
+        return int(digits.group()) if digits else bar_number
 
     def _read_unpitched_names(self):
         """{(part number in the file, stave step, stave octave): the drum on that line}.
@@ -821,6 +867,7 @@ class HTMLTalkingScoreFormatter:
             bar_endings=self.bar_endings,
             immediate_repetitions=self.music_analyser.immediate_repetition_contexts,
             detailed_repetitions=self.music_analyser.repetition_in_contexts,
+            bar_labels=self.score.bar_labels,
         )
         self.segments = []
         start_bar_for_loop = self._handle_pickup_bar(self.segments)
@@ -940,6 +987,10 @@ class HTMLTalkingScoreFormatter:
             'firstBar': first_bar,
             'firstNumberedBar': first_numbered,
             'lastBar': last_bar,
+            # What a reader sees on the page and types into the go-to box; a repeat
+            # ending prints one number on two bars, so these are not the counts above.
+            'firstPrintedBar': self.score.printed_bar_number(first_numbered),
+            'lastPrintedBar': self.score.printed_bar_number(last_bar),
             # The total counts numbered bars only, so it agrees with the last bar number.
             'totalBars': max(0, last_bar - first_numbered + 1) if self.segments else 0,
             'pickupBar': pickup,
@@ -1117,11 +1168,13 @@ class HTMLTalkingScoreFormatter:
         if is_pickup:
             label, anchor = "Pickup bar", "segment-pickup"
         elif start_bar == end_bar:
-            label, anchor = f"Bar {start_bar}", f"segment-{start_bar}"
+            label, anchor = f"Bar {self.score.bar_label(start_bar)}", f"segment-{start_bar}"
         else:
-            label, anchor = f"Bars {start_bar} to {end_bar}", f"segment-{start_bar}"
+            label = f"Bars {self.score.bar_label(start_bar)} to {self.score.bar_label(end_bar)}"
+            anchor = f"segment-{start_bar}"
         segment = SegmentDescription(
-            start_bar=start_bar, end_bar=end_bar, label=label, anchor=anchor, is_pickup=is_pickup)
+            start_bar=start_bar, end_bar=end_bar, label=label, anchor=anchor, is_pickup=is_pickup,
+            bar_labels=self.score.bar_labels)
         pickup_bar = start_bar if is_pickup else None
         for ins in self.score.selected_instruments:
             instrument = InstrumentDescription(number=ins, name=self.score.part_instruments[ins][0])

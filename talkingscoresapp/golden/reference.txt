@@ -2,7 +2,7 @@ Title: Untitled work
 Composer: Unknown composer
 Key: C major (no sharps or flats)
 Time signature: 3 4
-Bars: 24
+Bars: 25
 Instruments: Instrument 1 (unnamed)
 Octave numbers follow scientific pitch notation: middle C is C4.
 
@@ -60,10 +60,14 @@ Beat 1 crotchet F 5 staccato
 Beat 2 crotchet F 5 same note staccato
 Beat 3 crotchet F 5 same note staccato
 
-Bars 13 to 16
+Bars 13 to 15
 Bar 13
 Beat 1 minim F 5 slur starts
 Beat 3 crotchet E 5 down a second slur ends
+Bar 13, second time
+Same rhythm as bar 13
+Beat 1 minim G 5
+Beat 3 crotchet B 4 down a sixth
 Bar 14
 Beat 1 crotchet C 5 slur starts
 Beat 2 crotchet D 5 up a second
@@ -73,12 +77,12 @@ Same rhythm as bar 14
 Beat 1 crotchet F 5 staccato
 Beat 2 crotchet F 5 same note staccato
 Beat 3 crotchet E 5 down a second staccato
+
+Bars 16 to 19
 Bar 16
 Beat 1 crotchet E 5 slur starts
 Beat 2 quaver D 5 down a second slur ends beam starts, crescendo starts, quaver D 5 same note staccato
 Beat 3 quaver E 5 up a second staccato, quaver F 5 up a second staccato beam ends
-
-Bars 17 to 20
 Bar 17
 Beat 1 forte, minim G 5
 Beat 3 quaver E 5 down a third slur starts beam starts, quaver C 5 down a third slur ends beam ends
@@ -91,12 +95,12 @@ Same rhythm as bar 18
 Beat 1 crotchet C 5 staccato
 Beat 2 crotchet D 5 up a second staccato
 Beat 3 crotchet E 5 up a second staccato
+
+Bars 20 to 23
 Bar 20
 Beat 1 crotchet F 5 staccato
 Beat 2 crotchet D 5 down a third staccato
 Beat 3 crotchet rest
-
-Bars 21 to 24
 Bar 21
 Beat 1 minim G 5
 Beat 3 quaver E 5 down a third slur starts beam starts, quaver C 5 down a third slur ends beam ends
@@ -109,6 +113,7 @@ Same rhythm as bar 22
 Beat 1 crotchet C 5 slur starts
 Beat 2 crotchet E 5 up a third slur ends
 Beat 3 crotchet D 5 down a second staccato
+
 Bar 24
 Beat 1 dotted minim C 5
 Repeat ends
