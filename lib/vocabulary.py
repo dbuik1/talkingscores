@@ -253,7 +253,13 @@ class Vocabulary:
 
     def unpitched(self, event, beat_quarter_length=1.0):
         count = getattr(event, 'count', 1)
-        name = 'unpitched' if count == 1 else f'{count} unpitched together'
+        names = getattr(event, 'names', [])
+        if len(names) == count:
+            # The file names the drum on each line of the stave, so the stroke is
+            # read by what it is played on rather than by how many were struck.
+            name = ' and '.join(names) if len(names) > 1 else names[0]
+        else:
+            name = 'unpitched' if count == 1 else f'{count} unpitched together'
         return f'{self.duration(event, beat_quarter_length)} {name}'.strip()
 
     def slur(self, edge):
@@ -270,6 +276,12 @@ class Vocabulary:
         if self.settings.abbreviations:
             return 'tie'
         return TIE_WORDS.get(tie_type, '')
+
+    def chord_tie_words(self):
+        """The words that carry a list of tied chord notes: (lead-in, last joiner)."""
+        if self.settings.abbreviations:
+            return ('', '')
+        return ('with', 'and')
 
     def chord_count(self, count):
         if self.settings.abbreviations:

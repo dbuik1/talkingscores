@@ -19,6 +19,7 @@ from jinja2 import Environment, FileSystemLoader
 from music21 import converter, duration, environment, key, meter, stream
 from music21 import pitch as pitch_module
 from music21.stream import makeNotation
+from xml.etree import ElementTree
 from django.conf import settings as django_settings
 
 from lib.braille import text_to_brf
@@ -177,6 +178,8 @@ class Music21TalkingScore(TalkingScoreBase):
         self.unselected_instruments = []
         self.selected_part_names = []
         self.slur_edges = {}
+        self.unpitched_names = self._read_unpitched_names()
+        self.current_part_index = None
         self.use_settings(settings or RenderSettings())
         super().__init__()
 
@@ -466,9 +469,44 @@ class Music21TalkingScore(TalkingScoreBase):
         measures.append(pickup)
         return measures
 
+    def _read_unpitched_names(self):
+        """{(part number in the file, stave step, stave octave): the drum on that line}.
+
+        music21 keeps only the first instrument a percussion part lists and drops
+        the link from each note to the drum it names, so the file is read again
+        for it. A drum's identity in the file is its line on the stave.
+        """
+        names = {}
+        try:
+            root = ElementTree.parse(self.filepath).getroot()
+        except Exception:
+            return names
+        written = {element.get("id"): (element.findtext("instrument-name") or "").strip()
+                   for element in root.iter("score-instrument")}
+        for part_index, part in enumerate(root.iter("part")):
+            for note_element in part.iter("note"):
+                unpitched = note_element.find("unpitched")
+                instrument = note_element.find("instrument")
+                if unpitched is None or instrument is None:
+                    continue
+                name = written.get(instrument.get("id"), "")
+                if name:
+                    names.setdefault((part_index,
+                                      (unpitched.findtext("display-step") or "").strip(),
+                                      (unpitched.findtext("display-octave") or "").strip()), name)
+        return names
+
+    def _unpitched_name(self, element):
+        """The drum this note is written for, where the file says which."""
+        if not self.unpitched_names:
+            return None
+        return self.unpitched_names.get(
+            (self.current_part_index, element.displayStep, str(element.displayOctave)))
+
     def get_events_for_bar_range(self, start_bar, end_bar, part_index):
         """Events for each bar in the range: {bar: [time point, ...]}."""
         intermediate_events = {}
+        self.current_part_index = part_index
         if start_bar == 0:
             measures = self._pickup_measure_stream(part_index)
         else:
@@ -644,10 +682,10 @@ class Music21TalkingScore(TalkingScoreBase):
         if element_type == 'Rest':
             return TSRest()
         if element_type == 'Unpitched':
-            return TSUnpitched()
+            return TSUnpitched(names=[self._unpitched_name(element)])
         if element_type == 'PercussionChord':
-            # Drums struck together carry no pitch to name, only how many there are.
-            return TSUnpitched(count=len(element.notes))
+            return TSUnpitched(count=len(element.notes),
+                               names=[self._unpitched_name(drum) for drum in element.notes])
         if element_type == 'ChordSymbol':
             if not self.settings.chord_symbols:
                 return None

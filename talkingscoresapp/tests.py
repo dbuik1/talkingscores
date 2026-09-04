@@ -1610,20 +1610,29 @@ class ReviewedEngineTests(TestCase):
         repeated = self._score_of_bars([sharps, [note.Note("F#4") for _ in range(4)]])
         self.assertIn("Same as bar 1", self._text(repeated, {"style": "standard", "repetition_mode": "learning", "bars_at_a_time": 2}))
 
-    def test_a_tie_on_one_note_of_a_chord_is_read_beside_that_note(self):
+    def test_the_tied_notes_of_a_chord_are_named_after_the_chord(self):
         from music21 import chord, note, tie
         held = chord.Chord(["C4", "E4", "G4"])
         held.notes[0].tie = tie.Tie("start")
+        two = chord.Chord(["C4", "E4", "G4"])
+        two.notes[0].tie = tie.Tie("start")
+        two.notes[2].tie = tie.Tie("start")
         whole = chord.Chord(["C4", "E4", "G4"])
         whole.tie = tie.Tie("start")
         score = self._score_of_bars([
             [held, note.Rest(quarterLength=3)],
+            [two, note.Rest(quarterLength=3)],
             [whole, note.Rest(quarterLength=3)],
         ])
-        text = self._text(score, {"style": "standard", "bars_at_a_time": 2})
-        bar_one, bar_two = text.split("Bar 2")[0], text.split("Bar 2")[1]
-        self.assertIn("C tied to next E G", bar_one)
-        self.assertIn("C E G tied to next", bar_two)
+        text = self._text(score, {"style": "standard", "bars_at_a_time": 3, "repetition_mode": "none"})
+        one, two_text, three = text.split("\nBar ")[1:4]
+        # The chord is heard whole first, then the notes that are held, named
+        # again with their octaves so the tie cannot attach to the wrong one.
+        self.assertIn("mid C E G with mid C tied to next", one)
+        self.assertIn("mid C E G with mid C and mid G tied to next", two_text)
+        # A tie over the whole chord is still read once for the chord.
+        self.assertIn("mid C E G tied to next", three)
+        self.assertNotIn("with", three)
 
     def test_a_hairpin_ends_after_the_note_it_closes_on(self):
         from music21 import dynamics, note
@@ -1656,8 +1665,20 @@ class ReviewedEngineTests(TestCase):
         struck.quarterLength = 1.0
         score = self._score_of_bars([[struck, note.Unpitched(quarterLength=3)]])
         text = self._text(score, {"style": "standard"})
+        # The file names no drum for either line, so the count is what is left to read.
         self.assertIn("crotchet 2 unpitched together", text)
         self.assertIn("dotted minim unpitched", text)
+
+    def test_a_drum_is_read_by_name_where_the_file_names_it(self):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        formatter = HTMLTalkingScoreFormatter(
+            Music21TalkingScore(os.path.join(os.getcwd(), "test_scores", "drum-kit.musicxml")),
+            options={"style": "standard"})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            text = formatter.render_text()
+        self.assertIn("crotchet Acoustic Snare and Closed Hi-Hat", text)
+        self.assertIn("crotchet Closed Hi-Hat", text)
+        self.assertNotIn("unpitched", text)
 
     def test_slurs_and_articulations_are_read_with_the_notes_they_mark(self):
         from music21 import articulations, note, spanner

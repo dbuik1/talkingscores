@@ -83,10 +83,13 @@ class TSPitch:
 class TSUnpitched(TSEvent):
     kind = "unpitched"
 
-    def __init__(self, count=1):
+    def __init__(self, count=1, names=None):
         super().__init__()
         # More than one where several drums are struck together.
         self.count = count
+        # The drum each stroke is written for, where the file names it; a
+        # position with no name in the file holds None.
+        self.names = [name for name in (names or []) if name]
 
 
 class TSRest(TSEvent):

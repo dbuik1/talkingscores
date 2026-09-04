@@ -516,9 +516,6 @@ class DescriptionBuilder:
         previous = state.previous_pitch
         for pitch in pitches:
             pitch_words.extend(self._pitch_fragments(pitch, previous))
-            # A tie set on one note of a chord belongs to that note, so it is read
-            # beside it rather than over the whole chord.
-            pitch_words.extend(self._tie_words(pitch.tie))
             previous = pitch
         if self.settings.word_order == "pitch_first":
             words.extend(pitch_words)
@@ -526,6 +523,7 @@ class DescriptionBuilder:
         else:
             words.extend(rhythm)
             words.extend(pitch_words)
+        words.extend(self._chord_tie_fragments(pitches))
         words.extend(self._tuplet_fragments(event, opening=False))
         words.extend(self._articulation_fragments(event))
         words.extend(self._tie_fragments(event))
@@ -622,6 +620,41 @@ class DescriptionBuilder:
             return []
         text = self.vocabulary.slur(event.slur)
         return [Fragment(text)] if text else []
+
+    def _chord_tie_fragments(self, pitches):
+        """Which notes of a chord are tied, named after the chord has been heard whole.
+
+        A tie read straight after the note it belongs to attaches by ear to
+        whichever note follows it, so the notes are named again here instead.
+        """
+        if not self.settings.ties:
+            return []
+        fragments = []
+        for tie_type in ("start", "continue", "stop"):
+            tied = [pitch for pitch in pitches if pitch.tie == tie_type]
+            if not tied:
+                continue
+            lead, joiner = self.vocabulary.chord_tie_words()
+            if lead:
+                fragments.append(Fragment(lead))
+            # Named from scratch, octave and all, so no name depends on the one before.
+            names = [self._pitch_fragments(pitch, None) for pitch in tied]
+            fragments.extend(self._comma_list(names, joiner))
+            fragments.extend(self._tie_words(tie_type))
+        return fragments
+
+    @staticmethod
+    def _comma_list(groups, joiner):
+        """Groups of fragments read as a list: A, B and C."""
+        fragments = []
+        for index, group in enumerate(groups):
+            last = index == len(groups) - 1
+            if group and not last and not (joiner and index == len(groups) - 2):
+                group = group[:-1] + [Fragment(f"{group[-1].text},", group[-1].css_class)]
+            fragments.extend(group)
+            if joiner and index == len(groups) - 2:
+                fragments.append(Fragment(joiner))
+        return fragments
 
     def _tie_fragments(self, event):
         return self._tie_words(event.tie)
