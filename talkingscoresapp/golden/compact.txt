@@ -46,7 +46,7 @@ crotchet F 5 staccato, F staccato, F staccato
 Bars 13 to 15
 Bar 13
 minim F 5 slur starts, crotchet E slur ends
-Bar 13, second one
+Bar 13, continued
 Same rhythm as bar 13
 minim G 5, crotchet B 4
 Bar 14

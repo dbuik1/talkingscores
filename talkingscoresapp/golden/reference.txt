@@ -64,7 +64,7 @@ Bars 13 to 15
 Bar 13
 Beat 1 minim F 5 slur starts
 Beat 3 crotchet E 5 down a second slur ends
-Bar 13, second one
+Bar 13, continued
 Same rhythm as bar 13
 Beat 1 minim G 5
 Beat 3 crotchet B 4 down a sixth

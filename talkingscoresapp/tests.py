@@ -1694,10 +1694,10 @@ class ReviewedEngineTests(TestCase):
         # The file prints 13 on two bars. Each is counted as a bar of its own, so the
         # second is read rather than dropped, and neither claims to be a repeat ending.
         self.assertEqual(score.bar_label(13), "13")
-        self.assertEqual(score.bar_label(14), "13, second one")
+        self.assertEqual(score.bar_label(14), "13, continued")
         self.assertEqual(score.bar_label(25), "24")
         self.assertIn("Bar 13\nBeat 1 minim high F slur starts, Beat 3 crotchet E slur ends", text)
-        self.assertIn("Bar 13, second one\nSame rhythm as bar 13\nBeat 1 minim high G", text)
+        self.assertIn("Bar 13, continued\nSame rhythm as bar 13\nBeat 1 minim high G", text)
 
         # The audio for a bar holds the notes that bar is read as, so the page and the
         # player never name different music.
@@ -1713,12 +1713,39 @@ class ReviewedEngineTests(TestCase):
                     played[bar] = [note.pitch.nameWithOctave for note in written.flatten().notes]
         self.assertEqual(played, {13: ["F5", "E5"], 14: ["G5", "B4"], 25: ["C5"]})
 
-    def test_a_bar_the_page_prints_no_number_on_carries_on_the_one_before(self):
+    def test_a_bar_printed_in_two_halves_is_read_as_one_bar(self):
+        import shutil
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        from lib.midiHandler import MidiHandler
+        from music21 import converter
+        from types import SimpleNamespace
+        fixture = os.path.join(os.getcwd(), "test_scores", "split-bar.musicxml")
+        score = Music21TalkingScore(fixture)
+        formatter = HTMLTalkingScoreFormatter(score, options={"style": "standard", "bars_at_a_time": 4})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            text = formatter.render_text()
+        # The page runs out of room part way through the bar and prints the rest of it
+        # as a second bar carrying no number. The beats only add up when it is read whole.
+        self.assertEqual(len(score.score.parts[0].getElementsByClass("Measure")), 3)
+        self.assertEqual(score.bar_labels, {})
+        self.assertIn("Bar 2\nBeat 1 crotchet high D, Beat 2 E, Beat 3 F, Beat 4 G", text)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = os.path.join(temp_dir, VALID_ID)
+            os.makedirs(folder)
+            shutil.copy(fixture, os.path.join(folder, "score.musicxml"))
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                handler = MidiHandler(SimpleNamespace(GET={}), VALID_ID, "score.musicxml")
+                written = converter.parse(handler.make_midi_file(2, 2))
+        self.assertEqual([note.pitch.nameWithOctave for note in written.flatten().notes],
+                         ["D5", "E5", "F5", "G5"])
+
+    def test_halves_a_repeat_divides_are_left_as_they_are_played(self):
         from talkingscoreslib import Music21TalkingScore
         score = Music21TalkingScore(
             os.path.join(os.getcwd(), "test_scores", "Paganini - Le Streghe mvt 2.xml"))
-        # The second half of a bar split across a system break prints no number of its
-        # own, so it is not a second bar 8 and is not read as one.
+        # A repeat barline falls part way through bar 8. The halves are never played one
+        # after the other, so joining them would read music nobody plays.
         self.assertEqual(score.bar_label(8), "8")
         self.assertEqual(score.bar_label(9), "8, continued")
         self.assertEqual(score.bar_label(10), "9")
@@ -1727,7 +1754,7 @@ class ReviewedEngineTests(TestCase):
         from talkingscoreslib import Music21TalkingScore, number_bars_in_order
         score = Music21TalkingScore(os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml"))
         # Audio is cut from a score a caller may already have counted, so counting a
-        # second time has to name the same bars as the first.
+        # second time has to reach the same bars as the first.
         self.assertEqual(number_bars_in_order(score.score), score.bar_labels)
 
     def test_slurs_and_articulations_are_read_with_the_notes_they_mark(self):
@@ -1923,8 +1950,8 @@ class ReaderPageTests(TestCase):
         html = self._render(self._formatter({"style": "standard", "bars_at_a_time": 3}),
                             web_path="/midis/x/y.musicxml", options_url="/score_options/x/y.musicxml")
         data = json.loads(re.search(r'id="score-data">(.*?)</script>', html, re.S).group(1))
-        # The fixture prints 24 bar numbers; the last is printed twice, for a first-
-        # and second-time ending, and both halves are read.
+        # The fixture prints 24 bar numbers, one of them on two bars, and every bar
+        # is read.
         self.assertEqual((data["firstBar"], data["firstNumberedBar"], data["lastBar"], data["totalBars"]),
                          (1, 1, 25, 25))
         self.assertIsNone(data["pickupBar"])
@@ -1988,8 +2015,8 @@ class ReaderPageTests(TestCase):
         # The go-to box takes the number printed on the page, which stops one short of
         # the bar count when a repeat ending prints its number twice.
         self.assertEqual((data["firstPrintedBar"], data["lastPrintedBar"]), (1, 24))
-        self.assertIn('data-bar="14" data-printed="13, second one"', html)
-        self.assertIn("<small>Bar</small> 13, second one</h3>", html)
+        self.assertIn('data-bar="14" data-printed="13, continued"', html)
+        self.assertIn("<small>Bar</small> 13, continued</h3>", html)
 
     def test_a_pickup_bar_keeps_go_to_bar_on_numbered_bars(self):
         from talkingscoreslib import HTMLTalkingScoreFormatter

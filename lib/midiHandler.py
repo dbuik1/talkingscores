@@ -10,7 +10,7 @@ from music21 import converter, stream, tempo
 from pathvalidate import sanitize_filename
 
 from talkingscores.settings import MEDIA_ROOT
-from talkingscoreslib import Music21TalkingScore, number_bars_in_order
+from talkingscoreslib import Music21TalkingScore, join_split_bars, number_bars_in_order
 
 logger = logging.getLogger("TSScore")
 
@@ -76,7 +76,7 @@ class MidiHandler:
         # The page asks for bars by the number they are read under, so the score the
         # audio is cut from has to be counted the same way. A score handed over by a
         # caller has been counted already, and counting it again changes nothing.
-        number_bars_in_order(self.score)
+        number_bars_in_order(join_split_bars(self.score))
         first_bar, last_bar = self.score_bar_range()
         # A range reaching past the score writes the same file as the range that
         # stops at its last bar, so asking for bars that do not exist adds nothing

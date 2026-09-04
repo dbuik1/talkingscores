@@ -69,29 +69,73 @@ CLEF_NAMES = {
 ORDINALS = {1: "1st", 2: "2nd", 3: "3rd"}
 
 # A printed number that lands on more than one bar has to name which of them is
-# being read. Beyond the fourth the ordinal is built from the number itself.
-OCCURRENCE_WORDS = {2: "second", 3: "third", 4: "fourth", 5: "fifth", 6: "sixth",
-                    7: "seventh", 8: "eighth", 9: "ninth", 10: "tenth"}
+# being read. Beyond the second the ordinal is built from the number itself.
+CONTINUATION_WORDS = {3: "third", 4: "fourth", 5: "fifth", 6: "sixth", 7: "seventh",
+                      8: "eighth", 9: "ninth", 10: "tenth"}
 
 
-def occurrence_word(count):
-    """The word for the nth bar printing one number, counting from the second."""
-    if count in OCCURRENCE_WORDS:
-        return OCCURRENCE_WORDS[count]
+def continuation_word(count):
+    """The word for the nth bar printing one number, counting from the third."""
+    if count in CONTINUATION_WORDS:
+        return CONTINUATION_WORDS[count]
     if 11 <= count % 100 <= 13:
         return f"{count}th"
-    return f"{count}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(count % 10, 'th') }".replace(" ", "")
+    return f"{count}{ORDINAL_ENDINGS.get(count % 10, 'th')}"
+
+
+ORDINAL_ENDINGS = {1: "st", 2: "nd", 3: "rd"}
+
+
+def prints_its_own_number(measure):
+    """Whether the page prints a number on this bar, rather than carrying one on."""
+    return measure.showNumber is not ShowNumber.NEVER and not measure.numberSuffix
+
+
+def join_split_bars(score):
+    """Put a bar the page breaks in two back together, where the break is only a break.
+
+    A bar can be printed as two: the page runs out of room, or a barline falls part
+    way through it. Read as written, half a bar is read as a whole one and the beats
+    do not add up. The halves are joined where nothing but the page break separates
+    them; where a repeat or another barline divides them, they are left apart,
+    because the halves are not played one after the other.
+    """
+    for part in score.parts:
+        first = None
+        for measure in list(part.getElementsByClass('Measure')):
+            previous, first = first, measure
+            if prints_its_own_number(measure) or not measure.paddingLeft:
+                continue
+            if previous is None or not previous.paddingRight or _barline_divides(previous, measure):
+                continue
+            first = previous
+            for element in list(measure):
+                measure.remove(element)
+                first.insert(measure.paddingLeft + element.offset, element)
+            first.paddingRight = 0.0
+            part.remove(measure)
+    return score
+
+
+def _barline_divides(first, second):
+    """Whether a barline between the two halves means they are not played together."""
+    for barline in (first.rightBarline, second.leftBarline):
+        if barline is None:
+            continue
+        if type(barline).__name__ == 'Repeat' or barline.type not in ('regular', 'none'):
+            return True
+    return False
 
 
 def number_bars_in_order(score):
     """Number every bar by its place in the score, and say what each one prints.
 
-    A file can print one number on more than one bar: a bar split across a system
-    break carries the number once, and an engraver can repeat a number outright.
-    Addressing a bar by its printed number then reaches one of those bars or none,
-    so the rest are never read and never played. Bars are counted in the order they
-    are written instead, and what the page prints becomes the label the reading and
-    the page show.
+    A file can print one number on more than one bar: an engraver can repeat a
+    number, and a bar a barline divides is printed as two, the second carrying no
+    number of its own. Addressing a bar by its printed number then reaches one of
+    those bars or none, so the rest are never read and never played. Bars are counted
+    in the order they are written instead, and what the page prints becomes the label
+    the reading and the page show.
 
     The bars are counted from the first part, which is the numbering the page uses
     throughout; the other parts are counted alongside it so a bar is the same bar in
@@ -115,8 +159,6 @@ def number_bars_in_order(score):
         seen = {}
         for index, measure in enumerate(measures):
             printed = measure.number
-            carries_number = (measure.showNumber is not ShowNumber.NEVER
-                              and not measure.numberSuffix)
             if index:
                 assigned += 1
                 measure.number = assigned
@@ -124,11 +166,10 @@ def number_bars_in_order(score):
                 # One numbering for the whole score, taken from the first part.
                 continue
             seen[printed] = seen.get(printed, 0) + 1
-            if not carries_number and index:
-                # A bar the page prints no number on carries on the one before it.
+            if seen[printed] == 2:
                 label = f"{printed}, continued"
-            elif seen[printed] > 1:
-                label = f"{printed}, {occurrence_word(seen[printed])} one"
+            elif seen[printed] > 2:
+                label = f"{printed}, {continuation_word(seen[printed])} continuation"
             else:
                 label = str(printed)
             if label != str(assigned):
@@ -541,7 +582,7 @@ class Music21TalkingScore(TalkingScoreBase):
 
     def _renumber_bars(self):
         """Number the bars by their place in the score, and keep what the page prints."""
-        return number_bars_in_order(self.score)
+        return number_bars_in_order(join_split_bars(self.score))
 
     def bar_label(self, bar_number):
         """The bar's number as the page prints it."""
