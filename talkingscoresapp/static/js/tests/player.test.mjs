@@ -202,3 +202,47 @@ test("a delta time that never ends is refused", () => {
     assert.throws(() => parseMidi(Uint8Array.from(header({ tracks: 1 }).concat(chunk("MTrk", events))).buffer),
         /too long|no status/);
 });
+
+/* The shape of a struck note. A piano falls away from the moment the hammer lands,
+   dulling as it goes, and a low string rings far longer than a high one. */
+
+const { pianoVoice } = scope.window.TalkingScoresPlayer.voice;
+
+test("a low string rings longer than a high one", () => {
+    const bass = pianoVoice(28, 90);
+    const middle = pianoVoice(60, 90);
+    const treble = pianoVoice(96, 90);
+    assert.ok(bass.bodyRing > middle.bodyRing);
+    assert.ok(middle.bodyRing > treble.bodyRing);
+    assert.ok(treble.bodyRing >= 0.6);
+});
+
+test("the upper partials fall away before the fundamental", () => {
+    for (const number of [28, 60, 96]) {
+        const voice = pianoVoice(number, 90);
+        assert.ok(voice.strikeRing < voice.bodyRing,
+            `note ${number} rings ${voice.bodyRing} but strikes for ${voice.strikeRing}`);
+    }
+});
+
+test("a note struck harder is louder and brighter", () => {
+    const soft = pianoVoice(60, 30);
+    const hard = pianoVoice(60, 120);
+    assert.ok(hard.level > soft.level);
+    assert.ok(hard.strikeLevel > soft.strikeLevel);
+});
+
+test("a velocity outside the scale is held to the ends of it", () => {
+    assert.deepEqual(pianoVoice(60, -20), pianoVoice(60, 0));
+    assert.deepEqual(pianoVoice(60, 500), pianoVoice(60, 127));
+});
+
+test("every note has an attack short enough to be heard as a strike", () => {
+    for (const number of [21, 60, 108]) {
+        assert.ok(pianoVoice(number, 90).attack <= 0.01);
+    }
+});
+
+test("the top of the keyboard is still quieter above than the bottom", () => {
+    assert.ok(pianoVoice(96, 90).strikeLevel < pianoVoice(36, 90).strikeLevel);
+});

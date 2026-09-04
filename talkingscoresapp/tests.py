@@ -1958,7 +1958,9 @@ class ReaderPageTests(TestCase):
         self.assertEqual(data["barsPerGroup"], 3)
         self.assertEqual(data["groupSizes"], [1, 2, 3, 4, 8])
         self.assertEqual(data["midi"]["base"], "/midis/x/y.musicxml")
-        self.assertEqual(data["midi"]["parts"], [{"index": 0, "label": "Instrument 1 (unnamed)", "read": True}])
+        self.assertEqual(data["midi"]["parts"],
+                         [{"index": 0, "label": "Instrument 1 (unnamed)", "read": True,
+                           "sustains": False}])
         self.assertEqual(data["midi"]["voices"], [{"parts": [0], "label": "Instrument 1 (unnamed)"}])
         self.assertIn('<div class="bar" id="bar-1" data-bar="1"', html)
         self.assertIn("<small>Bar</small> 1</h3>", html)
@@ -2055,6 +2057,57 @@ class ReaderPageTests(TestCase):
         self.assertIn('"midi": null', html)
         self.assertIn("talkingscores.reader", html)      # the reader script is inlined
         self.assertIn("--note: 28px", html)              # so is the stylesheet
+
+class PlaybackVoiceTests(TestCase):
+    """Which voice a part is sounded with, since the audio carries no instrument."""
+
+    def _sustains(self, instrument_object):
+        from music21 import note, stream
+        from talkingscoreslib import Music21TalkingScore
+        part = stream.Part()
+        if instrument_object is not None:
+            part.append(instrument_object)
+        measure = stream.Measure(number=1)
+        measure.append(note.Note("C4", quarterLength=4))
+        part.append(measure)
+        score = stream.Score()
+        score.append(part)
+        temp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        path = os.path.join(temp_dir, "score.musicxml")
+        score.write("musicxml", fp=path)
+        return Music21TalkingScore(path).part_sustains(0)
+
+    def test_a_blown_instrument_holds_its_note(self):
+        from music21 import instrument
+        self.assertTrue(self._sustains(instrument.Flute()))
+
+    def test_a_bowed_instrument_holds_its_note(self):
+        from music21 import instrument
+        self.assertTrue(self._sustains(instrument.Violin()))
+
+    def test_a_struck_instrument_lets_its_note_ring_away(self):
+        from music21 import instrument
+        self.assertFalse(self._sustains(instrument.Piano()))
+
+    def test_a_plucked_instrument_lets_its_note_ring_away(self):
+        from music21 import instrument
+        self.assertFalse(self._sustains(instrument.AcousticGuitar()))
+
+    def test_an_instrument_named_only_in_words_is_still_recognised(self):
+        from music21 import instrument
+        named = instrument.Instrument()
+        named.partName = "Clarinet"
+        self.assertTrue(self._sustains(named))
+
+    def test_a_part_naming_no_instrument_sounds_as_the_default_piano_does(self):
+        self.assertFalse(self._sustains(None))
+
+    def test_a_part_that_is_not_in_the_score_is_not_asked_for(self):
+        from talkingscoreslib import Music21TalkingScore
+        score = Music21TalkingScore(os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml"))
+        self.assertFalse(score.part_sustains(99))
+
 
 class ExportDownloadTests(TestCase):
     """The text and braille downloads serve the cached exports as attachments."""

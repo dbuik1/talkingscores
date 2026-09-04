@@ -17,6 +17,7 @@ from types import SimpleNamespace
 
 from jinja2 import Environment, FileSystemLoader
 from music21 import converter, duration, environment, key, meter, stream
+from music21 import instrument as m21instrument
 from music21 import pitch as pitch_module
 from music21.stream import makeNotation
 from music21.stream.enums import ShowNumber
@@ -504,6 +505,45 @@ class Music21TalkingScore(TalkingScoreBase):
             self.part_names[current_index] = "Part 3"
         else:
             self.part_names[current_index] = f"Part {part_count}"
+
+    # General MIDI numbers its instruments in families. These are the families whose
+    # sound falls away from the moment the note starts, because the string is struck
+    # or plucked and nothing feeds it after that: pianos, tuned percussion, guitars,
+    # basses, harp and timpani, and the plucked and struck instruments at the top of
+    # the list. Everything else is bowed, blown or driven, and holds a note at
+    # whatever level it is given until the player stops it.
+    STRUCK_MIDI_PROGRAMS = (set(range(0, 16)) | set(range(24, 40)) | {45, 46, 47}
+                            | set(range(104, 120)))
+
+    def part_sustains(self, part_index):
+        """Whether the part's instrument holds a note rather than letting it ring away."""
+        try:
+            part = self.score.parts[part_index]
+        except (IndexError, AttributeError, TypeError):
+            return False
+        try:
+            instrument = part.getInstrument(recurse=True)
+            program = instrument.midiProgram
+        except Exception:
+            return False
+        if program is None:
+            # Plenty of files name the instrument in words and carry no MIDI number,
+            # so the name is asked next. A name nothing recognises leaves the part
+            # sounding the way the default piano does, as MIDI itself does.
+            program = self._program_from_name(instrument)
+        return program is not None and program not in self.STRUCK_MIDI_PROGRAMS
+
+    @staticmethod
+    def _program_from_name(instrument):
+        """The MIDI number for an instrument named only in words, where there is one."""
+        for name in (instrument.instrumentName, instrument.partName):
+            if not name or re.fullmatch(r"\(Inst\d+\)", name.strip()):
+                continue
+            try:
+                return m21instrument.fromString(name.strip()).midiProgram
+            except Exception:
+                continue
+        return None
 
     def part_name(self, ins, part_index):
         """Name of one part of an instrument; the instrument name when it has one part."""
@@ -1020,6 +1060,9 @@ class HTMLTalkingScoreFormatter:
                     'index': part_index,
                     'label': self.score.part_name(ins, part_index),
                     'read': ins in self.score.selected_instruments,
+                    # The file carries no instrument into the audio, so which voice a
+                    # part is sounded with is settled here and sent to the page.
+                    'sustains': self.score.part_sustains(part_index),
                 })
         return parts
 

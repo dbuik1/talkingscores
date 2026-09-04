@@ -303,22 +303,77 @@
         };
     }
 
-    /* Sounding the notes. */
+    /* Sounding the notes.
 
-    function makeNote(context, destination, note, start, end) {
+       A piano is a struck string, not a held tone: it is loudest at the moment the
+       hammer lands and quieter from then on, never levelling off, and its upper
+       partials fade first, so the sound dulls as it falls away. A wave held at one
+       level for the length of the note has the shape of an organ instead, which is
+       why a plain sustained wave reads as anything but a piano.
+
+       Each note is sounded as three waves under one damper. The body carries the
+       fundamental and the low partials and rings on; a second body a few cents away
+       gives the slow beating of strings tuned in unison; the strike carries the
+       upper partials and is gone within a fraction of a second. */
+
+    var BODY_PARTIALS = [0, 1, 0.4, 0.18, 0.09, 0.05, 0.028, 0.016];
+    var STRIKE_PARTIALS = [0, 0, 0, 0.22, 0.32, 0.28, 0.22, 0.17, 0.13, 0.1, 0.08, 0.06, 0.045, 0.03];
+    var UNISON_CENTS = 3.2;
+    // A ring is followed to this fraction of its loudest, which is far enough below
+    // hearing that the wave can be stopped there without the end being heard.
+    var INAUDIBLE = 0.0005;
+    var DAMPER = 0.11;
+    var waveCache = null;
+
+    /* The shape of one struck note. Kept apart from the audio nodes so the numbers
+       behind the sound can be checked without a browser. */
+    function pianoVoice(number, velocity) {
+        // Middle C is note 60. A bass string rings for many seconds and the top of
+        // the keyboard is gone in under one, so the ring is taken from the pitch.
+        var above = (number - 60) / 12;
+        var force = Math.min(1, Math.max(0, velocity / 127));
+        return {
+            level: 0.045 + force * 0.16,
+            bodyRing: Math.min(11, Math.max(0.6, 8 * Math.pow(0.56, above))),
+            // A string struck harder sounds brighter as well as louder, and the
+            // higher the string the less there is above it left to hear.
+            strikeLevel: (0.14 + force * 0.42) * Math.pow(0.78, Math.max(0, above)),
+            strikeRing: Math.min(0.9, Math.max(0.07, 0.4 * Math.pow(0.62, above))),
+            attack: 0.003
+        };
+    }
+
+    function partialWave(context, partials) {
+        return context.createPeriodicWave(new Float32Array(partials.length), new Float32Array(partials));
+    }
+
+    function waves(context) {
+        // Building the two waves costs as much as sounding a note does, so they are
+        // built once and kept for as long as the context they belong to lives.
+        if (!waveCache || waveCache.context !== context) {
+            waveCache = {
+                context: context,
+                body: partialWave(context, BODY_PARTIALS),
+                strike: partialWave(context, STRIKE_PARTIALS)
+            };
+        }
+        return waveCache;
+    }
+
+    /* A bowed, blown or driven instrument does none of that: it holds a note at
+       whatever level the player gives it and stops when they stop. Sounding one as
+       a struck string would let a held note die away under the reader. */
+    function sustainNote(context, destination, note, start, end) {
         var frequency = 440 * Math.pow(2, (note.note - 69) / 12);
-        var gain = context.createGain();
-        var level = Math.min(0.28, 0.06 + note.velocity / 127 * 0.22);
-        var attack = 0.012;
-        var release = Math.min(0.18, Math.max(0.05, (end - start) * 0.4));
+        var level = Math.min(0.24, 0.05 + note.velocity / 127 * 0.19);
+        var attack = 0.03;
+        var release = Math.min(0.16, Math.max(0.05, (end - start) * 0.35));
         var stopAt = end + release;
-        gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(level, start + attack);
-        gain.gain.setTargetAtTime(level * 0.6, start + attack, 0.35);
-        gain.gain.setTargetAtTime(0.0001, Math.max(start + attack, end - release), release / 3);
-        // The decay never reaches zero on its own, so the tail is taken to silence
-        // before the oscillator stops rather than being cut off with a click.
-        gain.gain.linearRampToValueAtTime(0, stopAt);
+        var gain = context.createGain();
+        gain.gain.setValueAtTime(level * INAUDIBLE, start);
+        gain.gain.linearRampToValueAtTime(level, start + attack);
+        gain.gain.setValueAtTime(level, Math.max(start + attack, end));
+        gain.gain.exponentialRampToValueAtTime(level * INAUDIBLE, stopAt);
         gain.connect(destination);
 
         [["triangle", 1], ["sine", 0.45]].forEach(function (shape) {
@@ -332,6 +387,43 @@
             oscillator.start(start);
             oscillator.stop(stopAt + 0.02);
         });
+    }
+
+    function synthNote(context, destination, note, start, end) {
+        var frequency = 440 * Math.pow(2, (note.note - 69) / 12);
+        var voice = pianoVoice(note.note, note.velocity);
+        var shapes = waves(context);
+        // The damper lands when the written note ends, so a note stops there even
+        // while the string still has sound left in it.
+        var stopAt = end + DAMPER;
+        var damper = context.createGain();
+        damper.gain.setValueAtTime(1, start);
+        damper.gain.setValueAtTime(1, end);
+        damper.gain.exponentialRampToValueAtTime(INAUDIBLE, stopAt);
+        damper.connect(destination);
+
+        function ring(shape, level, seconds, cents) {
+            var gain = context.createGain();
+            gain.gain.setValueAtTime(level * INAUDIBLE, start);
+            gain.gain.linearRampToValueAtTime(level, start + voice.attack);
+            // An exponential ramp is the ring itself, not an approach to it, so the
+            // fall is the same shape whatever else is written on this parameter.
+            gain.gain.exponentialRampToValueAtTime(level * INAUDIBLE, start + voice.attack + seconds);
+            gain.connect(damper);
+            var oscillator = context.createOscillator();
+            oscillator.setPeriodicWave(shape);
+            oscillator.frequency.setValueAtTime(frequency, start);
+            if (cents) {
+                oscillator.detune.setValueAtTime(cents, start);
+            }
+            oscillator.connect(gain);
+            oscillator.start(start);
+            oscillator.stop(stopAt + 0.02);
+        }
+
+        ring(shapes.body, voice.level, voice.bodyRing, 0);
+        ring(shapes.body, voice.level * 0.5, voice.bodyRing * 0.9, UNISON_CENTS);
+        ring(shapes.strike, voice.level * voice.strikeLevel, voice.strikeRing, 0);
     }
 
     /* Percussion has no pitch to sound, so it is struck as a short tap that keeps
@@ -370,6 +462,7 @@
         var group = null;
         var context = null;
         var master = null;
+        var limiter = null;
         var partGains = [];
         var scores = {};
         var order = [];
@@ -380,6 +473,12 @@
         var origin = 0;
         var cursor = { part: [], click: 0 };
         var stopAt = 0;
+
+        // Which voice each part is sounded with. The audio carries no instrument, so
+        // the page says which parts hold a note and which let it ring away.
+        var sustaining = (data.midi.parts || []).map(function (part) {
+            return Boolean(part.sustains);
+        });
 
         function label(item) {
             return controls.rangeLabel(item.start, item.end, false);
@@ -451,6 +550,15 @@
             return false;
         }
 
+        // Several parts sounding at once add up past what the output can carry, and
+        // the overflow is heard as a crackle over the notes. Everything passes
+        // through one compressor, which holds the loudest moments down instead.
+        function openMaster() {
+            master = context.createGain();
+            master.gain.value = 0.75;
+            master.connect(limiter);
+        }
+
         function audio() {
             if (!context) {
                 var Context = window.AudioContext || window.webkitAudioContext;
@@ -458,9 +566,14 @@
                     return null;
                 }
                 context = new Context();
-                master = context.createGain();
-                master.gain.value = 0.9;
-                master.connect(context.destination);
+                limiter = context.createDynamicsCompressor();
+                limiter.threshold.value = -12;
+                limiter.knee.value = 6;
+                limiter.ratio.value = 8;
+                limiter.attack.value = 0.004;
+                limiter.release.value = 0.18;
+                limiter.connect(context.destination);
+                openMaster();
             }
             return context;
         }
@@ -472,9 +585,7 @@
             }
             if (master && context) {
                 master.disconnect();
-                master = context.createGain();
-                master.gain.value = 0.9;
-                master.connect(context.destination);
+                openMaster();
             }
             partGains = [];
         }
@@ -512,8 +623,10 @@
                     if (partGains[part].gain.value > 0 && start >= now - LATE_TOLERANCE) {
                         if (note.percussion) {
                             makeTap(context, partGains[part], note, Math.max(start, now));
+                        } else if (sustaining[part]) {
+                            sustainNote(context, partGains[part], note, Math.max(start, now), end);
                         } else {
-                            makeNote(context, partGains[part], note, Math.max(start, now), end);
+                            synthNote(context, partGains[part], note, Math.max(start, now), end);
                         }
                     }
                     index++;
@@ -703,4 +816,6 @@
     };
     // Reading a file and laying its tracks against the parts is checked on its own.
     window.TalkingScoresPlayer.reading = { parseMidi: parseMidi, collect: collect };
+    // The numbers behind the sounded note, which no browser is needed to check.
+    window.TalkingScoresPlayer.voice = { pianoVoice: pianoVoice };
 })();
