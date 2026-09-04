@@ -19,6 +19,7 @@ from jinja2 import Environment, FileSystemLoader
 from music21 import converter, duration, environment, key, meter, stream
 from music21 import pitch as pitch_module
 from music21.stream import makeNotation
+from music21.stream.enums import ShowNumber
 from xml.etree import ElementTree
 from django.conf import settings as django_settings
 
@@ -67,8 +68,73 @@ CLEF_NAMES = {
 
 ORDINALS = {1: "1st", 2: "2nd", 3: "3rd"}
 
-# A bar number the file prints twice belongs to a repeat ending.
-TIME_WORDS = {2: "second", 3: "third", 4: "fourth"}
+# A printed number that lands on more than one bar has to name which of them is
+# being read. Beyond the fourth the ordinal is built from the number itself.
+OCCURRENCE_WORDS = {2: "second", 3: "third", 4: "fourth", 5: "fifth", 6: "sixth",
+                    7: "seventh", 8: "eighth", 9: "ninth", 10: "tenth"}
+
+
+def occurrence_word(count):
+    """The word for the nth bar printing one number, counting from the second."""
+    if count in OCCURRENCE_WORDS:
+        return OCCURRENCE_WORDS[count]
+    if 11 <= count % 100 <= 13:
+        return f"{count}th"
+    return f"{count}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(count % 10, 'th') }".replace(" ", "")
+
+
+def number_bars_in_order(score):
+    """Number every bar by its place in the score, and say what each one prints.
+
+    A file can print one number on more than one bar: a bar split across a system
+    break carries the number once, and an engraver can repeat a number outright.
+    Addressing a bar by its printed number then reaches one of those bars or none,
+    so the rest are never read and never played. Bars are counted in the order they
+    are written instead, and what the page prints becomes the label the reading and
+    the page show.
+
+    The bars are counted from the first part, which is the numbering the page uses
+    throughout; the other parts are counted alongside it so a bar is the same bar in
+    every part.
+
+    Returns {bar number: the label to read} for every bar whose label is not its
+    counted number.
+    """
+    counted = getattr(score, "bar_labels_in_order", None)
+    if counted is not None:
+        # Counting a score that has already been counted would find the counted
+        # numbers on the page and record no labels at all, so the first count is
+        # kept: audio is cut from a score a caller may have handed over counted.
+        return counted
+    labels = {}
+    for part_index, part in enumerate(score.parts):
+        measures = list(part.getElementsByClass('Measure'))
+        if not measures:
+            continue
+        assigned = measures[0].number
+        seen = {}
+        for index, measure in enumerate(measures):
+            printed = measure.number
+            carries_number = (measure.showNumber is not ShowNumber.NEVER
+                              and not measure.numberSuffix)
+            if index:
+                assigned += 1
+                measure.number = assigned
+            if part_index:
+                # One numbering for the whole score, taken from the first part.
+                continue
+            seen[printed] = seen.get(printed, 0) + 1
+            if not carries_number and index:
+                # A bar the page prints no number on carries on the one before it.
+                label = f"{printed}, continued"
+            elif seen[printed] > 1:
+                label = f"{printed}, {occurrence_word(seen[printed])} one"
+            else:
+                label = str(printed)
+            if label != str(assigned):
+                labels[assigned] = label
+    score.bar_labels_in_order = labels
+    return labels
 
 # A metronome mark is often written with a note drawn by a music font, one letter
 # to a note, so the letter alone would be read as a letter.
@@ -474,37 +540,8 @@ class Music21TalkingScore(TalkingScoreBase):
         return measures
 
     def _renumber_bars(self):
-        """Number every bar by its place in the part, and keep what the file printed.
-
-        A file numbers both halves of a first- and second-time ending 13, and may
-        skip a number entirely. Addressing a bar by its printed number then reaches
-        one of two bars or none, so the second-time bar is never read and never
-        played. Bars are counted in the order they are written instead, and the
-        printed number is what the reading says.
-
-        Returns {bar number: the label to read} for every bar whose printed number
-        is not its counted one.
-        """
-        labels = {}
-        for part in self.score.parts:
-            measures = list(part.getElementsByClass('Measure'))
-            if not measures:
-                continue
-            assigned = measures[0].number
-            seen = {}
-            for index, measure in enumerate(measures):
-                printed = measure.number
-                if index:
-                    assigned += 1
-                    measure.number = assigned
-                seen[printed] = seen.get(printed, 0) + 1
-                label = str(printed)
-                if seen[printed] > 1:
-                    # Both halves of a repeat ending carry the one number on the page.
-                    label = f"{printed}, {TIME_WORDS.get(seen[printed], str(seen[printed]) + 'th')} time"
-                if label != str(assigned):
-                    labels.setdefault(assigned, label)
-        return labels
+        """Number the bars by their place in the score, and keep what the page prints."""
+        return number_bars_in_order(self.score)
 
     def bar_label(self, bar_number):
         """The bar's number as the page prints it."""
@@ -991,7 +1028,8 @@ class HTMLTalkingScoreFormatter:
             # ending prints one number on two bars, so these are not the counts above.
             'firstPrintedBar': self.score.printed_bar_number(first_numbered),
             'lastPrintedBar': self.score.printed_bar_number(last_bar),
-            # The total counts numbered bars only, so it agrees with the last bar number.
+            # Every bar that is read, which is more than the highest number the page
+            # prints when one number lands on two bars.
             'totalBars': max(0, last_bar - first_numbered + 1) if self.segments else 0,
             'pickupBar': pickup,
             'barsPerGroup': bars_per_group,

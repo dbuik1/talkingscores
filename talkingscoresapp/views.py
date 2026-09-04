@@ -348,7 +348,7 @@ def score(request, id, filename):
             return redirect('error', id, filename)
 
 
-MIDI_PATH_RANGE = re.compile(r"s(\d+)e(\d+)\.mid$")
+MIDI_PATH_RANGE = re.compile(r"b(\d+)e(\d+)\.mid$")
 
 
 def saved_midi_name(filename, midi_file_path):

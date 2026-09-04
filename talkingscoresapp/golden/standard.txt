@@ -46,7 +46,7 @@ Beat 1 crotchet high F staccato, Beat 2 F staccato, Beat 3 F staccato
 Bars 13 to 15
 Bar 13
 Beat 1 minim high F slur starts, Beat 3 crotchet E slur ends
-Bar 13, second time
+Bar 13, second one
 Same rhythm as bar 13
 Beat 1 minim high G, Beat 3 crotchet mid B
 Bar 14

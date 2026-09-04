@@ -46,7 +46,7 @@ b1 F 5 cr st, b2 F st, b3 F st
 Bars 13 to 15
 Bar 13
 b1 F 5 mn sl, b3 E cr end sl
-Bar 13, second time
+Bar 13, second one
 rhythm = bar 13
 b1 G 5 mn, b3 B 4 cr
 Bar 14

@@ -9,7 +9,7 @@ from talkingscores.settings import MEDIA_ROOT
 # A current file is named for the score and the range of bars it holds. Anything
 # else ending in .mid was written for a selection of instruments, a speed and a
 # click setting the browser now applies itself, so nothing asks for it again.
-CURRENT_MIDI = re.compile(r"s\d+e\d+\.mid$")
+CURRENT_MIDI = re.compile(r"b\d+e\d+\.mid$")
 SCORE_SUFFIXES = (".xml", ".musicxml", ".mxl")
 # A half-written file is still being written until it is put in place, so one is
 # only counted as abandoned once no request could still be holding it open.

@@ -46,7 +46,7 @@ Beat 1 high F 1 beat staccato, Beat 2 F 1 beat staccato, Beat 3 F 1 beat staccat
 Bars 13 to 15
 Bar 13
 Beat 1 high F 2 beats slur starts, Beat 3 E 1 beat slur ends
-Bar 13, second time
+Bar 13, second one
 Same rhythm as bar 13
 Beat 1 high G 2 beats, Beat 3 middle B 1 beat
 Bar 14

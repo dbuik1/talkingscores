@@ -395,7 +395,7 @@ class DownloadTests(TestCase):
         # The saved name is read off the file that was written, so the stand-in is
         # named the way the handler names one.
         midi_dir = tempfile.mkdtemp()
-        midi_path = os.path.join(midi_dir, "score.musicxmls3e7.mid")
+        midi_path = os.path.join(midi_dir, "score.musicxmlb3e7.mid")
         with open(midi_path, "wb") as midi_file:
             midi_file.write(b"MThd")
 
@@ -416,17 +416,17 @@ class DownloadTests(TestCase):
         self.assertNotIn("Access-Control-Allow-Origin", response)
 
     def test_saved_midi_files_are_named_for_the_bars_they_hold(self):
-        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls1e2.mid"),
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmlb1e2.mid"),
                          "bach-bars-1-to-2.mid")
-        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls4e4.mid"),
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmlb4e4.mid"),
                          "bach-bar-4.mid")
-        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls0e0.mid"),
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmlb0e0.mid"),
                          "bach-pickup-bar.mid")
 
     def test_a_saved_midi_file_is_named_for_the_bars_written_not_the_bars_asked_for(self):
         # A request reaching past the score is written as the bars that exist, and the
         # name follows the file so it never claims bars it does not hold.
-        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmls5e9.mid"),
+        self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/bach.musicxmlb5e9.mid"),
                          "bach-bars-5-to-9.mid")
         self.assertEqual(views_module.saved_midi_name("bach.musicxml", "/m/unreadable"),
                          "bach.mid")
@@ -1680,24 +1680,55 @@ class ReviewedEngineTests(TestCase):
         self.assertIn("crotchet Closed Hi-Hat", text)
         self.assertNotIn("unpitched", text)
 
-    def test_both_halves_of_a_repeat_ending_are_read_and_addressable(self):
+    def test_a_bar_sharing_a_printed_number_is_read_and_played_as_its_own_bar(self):
+        import shutil
         from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
-        score = Music21TalkingScore(os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml"))
+        from lib.midiHandler import MidiHandler
+        from music21 import converter
+        from types import SimpleNamespace
+        fixture = os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml")
+        score = Music21TalkingScore(fixture)
         formatter = HTMLTalkingScoreFormatter(score, options={"style": "standard", "bars_at_a_time": 4})
         with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
             text = formatter.render_text()
-        # The file prints 13 on both halves of a first- and second-time ending; each
-        # is counted as a bar of its own so the second is read rather than dropped.
-        self.assertIn("Bar 13\nBeat 1 minim high F", text)
-        self.assertIn("Bar 13, second time\n", text)
-        self.assertIn("Beat 1 minim high G, Beat 3 crotchet mid B", text)
+        # The file prints 13 on two bars. Each is counted as a bar of its own, so the
+        # second is read rather than dropped, and neither claims to be a repeat ending.
         self.assertEqual(score.bar_label(13), "13")
-        self.assertEqual(score.bar_label(14), "13, second time")
-        # The counted number reaches one bar and only one, so the second-time bar
-        # can be played on its own.
-        events = score.get_events_for_bar_range(14, 14, 0)
-        self.assertEqual(sorted(events.keys()), [14])
-        self.assertTrue(events[14])
+        self.assertEqual(score.bar_label(14), "13, second one")
+        self.assertEqual(score.bar_label(25), "24")
+        self.assertIn("Bar 13\nBeat 1 minim high F slur starts, Beat 3 crotchet E slur ends", text)
+        self.assertIn("Bar 13, second one\nSame rhythm as bar 13\nBeat 1 minim high G", text)
+
+        # The audio for a bar holds the notes that bar is read as, so the page and the
+        # player never name different music.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = os.path.join(temp_dir, VALID_ID)
+            os.makedirs(folder)
+            shutil.copy(fixture, os.path.join(folder, "score.musicxml"))
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                handler = MidiHandler(SimpleNamespace(GET={}), VALID_ID, "score.musicxml")
+                played = {}
+                for bar in (13, 14, 25):
+                    written = converter.parse(handler.make_midi_file(bar, bar))
+                    played[bar] = [note.pitch.nameWithOctave for note in written.flatten().notes]
+        self.assertEqual(played, {13: ["F5", "E5"], 14: ["G5", "B4"], 25: ["C5"]})
+
+    def test_a_bar_the_page_prints_no_number_on_carries_on_the_one_before(self):
+        from talkingscoreslib import Music21TalkingScore
+        score = Music21TalkingScore(
+            os.path.join(os.getcwd(), "test_scores", "Paganini - Le Streghe mvt 2.xml"))
+        # The second half of a bar split across a system break prints no number of its
+        # own, so it is not a second bar 8 and is not read as one.
+        self.assertEqual(score.bar_label(8), "8")
+        self.assertEqual(score.bar_label(9), "8, continued")
+        self.assertEqual(score.bar_label(10), "9")
+
+    def test_counting_the_bars_again_leaves_them_where_they_are(self):
+        from talkingscoreslib import Music21TalkingScore, number_bars_in_order
+        score = Music21TalkingScore(os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml"))
+        # Audio is cut from a score a caller may already have counted, so counting a
+        # second time has to name the same bars as the first.
+        self.assertEqual(number_bars_in_order(score.score), score.bar_labels)
 
     def test_slurs_and_articulations_are_read_with_the_notes_they_mark(self):
         from music21 import articulations, note, spanner
@@ -1951,14 +1982,14 @@ class ReaderPageTests(TestCase):
         formatter.score.selected_instruments = [4]
         self.assertEqual(formatter._meta_line()[-2:], ["Oboe", "25 bars"])
 
-    def test_the_page_labels_a_repeat_ending_by_its_printed_number(self):
+    def test_the_page_labels_a_shared_bar_number_by_which_bar_it_is(self):
         html = self._render(self._formatter({"style": "standard", "bars_at_a_time": 4}))
         data = json.loads(re.search(r'id="score-data">(.*?)</script>', html, re.S).group(1))
         # The go-to box takes the number printed on the page, which stops one short of
         # the bar count when a repeat ending prints its number twice.
         self.assertEqual((data["firstPrintedBar"], data["lastPrintedBar"]), (1, 24))
-        self.assertIn('data-bar="14" data-printed="13, second time"', html)
-        self.assertIn("<small>Bar</small> 13, second time</h3>", html)
+        self.assertIn('data-bar="14" data-printed="13, second one"', html)
+        self.assertIn("<small>Bar</small> 13, second one</h3>", html)
 
     def test_a_pickup_bar_keeps_go_to_bar_on_numbered_bars(self):
         from talkingscoreslib import HTMLTalkingScoreFormatter
@@ -2284,7 +2315,7 @@ class MidiFileTests(TestCase):
             with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
                 handler = self._handler_in(temp_dir)
                 path = handler.make_midi_file(2, 3)
-                self.assertTrue(path.endswith("score.musicxmls2e3.mid"))
+                self.assertTrue(path.endswith("score.musicxmlb2e3.mid"))
                 header, tracks = self._tracks_with_notes(path)
                 self.assertEqual(header, b"MThd")
                 self.assertGreaterEqual(tracks, 2)     # one track per part
@@ -2299,13 +2330,13 @@ class MidiFileTests(TestCase):
             with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
                 handler = self._handler_in(temp_dir, {"start": "1", "end": "2"})
                 self.assertEqual(handler.requested_range(), (1, 2))
-                self.assertTrue(handler.get_or_make_midi_file().endswith("s1e2.mid"))
+                self.assertTrue(handler.get_or_make_midi_file().endswith("b1e2.mid"))
 
     def test_the_whole_score_is_written_when_no_range_is_asked_for(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
                 handler = self._handler_in(temp_dir)
-                self.assertTrue(handler.make_midi_file().endswith("s1e3.mid"))
+                self.assertTrue(handler.make_midi_file().endswith("b1e3.mid"))
 
     def test_a_written_range_is_served_without_reading_the_score_again(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2313,17 +2344,17 @@ class MidiFileTests(TestCase):
                 self._handler_in(temp_dir).make_midi_file(1, 2)
                 second = self._handler_in(temp_dir)
                 with patch("lib.midiHandler.converter.parse") as mock_parse:
-                    self.assertTrue(second.make_midi_file(1, 2).endswith("s1e2.mid"))
+                    self.assertTrue(second.make_midi_file(1, 2).endswith("b1e2.mid"))
                 mock_parse.assert_not_called()
 
     def test_a_range_past_the_last_bar_writes_the_range_that_fits(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
                 handler = self._handler_in(temp_dir)
-                self.assertTrue(handler.make_midi_file(2, 900).endswith("s2e3.mid"))
-                self.assertTrue(handler.make_midi_file(900, 950).endswith("s3e3.mid"))
+                self.assertTrue(handler.make_midi_file(2, 900).endswith("b2e3.mid"))
+                self.assertTrue(handler.make_midi_file(900, 950).endswith("b3e3.mid"))
                 written = sorted(os.path.basename(path) for path in glob.glob(os.path.join(temp_dir, VALID_ID, "*.mid")))
-                self.assertEqual(written, ["score.musicxmls2e3.mid", "score.musicxmls3e3.mid"])
+                self.assertEqual(written, ["score.musicxmlb2e3.mid", "score.musicxmlb3e3.mid"])
 
     def test_a_failed_write_leaves_nothing_behind(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2358,9 +2389,10 @@ class StaleMidiCleanupTests(TestCase):
             os.makedirs(folder)
             names = [
                 "score.musicxml",
-                "score.musicxmls1e2.mid",          # a range the page still asks for
+                "score.musicxmlb1e2.mid",          # a range the page still asks for
+                "score.musicxmls1e2.mid",          # bars counted the way they were before
                 "score.musicxmls1e2c0t100.mid",    # a speed and a click the browser now applies
-                "score.musicxmlsel-1s1e2.mid",     # a selection of instruments
+                "score.musicxmlsel-1b1e2.mid",     # a selection of instruments
                 "s0e0_upfront.generated",          # a flag file nothing reads now
                 "tmpabc.partial",                  # a write that was abandoned
                 "other.mid",                       # names no score in its folder
@@ -2375,8 +2407,8 @@ class StaleMidiCleanupTests(TestCase):
             with patch("talkingscoresapp.management.commands.cleanup_midi.MEDIA_ROOT", temp_dir):
                 call_command("cleanup_midi", stdout=output)
 
-            self.assertEqual(sorted(os.listdir(folder)), ["score.musicxml", "score.musicxmls1e2.mid"])
-            self.assertIn("Removed 5 file(s); kept 1.", output.getvalue())
+            self.assertEqual(sorted(os.listdir(folder)), ["score.musicxml", "score.musicxmlb1e2.mid"])
+            self.assertIn("Removed 6 file(s); kept 1.", output.getvalue())
 
     def test_a_write_still_in_progress_is_left_alone(self):
         with tempfile.TemporaryDirectory() as temp_dir:
