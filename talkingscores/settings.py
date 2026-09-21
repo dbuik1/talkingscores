@@ -75,12 +75,15 @@ CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(DEFAULT_CSRF_TRUSTED_ORIGINS + env_csr
 # onsubmit handlers in its forms. A nonce would not cover those handlers, so
 # dropping 'unsafe-inline' means moving all of them out first. Styles are inline
 # in the same way: the score page's colour palette is written into the page, and
-# its typefaces come from Google Fonts. The player fetches its MIDI files from
-# this origin and sounds them itself, so no other host is named, and it needs
-# neither a worker nor a media element to do it.
+# its typefaces come from Google Fonts. The player fetches its MIDI files and its
+# sound bank from this origin and sounds them itself, so no other host is named,
+# and it needs neither a worker nor a media element to do it. The sampled
+# instruments run in an audio worklet, which script-src governs, and decode the
+# sound bank with WebAssembly, which 'wasm-unsafe-eval' allows without allowing
+# eval of script.
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline'; "
+    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com; "
     "img-src 'self' data:; "

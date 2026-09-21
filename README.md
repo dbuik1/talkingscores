@@ -71,6 +71,16 @@ the path; to run them alone:
 node --test talkingscoresapp/static/js/tests/player.test.mjs
 ```
 
+The player sounds the notes with sampled instruments: the spessasynth_lib
+synthesizer, vendored under `talkingscoresapp/static/js/vendor/`, playing the
+GeneralUser GS sound bank in `talkingscoresapp/static/sound/`. Both are served
+from this site, and their licences sit beside them. To take a newer release of
+the synthesizer:
+
+```
+scripts/build_synth.sh
+```
+
 The words a reader sees, and the code comments, are checked for wording that
 belongs in a commit message rather than on the page. The Django suite runs the
 check; to run it alone:

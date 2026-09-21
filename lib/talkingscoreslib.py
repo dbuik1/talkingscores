@@ -986,6 +986,7 @@ class HTMLTalkingScoreFormatter:
             'static_css_url': f"{django_settings.STATIC_URL}css/score.css",
             'static_js_url': f"{django_settings.STATIC_URL}js/score.js",
             'static_player_url': f"{django_settings.STATIC_URL}js/player.js",
+            'static_synth_url': f"{django_settings.STATIC_URL}js/vendor/spessasynth.js",
             'palette_css': palette.css(),
             'colour_root_class': palette.root_class,
         })
@@ -1057,7 +1058,17 @@ class HTMLTalkingScoreFormatter:
         midi = None
         if web_path and not export_mode:
             parts = self._playback_parts()
-            midi = {'base': web_path, 'parts': parts, 'voices': self._playback_voices(parts)}
+            midi = {
+                'base': web_path,
+                'parts': parts,
+                'voices': self._playback_voices(parts),
+                # The sampled instruments: the synthesizer's audio worklet and the
+                # General MIDI sound bank it plays, both served from this site.
+                'sounds': {
+                    'processor': f"{django_settings.STATIC_URL}js/vendor/spessasynth_processor.min.js",
+                    'bank': f"{django_settings.STATIC_URL}sound/GeneralUserGS.sf3",
+                },
+            }
         # A score that is only a pickup bar keeps the go-to range inside the bars that exist.
         first_numbered = min(first_bar + 1, last_bar) if pickup == first_bar else first_bar
         return {

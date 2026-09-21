@@ -124,7 +124,9 @@
                         velocity: velocity,
                         channel: channel
                     });
-                } else if (command === 0xc0 || command === 0xd0) {
+                } else if (command === 0xc0) {
+                    events.push({ ticks: ticks, kind: "program", channel: channel, program: reader.byte() });
+                } else if (command === 0xd0) {
                     reader.at++;
                 } else {
                     reader.at += 2;
@@ -257,10 +259,23 @@
             };
         }
 
+        // The channel each track sounds on and the instrument it was written for,
+        // so a sampled instrument can be chosen for it. A track with no notes
+        // has no channel.
+        var channels = [];
         var tracks = midi.tracks.map(function (track) {
             var notes = [];
             var sounding = {};
+            var programs = {};
+            var channel = { number: -1, program: 0 };
             track.forEach(function (event) {
+                if (event.kind === "program") {
+                    programs[event.channel] = event.program;
+                    return;
+                }
+                if (event.kind === "on" && channel.number === -1) {
+                    channel = { number: event.channel, program: programs[event.channel] || 0 };
+                }
                 var key = event.channel + ":" + event.note;
                 if (event.kind === "on") {
                     // Two voices in one part can hold the same pitch at once.
@@ -277,6 +292,7 @@
                 });
             });
             notes.sort(function (a, b) { return a.start - b.start; });
+            channels.push(channel);
             return notes;
         });
 
@@ -285,9 +301,11 @@
         // other track keeps its place, even when the part rests through the range.
         while (tracks.length > expectedParts && tracks.length && !tracks[0].length) {
             tracks.shift();
+            channels.shift();
         }
         while (tracks.length < expectedParts) {
             tracks.push([]);
+            channels.push({ number: -1, program: 0 });
         }
 
         var clicks = beatGrid(midi, lastTick).map(function (beat) {
@@ -295,6 +313,7 @@
         });
         return {
             parts: tracks,
+            channels: channels,
             clicks: clicks,
             duration: seconds(lastTick),
             // A file with a track for every part is the only one the parts can be
@@ -374,6 +393,14 @@
         var context = null;
         var master = null;
         var partGains = [];
+        // The sampled instruments, once their sound bank has loaded. Until then,
+        // and whenever they cannot load, the notes sound as simple tones.
+        var synth = null;
+        var synthLoading = null;
+        var synthFailed = false;
+        var toldFailed = false;
+        var sampled = false;
+        var staleUntil = 0;
         var scores = {};
         var order = [];
         var timer = null;
@@ -471,21 +498,83 @@
             return context;
         }
 
-        function silence() {
+        function silence(cut) {
             if (timer) {
                 window.clearInterval(timer);
                 timer = null;
             }
             if (master && context) {
-                master.disconnect();
+                var old = master;
+                old.disconnect();
                 master = context.createGain();
                 master.gain.value = 0.9;
                 master.connect(context.destination);
+                if (synth) {
+                    synth.disconnect(old);
+                    synth.connect(master);
+                }
             }
             partGains = [];
+            // Notes already handed to the sampled instruments for the next second
+            // or so would still sound after a stop. A muted channel drops them, and
+            // stays muted until the last of them has come and gone.
+            if (cut && synth && sampled) {
+                synth.stopAll(true);
+                muteSampled(true);
+                staleUntil = context.currentTime + LOOKAHEAD_SECONDS;
+            }
+        }
+
+        function muteSampled(muted) {
+            synth.midiChannels.forEach(function (channel) {
+                channel.setSystemParameter("isMuted", muted);
+            });
+        }
+
+        function sampledWanted() {
+            return Boolean(data.midi.sounds && window.SpessaSynth && context && context.audioWorklet
+                && (!controls.sampled || controls.sampled.checked));
+        }
+
+        // Loads the sampled instruments once. Never rejects: a failure leaves the
+        // simple tones in place, and is reported the first time they stand in.
+        function loadSampled() {
+            if (synth || synthFailed || !sampledWanted()) {
+                return Promise.resolve(synth);
+            }
+            if (!synthLoading) {
+                var sounds = data.midi.sounds;
+                synthLoading = Promise.all([
+                    context.audioWorklet.addModule(sounds.processor),
+                    fetch(sounds.bank).then(function (response) {
+                        if (!response.ok) {
+                            throw new Error("the sound bank was refused");
+                        }
+                        return response.arrayBuffer();
+                    })
+                ]).then(function (results) {
+                    var made = new window.SpessaSynth.WorkletSynthesizer(context);
+                    made.connect(master);
+                    // Enough voices for a full score at once, well under the library's
+                    // default, which is sized for dense MIDI files.
+                    made.setSystemParameter("voiceCap", 128);
+                    return made.soundBankManager.addSoundBank(results[1], "main").then(function () {
+                        return made.isReady;
+                    }).then(function () {
+                        synth = made;
+                        return synth;
+                    });
+                }).catch(function () {
+                    synthFailed = true;
+                    synthLoading = null;
+                    return null;
+                });
+            }
+            return synthLoading;
         }
 
         function openGains() {
+            sampled = Boolean(synth) && sampledWanted();
             var voice = chosenVoice();
             var forward = forwardPart();
             partGains = music.parts.map(function (notes, index) {
@@ -500,6 +589,24 @@
                 gain.connect(master);
                 return gain;
             });
+            if (!sampled) {
+                return;
+            }
+            // Each part plays on its own channel with the instrument it was written
+            // for, at the level its balance setting gives it.
+            music.channels.forEach(function (channel, index) {
+                if (channel.number === -1) {
+                    return;
+                }
+                synth.programChange(channel.number, channel.program);
+                synth.midiChannels[channel.number].setSystemParameter("gain", partGains[index].gain.value);
+            });
+            var wait = staleUntil - context.currentTime;
+            if (wait > 0) {
+                window.setTimeout(function () { muteSampled(false); }, wait * 1000 + 30);
+            } else {
+                muteSampled(false);
+            }
         }
 
         function scheduleUpTo(until) {
@@ -516,7 +623,11 @@
                     // clock runs on. Notes whose moment has passed are let go rather
                     // than sounded together on the next pass.
                     if (partGains[part].gain.value > 0 && start >= now - LATE_TOLERANCE) {
-                        if (note.percussion) {
+                        if (sampled && music.channels[part].number !== -1) {
+                            var channel = music.channels[part].number;
+                            synth.noteOn(channel, note.note, note.velocity, { time: Math.max(start, now) });
+                            synth.noteOff(channel, note.note, { time: end });
+                        } else if (note.percussion) {
                             makeTap(context, partGains[part], note, Math.max(start, now));
                         } else {
                             makeNote(context, partGains[part], note, Math.max(start, now), end);
@@ -541,7 +652,7 @@
 
         function restart() {
             cursor = { part: music.parts.map(function () { return 0; }), click: 0 };
-            silence();
+            silence(false);
             openGains();
             stopAt = origin + music.duration * speedFactor() + 0.6;
             timer = window.setInterval(tick, SCHEDULER_MS);
@@ -562,7 +673,7 @@
                 return;
             }
             playing = false;
-            silence();
+            silence(false);
             report("Reached the end of " + label(target) + ".");
         }
 
@@ -606,7 +717,7 @@
             var wasSounding = playing || pending;
             pending = false;
             playing = false;
-            silence();
+            silence(true);
             // Stop answers every press, so a reader who cannot see the button knows
             // it reached the player whether or not anything was sounding.
             if (spoken) {
@@ -614,12 +725,14 @@
             }
         }
 
-        function start(parsed) {
+        function start(parsed, said) {
             music = parsed;
             playing = true;
-            origin = context.currentTime + 0.15;
+            // The sampled instruments stay muted while notes from a stopped run are
+            // still due, so a fresh run begins once those have passed.
+            origin = Math.max(context.currentTime + 0.15, synth && sampledWanted() ? staleUntil + 0.1 : 0);
             restart();
-            report("Playing " + label(target) + ".");
+            report(said + "Playing " + label(target) + ".");
         }
 
         // A note said before the state is a note the next message would wipe out, so
@@ -634,11 +747,12 @@
             var wanted = range;
             target = range;
             pending = true;
-            report(said + "Loading " + label(range) + ".");
+            var loadingSounds = sampledWanted() && !synth && !synthFailed;
+            report(said + "Loading " + (loadingSounds ? "the instrument sounds and " : "") + label(range) + ".");
             var loaded = fetchRange(range.start, range.end);
             // The browser holds the audio clock until a gesture releases it, so
             // playback waits for the resume as well as for the file.
-            Promise.all([loaded, context.resume()]).then(function (results) {
+            Promise.all([loaded, context.resume(), loadSampled()]).then(function (results) {
                 if (!pending || wanted !== target) {
                     return;
                 }
@@ -657,7 +771,12 @@
                     report("The audio for " + label(wanted) + " does not match the bars on this page. Reload the page and try again.");
                     return;
                 }
-                start(results[0]);
+                var fell = "";
+                if (synthFailed && sampledWanted() && !toldFailed) {
+                    toldFailed = true;
+                    fell = "The instrument sounds could not be loaded, so the notes sound as simple tones. ";
+                }
+                start(results[0], fell);
             }, function (error) {
                 pending = false;
                 if (error && error.refused) {
@@ -688,7 +807,7 @@
         if (controls.stop) {
             controls.stop.addEventListener("click", function () { stop(true); });
         }
-        [controls.speed, controls.voice, controls.forward, controls.click].forEach(function (control) {
+        [controls.speed, controls.voice, controls.forward, controls.click, controls.sampled].forEach(function (control) {
             if (control) {
                 control.addEventListener("change", replayIfPlaying);
             }

@@ -48,6 +48,7 @@ def reader_context(**overrides):
         "static_css_url": "/static/css/score.css",
         "static_js_url": "/static/js/score.js",
         "static_player_url": "/static/js/player.js",
+        "static_synth_url": "/static/js/vendor/spessasynth.js",
         "download_html_url": "/download/html/abc123/score.musicxml",
         "download_text_url": "/download/text/abc123/score.musicxml",
         "download_braille_url": "/download/braille/abc123/score.musicxml",
@@ -150,7 +151,8 @@ class BasicFunctionalityTests(TestCase):
             if parts:
                 directives[parts[0]] = parts[1:]
 
-        self.assertEqual(directives["script-src"], ["'self'", "'unsafe-inline'"])
+        # The sampled instruments decode their sound bank with WebAssembly.
+        self.assertEqual(directives["script-src"], ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"])
         self.assertEqual(directives["frame-ancestors"], ["'none'"])
         self.assertIn("upgrade-insecure-requests", directives)
         # The page sounds its own MIDI, so it needs no other host, no worker and no media element.
@@ -1978,6 +1980,10 @@ class ReaderPageTests(TestCase):
         self.assertEqual(data["midi"]["base"], "/midis/x/y.musicxml")
         self.assertEqual(data["midi"]["parts"], [{"index": 0, "label": "Instrument 1 (unnamed)", "read": True}])
         self.assertEqual(data["midi"]["voices"], [{"parts": [0], "label": "Instrument 1 (unnamed)"}])
+        self.assertEqual(data["midi"]["sounds"], {"processor": "/static/js/vendor/spessasynth_processor.min.js",
+                                                  "bank": "/static/sound/GeneralUserGS.sf3"})
+        self.assertIn('src="/static/js/vendor/spessasynth.js" defer', html)
+        self.assertIn('id="setting-sampled" checked', html)
         self.assertIn('<div class="bar" id="bar-1" data-bar="1"', html)
         self.assertIn("<small>Bar</small> 1</h3>", html)
         self.assertNotIn("group-toggle", html)           # the script builds the group buttons

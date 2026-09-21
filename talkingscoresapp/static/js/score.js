@@ -520,9 +520,10 @@
 
         // Playback choices are kept alongside the reading settings, so a reader who
         // needs half speed or the click sets them once. The speed, the click and the
-        // repeat mean the same in any score. The instruments and the balance name
-        // positions in one score's part list, so they are kept against that score.
-        var SHARED_PLAYBACK = ["speed", "click", "repeat"];
+        // repeat and the choice of sounds mean the same in any score. The instruments
+        // and the balance name positions in one score's part list, so they are kept
+        // against that score.
+        var SHARED_PLAYBACK = ["speed", "click", "repeat", "sampled"];
         var SCORE_PLAYBACK = ["voice", "forward"];
 
         function rememberPlayback(name, value) {
@@ -593,6 +594,7 @@
                 click: document.getElementById("setting-click"),
                 forward: document.getElementById("setting-forward"),
                 repeat: document.getElementById("setting-repeat"),
+                sampled: document.getElementById("setting-sampled"),
                 rangeLabel: rangeLabel,
                 remember: rememberPlayback
             };

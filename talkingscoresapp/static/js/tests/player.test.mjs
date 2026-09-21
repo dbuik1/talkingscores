@@ -53,6 +53,7 @@ const tempoAfter = (delta, microseconds) => variable(delta).concat([0xff, 0x51, 
 const timeSignature = (beats, beatPower) => variable(0).concat([0xff, 0x58, 0x04, beats, beatPower, 24, 8]);
 const noteOn = (delta, note, velocity = 90, channel = 0) => variable(delta).concat([0x90 | channel, note, velocity]);
 const noteOff = (delta, note, channel = 0) => variable(delta).concat([0x80 | channel, note, 64]);
+const programChange = (delta, channel, program) => variable(delta).concat([0xc0 | channel, program]);
 
 test("a part that rests through the range keeps its place", () => {
     const conductor = tempo(500000);
@@ -201,6 +202,18 @@ test("a delta time that never ends is refused", () => {
     const events = [0xff, 0xff, 0xff, 0xff, 0xff];
     assert.throws(() => parseMidi(Uint8Array.from(header({ tracks: 1 }).concat(chunk("MTrk", events))).buffer),
         /too long|no status/);
+});
+
+test("a program change before the notes names the channel and instrument", () => {
+    const events = programChange(0, 2, 40).concat(noteOn(0, 60, 90, 2), noteOff(DIVISION, 60, 2));
+    const music = collect(parseMidi(file([events])), 1);
+    assert.deepEqual(music.channels[0], { number: 2, program: 40 });
+});
+
+test("a part missing from the file is padded with no channel", () => {
+    const events = noteOn(0, 60).concat(noteOff(DIVISION, 60));
+    const music = collect(parseMidi(file([events])), 2);
+    assert.deepEqual(music.channels[1], { number: -1, program: 0 });
 });
 
 /* Playing the whole score alongside a group. */

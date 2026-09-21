@@ -26,6 +26,7 @@
     {% else %}
     <script src="{{ static_js_url }}"></script>
     {% if score_data.midi %}
+    <script src="{{ static_synth_url }}" defer></script>
     <script src="{{ static_player_url }}" defer></script>
     {% endif %}
     {% endif %}
@@ -143,8 +144,9 @@
                 <div class="row">
                     <label class="check"><input type="checkbox" id="setting-click">Metronome click</label>
                     <label class="check"><input type="checkbox" id="setting-repeat">Repeat playback</label>
+                    <label class="check"><input type="checkbox" id="setting-sampled" checked>Instrument sounds</label>
                 </div>
-                <p class="small muted">These stay on this device. Changing the parts, balance or click while anything is playing starts it again.</p>
+                <p class="small muted">These stay on this device. Changing the parts, balance, click or sounds while anything is playing starts it again. The instrument sounds are an 8 MB download the first time you press play; without them the notes sound as simple tones.</p>
             </form>
         </details>
         {% endif %}
