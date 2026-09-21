@@ -1,17 +1,17 @@
 {% extends "base_site.html" %}
 
-{% block title %}How should this score read? - Talking Scores{% endblock %}
+{% block title %}Reading options - Talking Scores{% endblock %}
 {% block noindex %}<meta name="robots" content="noindex">{% endblock %}
 
 {% block content %}
 <div>
     <p class="meta"><b>{{ score_info.title }}</b>{% if score_info.composer %} by {{ score_info.composer }}{% endif %} · <a href="{% url 'index' %}">Open a different score</a></p>
-    <h1 style="margin-top: 8px;">How should this score read?</h1>
+    <h1 style="margin-top: 8px;">Reading options</h1>
 </div>
 
 {% if form.errors %}
 <div id="setup-errors" tabindex="-1">
-    <h2 class="legend">The reading was not generated</h2>
+    <h2 class="legend">There is a problem</h2>
     <div class="callout error-callout">
         <ul class="errors">
             {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
@@ -26,7 +26,8 @@
     {% csrf_token %}
 
     <fieldset>
-        <legend class="legend prompt">Pick a style. Each one shows the same bar written its way.</legend>
+        <legend class="legend prompt">Style</legend>
+        <p class="small muted">Each one shows the same bar written its way.</p>
         <div class="cards">
             {% for choice in style_choices %}
             <div class="card">
@@ -85,19 +86,19 @@
                             <option value="everyNote">On every note</option>
                             <option value="firstNote">On the first note of a group</option>
                         </select></span>
-                    <span class="setting"><label for="octave_position">Octave comes</label>
+                    <span class="setting"><label for="octave_position">Octave position</label>
                         <select class="input" name="octave_position" id="octave_position">
                             <option value="before" selected>Before the pitch</option>
                             <option value="after">After the pitch</option>
                         </select></span>
                 </div>
                 <div class="row">
-                    <span class="setting"><label for="accidental_style">Sharps and flats</label>
+                    <span class="setting"><label for="accidental_style">Accidentals</label>
                         <select class="input" name="accidental_style" id="accidental_style">
                             <option value="words" selected>Written as words</option>
                             <option value="symbols">Written as symbols</option>
                         </select></span>
-                    <span class="setting"><label for="key_signature_accidentals">Sharps and flats</label>
+                    <span class="setting"><label for="key_signature_accidentals">Say accidentals</label>
                         <select class="input" name="key_signature_accidentals" id="key_signature_accidentals">
                             <option value="sounding" selected>Named on every note that sounds sharp or flat</option>
                             <option value="on_change">Named when they change</option>
@@ -226,7 +227,7 @@
     <div class="actions">
         <label class="check"><input type="checkbox" id="remember-setup"> Remember these settings on this device</label>
         <button class="btn primary" type="submit">Generate the reading</button>
-        <p class="small muted">Takes about a minute. You can leave the page that follows and come back to its link.</p>
+        <p class="small muted">Takes about a minute. You can leave the next page and come back to its link later.</p>
     </div>
 </form>
 {% endblock content %}

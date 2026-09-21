@@ -6,11 +6,11 @@
 
 {% block content %}
 <div>
-    <h1>Sheet music, in words you can read bar by bar.</h1>
+    <h1>Sheet music, written out bar by bar</h1>
     <p class="lead">Open a MusicXML file and Talking Scores writes out every bar: the rhythm, the pitch, the dynamics. Read it with a screen reader, a braille display, a magnifier, or your eyes, and hear any bar on its own.</p>
 </div>
 
-<p class="callout" id="file-rules"><strong>MusicXML files</strong> (.musicxml, .xml or .mxl) up to 10 MB. The file and the reading written from it stay on this server, and the link to them keeps working. Nothing is shared or listed.</p>
+<p class="callout" id="file-rules"><strong>MusicXML files</strong> (.musicxml, .xml or .mxl) up to 10 MB. Your file stays on this server and is not shared.</p>
 
 <form id="open" class="form" action="{% url 'index' %}" method="post" enctype="multipart/form-data">
     {% csrf_token %}
@@ -26,12 +26,12 @@
             <p class="small muted" id="url-help">The link has to point at the file itself, not at a page about it</p>
         </div>
     </details>
-    <button class="btn primary" type="submit">Choose how it reads</button>
+    <button class="btn primary" type="submit">Continue</button>
 </form>
 
 <div>
     <details>
-        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>How to get a MusicXML file from MuseScore, Sibelius, Finale or Dorico</h2></summary>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>How to get a MusicXML file</h2></summary>
         <div class="panel">
             <p>Every notation program writes MusicXML, usually under Export rather than Save.</p>
             <ul class="bullets">
@@ -40,14 +40,14 @@
                 <li><b>Finale</b> - File, Export, MusicXML, Uncompressed.</li>
                 <li><b>Dorico</b> - File, Export, MusicXML.</li>
             </ul>
-            <p class="small muted">A PDF or a scan cannot be read here. The music has to have been typed into a notation program.</p>
+            <p class="small muted">PDFs and scans cannot be read. The music has to come from a notation program.</p>
         </div>
     </details>
     {% if example_scores %}
     <details>
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Try an example score</h2></summary>
         <div class="panel">
-            <p>These were written by this site and show what a reading page looks like. They may have been written by an earlier version.</p>
+            <p>Each one is a reading made by this site. Some were made by an earlier version.</p>
             <ul class="bullets">
                 {% for score in example_scores %}
                 <li><a href="{% static 'data/' %}{{ score }}">{{ score }}</a></li>
@@ -64,10 +64,10 @@
         </div>
     </details>
     <details>
-        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>What is kept and for how long</h2></summary>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>What happens to your file</h2></summary>
         <div class="panel">
-            <p>The file you open and the reading written from it stay on this server so your link keeps working. Nothing is listed publicly and nothing is shared.</p>
-            <p><a href="{% url 'privacy-policy' %}">Read the privacy policy</a></p>
+            <p>Your file and its reading stay on this server, so your link keeps working. Nothing is listed publicly or shared.</p>
+            <p><a href="{% url 'privacy-policy' %}">Privacy policy</a></p>
         </div>
     </details>
 </div>

@@ -1,18 +1,19 @@
 {% extends "base_site.html" %}
 
-{% block title %}This score could not be written - Talking Scores{% endblock %}
+{% block title %}The reading could not be generated - Talking Scores{% endblock %}
 {% block noindex %}<meta name="robots" content="noindex">{% endblock %}
 
 {% block content %}
 <div>
-    <h1>This score could not be written</h1>
-    <p class="lead">The file <b>{{ filename }}</b> was read, but writing it out as a talking score stopped part way through. The failure has been recorded on this server.</p>
+    <h1>The reading could not be generated</h1>
+    <p class="lead">The file <b>{{ filename }}</b> was read, but writing out the bars stopped part way through.</p>
 </div>
 
 <div class="actions">
     <a class="btn primary" href="{% url 'index' %}">Open a different score</a>
-    <a href="{% url 'change-log' %}">Fixes already made are listed on the change log</a>
 </div>
+
+<p class="small muted">Fixes already made are listed on the <a href="{% url 'change-log' %}">change log</a>.</p>
 
 <p class="small muted">To report this score, use the <a href="{% url 'contact-us' %}">contact page</a> and quote the file name {{ filename }}.</p>
 {% endblock content %}

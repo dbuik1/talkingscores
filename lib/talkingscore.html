@@ -38,7 +38,7 @@
         <span class="brand"><svg viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h20M4 13h20M4 18h20M4 23h20"></path><circle cx="17" cy="20.5" r="3" fill="currentColor" stroke="none"></circle><path d="M20 20.5V7l4 2"></path></svg><span>Talking Scores</span></span>
         {% else %}
         <a class="brand" href="/"><svg viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h20M4 13h20M4 18h20M4 23h20"></path><circle cx="17" cy="20.5" r="3" fill="currentColor" stroke="none"></circle><path d="M20 20.5V7l4 2"></path></svg><span>Talking Scores</span></a>
-        <nav aria-label="Site"><a href="/privacy-policy">Privacy</a></nav>
+        <nav aria-label="Site"><a href="/privacy-policy">Privacy policy</a></nav>
         {% endif %}
     </header>
 
@@ -106,7 +106,7 @@
             </div>
         </details>
         <details>
-            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Reading settings</h2></summary>
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Text and colours</h2></summary>
             <form class="panel" id="reading-settings-form" onsubmit="return false">
                 <fieldset class="field">
                     <legend>Text size</legend>
@@ -122,7 +122,7 @@
                     <p class="small muted" id="stack-locked" hidden>Extra large sets one note per line.</p>
                     <label class="goto"><span>Colours</span><select class="input" id="setting-theme"><option value="system">Match my system</option><option value="light">Light</option><option value="dark">Dark</option><option value="contrast">High contrast</option></select></label>
                 </div>
-                <p class="small muted">Changes apply straight away and are kept on this device.{% if options_url %} The words themselves are set under <a href="{{ options_url }}">Choose how it reads</a>.{% endif %}</p>
+                <p class="small muted">Changes apply straight away and are kept on this device.{% if options_url %} The wording is set under <a href="{{ options_url }}">Reading options</a>.{% endif %}</p>
             </form>
         </details>
         {% if score_data.midi %}
@@ -164,7 +164,7 @@
 
     <div class="score" id="score" tabindex="-1" role="region" aria-label="The score">
         {% if not music_segments %}
-        <p class="callout">No bars could be read from this file. Check that it is a MusicXML file with at least one part that contains notes, then upload it again.</p>
+        <p class="callout">No bars could be read from this file. Check that it is a MusicXML file with at least one part that contains notes, then <a href="/">upload it again</a>.</p>
         {% endif %}
         {% for segment in music_segments %}
         <section class="group current" id="group-{{ segment.start_bar }}">
@@ -212,7 +212,7 @@
         <span>Downloaded from Talking Scores. Words: {{ style_name }}.</span>
         {% else %}
         <span>Talking Scores</span>
-        <a href="/privacy-policy">What is kept and for how long</a>
+        <a href="/privacy-policy">Privacy policy</a>
         <a href="/change-log">Change log</a>
         <a href="/contact-us">Contact</a>
         {% endif %}

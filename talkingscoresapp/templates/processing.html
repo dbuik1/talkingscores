@@ -16,11 +16,11 @@
     <p><a id="processing-next-link" class="btn" href="{% url 'index' %}">Open a different score</a></p>
 </div>
 
-<p>Usually about a minute. Nothing will move or reload on its own; the score opens here when it is ready.</p>
+<p>Usually about a minute. This page opens the reading as soon as it is ready.</p>
 <p class="small muted">You can leave this page. The link in the address bar brings you back to the finished score.</p>
 
 <noscript>
-    <p class="noscript">This page checks for the finished score with script, which is turned off. Reload the page every minute or so to see whether it is ready.</p>
+    <p class="noscript">JavaScript is turned off, so this page cannot check for itself. Reload it every minute or so to see whether the score is ready.</p>
 </noscript>
 {% endblock content %}
 
@@ -78,7 +78,7 @@
                 } else if (data.status === 'options_required' && data.next_url) {
                     window.location = data.next_url;
                 } else {
-                    setProcessingStatus(data.message || 'Writing the bars');
+                    setProcessingStatus(data.message || 'Writing out the bars');
                     setTimeout(pollStatus, 2000);
                 }
             })

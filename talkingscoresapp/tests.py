@@ -171,7 +171,7 @@ class BasicFunctionalityTests(TestCase):
         self.assertIn('aria-describedby="file-rules"', content)
         self.assertIn('id="file-rules"', content)
         self.assertIn('accept=".xml,.musicxml,.mxl"', content)
-        self.assertIn("Choose how it reads", content)
+        self.assertIn("Continue", content)
 
     def test_site_shell_reads_the_stored_colours_before_the_page_paints(self):
         response = self.client.get(reverse("index"))
@@ -233,7 +233,7 @@ class BasicFunctionalityTests(TestCase):
         content = response.content.decode("utf-8")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("What is kept and for how long", content)
+        self.assertIn("Privacy policy", content)
         for cookie in ("csrftoken", "messages"):
             self.assertIn(cookie, content)
         self.assertNotIn("Google Analytics", content)
