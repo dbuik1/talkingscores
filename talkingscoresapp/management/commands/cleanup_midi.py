@@ -64,7 +64,7 @@ class Command(BaseCommand):
         lowered = name.lower()
         if lowered.endswith(".partial"):
             return self._abandoned(os.path.join(folder_path, name))
-        # The flag files that once recorded a finished write are no longer read.
+        # .generated files are never read; treat them as stale.
         if lowered.endswith(".generated"):
             return True
         if not lowered.endswith(".mid"):

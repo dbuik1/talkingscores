@@ -1,7 +1,7 @@
-"""One bar of the same music, read once in each style, for the set-up page.
+"""One bar of the same music, read once in each style, for the options page.
 
 The samples come from the reading engine rather than a written-out table, so
-what the set-up page shows a reader is what the style will produce.
+what the options page shows a reader is what the style will produce.
 """
 
 import os
@@ -32,7 +32,7 @@ def style_samples():
         try:
             samples[style] = _sample_for(style)
         except Exception:
-            # A sample is an aid to choosing, so the set-up page still lists the
+            # A sample is an aid to choosing, so the options page still lists the
             # style when the sample cannot be built.
             samples[style] = ""
     return samples

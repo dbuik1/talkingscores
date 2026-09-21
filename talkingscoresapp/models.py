@@ -273,7 +273,6 @@ def extract_musicxml_from_mxl(mxl_path, output_path):
     """
     try:
         with zipfile.ZipFile(mxl_path, 'r') as zip_ref:
-            # List all files in the archive
             file_list = zip_ref.namelist()
             logger.info(f"Files in MXL archive: {file_list}")
 
@@ -283,38 +282,31 @@ def extract_musicxml_from_mxl(mxl_path, output_path):
             
             if not manifest_rootfile:
                 for filename in file_list:
-                    # Skip metadata folders and files
                     if filename.startswith('META-INF/') or filename.startswith('__MACOSX/'):
                         continue
 
-                    # Look for XML files
                     if filename.lower().endswith(('.xml', '.musicxml')):
                         musicxml_candidates.append(filename)
                         break
             
             if not musicxml_candidates:
-                # If no obvious XML files, look for the largest file that might be XML
                 non_meta_files = [f for f in file_list if not f.startswith(('META-INF/', '__MACOSX/'))]
                 if non_meta_files:
-                    # Try the first non-metadata file
                     musicxml_candidates = [non_meta_files[0]]
-            
+
             if not musicxml_candidates:
                 raise Exception("No MusicXML content found in the .mxl file.")
-            
-            # Use the first candidate (or the one that looks most like a main file)
+
             musicxml_file = musicxml_candidates[0]
             logger.info(f"Extracting MusicXML file: {musicxml_file}")
-            
-            # Extract the MusicXML content
+
             # The archive header can lie about the uncompressed size, so the
             # cap is applied to the bytes actually read.
             with zip_ref.open(musicxml_file) as source:
                 content = source.read(MAX_EXTRACTED_SCORE_BYTES + 1)
             if len(content) > MAX_EXTRACTED_SCORE_BYTES:
                 raise Exception("The MusicXML inside the .mxl file is too large.")
-            
-            # Write to output path
+
             with open(output_path, 'wb') as target:
                 target.write(content)
             
@@ -565,7 +557,7 @@ class TSScore(object):
                     if not self.refresh_generation_lock():
                         return
                     if with_status:
-                        self._write_processing_status("processing", "Generating score.", epoch=epoch)
+                        self._write_processing_status("processing", "Writing out the bars.", epoch=epoch)
                 except OSError:
                     # A passing disk error is retried on the next beat; the lock
                     # only goes stale if the errors last the whole stale window.
@@ -643,7 +635,7 @@ class TSScore(object):
                 self._write_processing_status("complete", "Score ready.", epoch=epoch)
                 self.release_generation_lock()
                 return True
-            self._write_processing_status("processing", "Generating score.", epoch=epoch)
+            self._write_processing_status("processing", "Writing out the bars.", epoch=epoch)
 
             def generate():
                 try:
@@ -672,7 +664,7 @@ class TSScore(object):
         """Return the score HTML, generating it under the per-score lock when the cache is missing or stale."""
         data_path = self.get_data_file_path()
         if not data_path:
-            return "Error: Could not find score data file."
+            return "<h1>This score is no longer stored here</h1><p>Upload the file again to make a new reading.</p><p><a href=\"/\">Talking Scores home</a></p>"
 
         html_cache_path = self.get_html_cache_file_path()
         if not export_mode and not force_refresh and self._is_html_cache_fresh(html_cache_path, data_path):
@@ -687,7 +679,7 @@ class TSScore(object):
         except Exception:
             if raise_errors:
                 raise
-            return f"<h1>Error generating score</h1><p>{GENERATION_FAILED_MESSAGE}</p>"
+            return f"<h1>The reading could not be generated</h1><p>{GENERATION_FAILED_MESSAGE} Try a different MusicXML file.</p>"
         finally:
             self.release_generation_lock()
 
@@ -754,7 +746,6 @@ class TSScore(object):
         base_name = os.path.splitext(sanitized_name)[0]
         original_extension = os.path.splitext(sanitized_name)[1].lower()
         
-        # Always store as .musicxml regardless of input format
         score.filename = f"{base_name}.musicxml"
 
         destination_path = score.get_data_file_path()
@@ -762,7 +753,6 @@ class TSScore(object):
             raise Exception("Could not determine file destination path.")
         os.makedirs(os.path.dirname(destination_path), exist_ok=True)
 
-        # Clear any stale .opts file
         opts_path = destination_path + '.opts'
         if os.path.exists(opts_path):
             try:
@@ -774,24 +764,19 @@ class TSScore(object):
         uploaded_file.seek(0)
         
         if original_extension == '.mxl':
-            # Handle .mxl files: extract to temporary location, then move to final destination
             score.logger.info(f"Processing .mxl file: {uploaded_file.name}")
-            
-            # Create temporary file for the uploaded .mxl
+
             with tempfile.NamedTemporaryFile(suffix='.mxl', delete=False) as temp_mxl:
                 for chunk in uploaded_file.chunks():
                     temp_mxl.write(chunk)
                 temp_mxl_path = temp_mxl.name
-            
+
             try:
-                # Extract MusicXML from the .mxl file
                 extract_musicxml_from_mxl(temp_mxl_path, destination_path)
                 score.logger.info(f"Successfully extracted MusicXML from .mxl to {destination_path}")
             finally:
-                # Clean up temporary .mxl file
                 remove_file_quietly(temp_mxl_path)
         else:
-            # Handle regular .xml/.musicxml files
             with open(destination_path, 'wb+') as destination:
                 for chunk in uploaded_file.chunks():
                     destination.write(chunk)
@@ -822,34 +807,27 @@ class TSScore(object):
         base_name = os.path.splitext(sanitized_name)[0]
         original_extension = os.path.splitext(sanitized_name)[1].lower()
         
-        # Always store as .musicxml regardless of input format
         score.filename = f"{base_name}.musicxml"
 
         destination_path = score.get_data_file_path()
         os.makedirs(os.path.dirname(destination_path), exist_ok=True)
 
         if original_extension == '.mxl':
-            # Handle .mxl files from URL
             score.logger.info(f"Processing .mxl file from URL: {url}")
-            
-            # Create temporary file for the downloaded .mxl
+
             with tempfile.NamedTemporaryFile(suffix='.mxl', delete=False) as temp_mxl:
                 temp_mxl.write(file_content)
                 temp_mxl_path = temp_mxl.name
-            
+
             try:
-                # Extract MusicXML from the .mxl file
                 extract_musicxml_from_mxl(temp_mxl_path, destination_path)
                 score.logger.info(f"Successfully extracted MusicXML from URL .mxl to {destination_path}")
             finally:
-                # Clean up temporary .mxl file
                 remove_file_quietly(temp_mxl_path)
         else:
-            # Handle regular .xml/.musicxml files from URL
             with open(destination_path, 'wb') as f:
                 f.write(file_content)
-        
-        # Validate the final file
+
         try:
             Music21TalkingScore(destination_path)
         except Exception as e:

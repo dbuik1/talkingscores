@@ -25,8 +25,9 @@
 html:not(.js) .group-toggle { cursor: default; }
 .group-toggle .chev { width: 0.8em; height: 0.8em; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex: none; transition: transform 0.15s; }
 html:not(.js) .group-toggle .chev { display: none; }
-/* The open group's toggle carries aria-current rather than aria-expanded, since
-   it no longer offers a state to change, so the chevron follows the group. */
+/* The open group's toggle carries aria-current, not aria-expanded: it has no
+   closed state to expand into, so the chevron tracks .group.current instead
+   of a toggle state. */
 .group.current .group-toggle .chev { transform: rotate(90deg); }
 .group h2:focus-visible { outline: none; }
 .group:not(.current) h2 { font-size: 1.5rem; font-weight: 400; }
@@ -115,7 +116,7 @@ html[data-size="xlarge"] .bar h3 { font-size: 5rem; }
     border-top: 1px solid var(--edge);
 }
 
-/* Colour from the set-up page lands in a separate style block. High contrast is one colour on one
+/* Colour from the options page lands in a separate style block. High contrast is one colour on one
    ground, so it overrides those rules and the print block does the same. */
 /* Scores set up before the colour became a plate carry the older body classes. */
 html[data-theme="contrast"] .colour-words [class*="colour-"],

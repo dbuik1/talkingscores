@@ -70,8 +70,7 @@ class MusicAnalyser:
         self.summary_parts = []
         self.repetition_in_contexts = {}  # key = part index
         self.general_summary = ""
-        # FIX: Initialize the new context dictionary
-        self.immediate_repetition_contexts = {} 
+        self.immediate_repetition_contexts = {}
 
         analyse_index = 0
         for ins in ts.part_instruments:
@@ -87,7 +86,6 @@ class MusicAnalyser:
                     self.repetition_in_contexts[part_index] = (self.analyse_parts[analyse_index].describe_repetition_in_context())
                     self.summary_parts.append(summary)
 
-                    # FIX: Call the new method to get "Learning Mode" repetition info
                     self.immediate_repetition_contexts[part_index] = self.analyse_parts[analyse_index].describe_immediate_repetition()
 
                     # self.repetition_parts.append(self.analyse_parts[analyse_index].describe_repetition())
@@ -947,9 +945,10 @@ class AnalysePart:
     # section first usage - says how many times it is used later.
     # section second usage - says when it was first used.
     # after second usage - says first and most recent time it was used
-    # repeat_what eg "full match", "rhythm", "intervals"
+    # repeat_what is a (prefix, present-tense verb, past-tense verb) tuple, e.g. ("Bars ", "are", "were"), matched to the subject so every sentence agrees
     # modifies the repetition_in_context dictionary
     def describe_section_usage_in_context(self, groups_list, repeat_what, repetition_in_context):
+        repeat_what_prefix, repeat_what_present_verb, repeat_what_past_verb = repeat_what
         for group in groups_list:
             # see if a group repetition is used a lot so change what we say about it to avoid becoming too verbose
             group_repetition_percent = ((group[0][1]-group[0][0]+1)*len(group)/len(self.measure_indexes))*100
@@ -964,13 +963,13 @@ class AnalysePart:
             temp = ""
             for index, usage in enumerate(group):
                 if index >= 1:
-                    temp = repeat_what + self.bar_number(usage[0]) + and_or_through + self.bar_number(usage[1])
-                    temp += " were first used at " + self.bar_number(group[0][0])
+                    temp = repeat_what_prefix + self.bar_number(usage[0]) + and_or_through + self.bar_number(usage[1])
+                    temp += " " + repeat_what_past_verb + " first used at " + self.bar_number(group[0][0])
                     if index >= 2:
-                        temp += " and lately used at " + self.bar_number(group[index-1][0])
+                        temp += " and last used at " + self.bar_number(group[index-1][0])
                 else:
-                    temp = "Bars " + self.bar_number(usage[0]) + and_or_through + self.bar_number(usage[1])
-                    temp += " are used " + (str(len(group)-1)) + " more times.  "
+                    temp = repeat_what_prefix + self.bar_number(usage[0]) + and_or_through + self.bar_number(usage[1])
+                    temp += " " + repeat_what_present_verb + " used " + (str(len(group)-1)) + " more times"
 
                 self.insert_or_plus_equals(repetition_in_context, usage[0], temp + ".  ")
 
@@ -978,18 +977,19 @@ class AnalysePart:
     # bar first usage - says how many times it is used later.
     # bar second usage - says when it was first used.
     # after second usage - says first and most recent time it was used
-    # repeat_what eg "full match", "rhythm", "intervals"
+    # repeat_what is a (prefix, present-tense verb, past-tense verb) tuple, e.g. ("Bars ", "are", "were"), matched to the subject so every sentence agrees
     # modifies the repetition_in_context dictionary
     def describe_measure_usage_in_context(self, repeated_measures_not_in_groups_dictionary, repeat_what, repetition_in_context):
+        repeat_what_prefix, repeat_what_present_verb, repeat_what_past_verb = repeat_what
         for key, ms in repeated_measures_not_in_groups_dictionary.items():
-            temp = repeat_what + self.bar_label(key) + " is used " + str(len(ms)) + " more times.  "
+            temp = repeat_what_prefix + self.bar_label(key) + " " + repeat_what_present_verb + " used " + str(len(ms)) + " more times.  "
             self.insert_or_plus_equals(repetition_in_context, key, temp)
 
             for index, m in enumerate(ms):
-                temp = repeat_what + self.bar_number(m)
-                temp += " was first used at " + self.bar_number(key)
+                temp = repeat_what_prefix + self.bar_number(m)
+                temp += " " + repeat_what_past_verb + " first used at " + self.bar_number(key)
                 if index >= 1:
-                    temp += " and lately used at " + self.bar_number(ms[index-1])
+                    temp += " and last used at " + self.bar_number(ms[index-1])
 
                 self.insert_or_plus_equals(repetition_in_context, m, temp + ".  ")
 
@@ -1001,14 +1001,14 @@ class AnalysePart:
 
         repetition_in_context = {}  # key = measure number.  value = string
         # todo - could eg bar 4 could be full match for another bar - but only rhythm match for another bar.  The later rhythm match will say when it was first used - but the earlier full match won't treat it like the first rhythm match and say how many times it was used.
-        self.describe_section_usage_in_context(self.measure_groups_list, "Bars ", repetition_in_context)
-        self.describe_measure_usage_in_context(self.repeated_measures_not_in_groups_dictionary, "Bar ", repetition_in_context)
+        self.describe_section_usage_in_context(self.measure_groups_list, ("Bars ", "are", "were"), repetition_in_context)
+        self.describe_measure_usage_in_context(self.repeated_measures_not_in_groups_dictionary, ("Bar ", "is", "was"), repetition_in_context)
 
-        self.describe_section_usage_in_context(self.measure_rhythm_not_full_match_groups_list, "The rhythm in bars ", repetition_in_context)
-        self.describe_measure_usage_in_context(self.repeated_rhythm_measures_not_full_match_not_in_groups_dictionary, "The rhythm in bar ", repetition_in_context)
+        self.describe_section_usage_in_context(self.measure_rhythm_not_full_match_groups_list, ("The rhythm in bars ", "is", "was"), repetition_in_context)
+        self.describe_measure_usage_in_context(self.repeated_rhythm_measures_not_full_match_not_in_groups_dictionary, ("The rhythm in bar ", "is", "was"), repetition_in_context)
 
-        self.describe_section_usage_in_context(self.measure_intervals_not_full_match_groups_list, "The intervals in bars ", repetition_in_context)
-        self.describe_measure_usage_in_context(self.repeated_intervals_measures_not_full_match_not_in_groups_dictionary, "The intervals in bar ", repetition_in_context)
+        self.describe_section_usage_in_context(self.measure_intervals_not_full_match_groups_list, ("The intervals in bars ", "are", "were"), repetition_in_context)
+        self.describe_measure_usage_in_context(self.repeated_intervals_measures_not_full_match_not_in_groups_dictionary, ("The intervals in bar ", "are", "were"), repetition_in_context)
 
         return repetition_in_context
 

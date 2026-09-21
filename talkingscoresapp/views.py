@@ -29,7 +29,7 @@ def clean_style(value):
 
 
 def submitted_settings(post):
-    """What the set-up page was showing when it was submitted, so a rejected
+    """What the options page was showing when it was submitted, so a rejected
     submission comes back with the reader's choices rather than the defaults.
     An unticked box sends nothing, so every checkbox is named explicitly."""
     settings = {
@@ -48,7 +48,7 @@ CHECKBOX_FIELDS = (
     "chk_describe_chords", "chk_colourPitch",
 )
 
-# The set-up page reads this rather than naming the styles itself, so a style
+# The options page reads this rather than naming the styles itself, so a style
 # added to the engine reaches the page with the words that describe it. The
 # samples are read out of the engine on first use, not at import, so starting
 # the site does not wait on a score being parsed five times.
@@ -128,16 +128,16 @@ def add_rhythm_colour_defaults(score_info):
 def parse_selected_instruments(post_data, instrument_count):
     selected = post_data.getlist("instruments")
     if not selected:
-        raise forms.ValidationError("Please select at least one instrument to describe.")
+        raise forms.ValidationError("Choose at least one part.")
 
     try:
         instrument_ids = [int(instrument_id) for instrument_id in selected]
     except (TypeError, ValueError):
-        raise forms.ValidationError("Invalid instrument selection.")
+        raise forms.ValidationError("Choose only parts listed for this score.")
 
     valid_ids = set(range(1, instrument_count + 1))
     if any(instrument_id not in valid_ids for instrument_id in instrument_ids):
-        raise forms.ValidationError("Invalid instrument selection.")
+        raise forms.ValidationError("Choose only parts listed for this score.")
 
     return instrument_ids
 
@@ -158,9 +158,9 @@ def validate_midi_query_params(query_params):
         try:
             bars[param] = int(query_params[param])
         except (TypeError, ValueError):
-            raise forms.ValidationError(f"Invalid MIDI parameter: {param}.")
+            raise forms.ValidationError(f"The MIDI parameter {param} has to be a whole number.")
         if not 0 <= bars[param] <= MAX_MIDI_BAR_NUMBER:
-            raise forms.ValidationError(f"Invalid MIDI parameter: {param}.")
+            raise forms.ValidationError(f"The MIDI parameter {param} is outside the bars this score has.")
 
     if bars["start"] > bars["end"]:
         raise forms.ValidationError("MIDI start parameter cannot be after end.")
@@ -386,7 +386,7 @@ def midi(request, id, filename):
         return HttpResponse("There is nothing to play for that range.", status=404)
     except Exception:
         logger.exception("Unable to generate MIDI: http://%s%s" % (request.get_host(), request.get_full_path()))
-        return HttpResponse("MIDI generation failed.", status=500)
+        return HttpResponse("The audio for that range could not be generated. Try a different range.", status=500)
     
     if os.path.exists(midi_file_path):
         fr = FileResponse(
@@ -399,14 +399,14 @@ def midi(request, id, filename):
         return fr
     else:
         logger.error(f"MIDI file not found at path: {midi_file_path}")
-        return HttpResponse("MIDI file not found.", status=404)
+        return HttpResponse("There is no audio at that link.", status=404)
 
 
 def download_html(request, id, filename):
     score_obj = TSScore(id=id, filename=filename)
 
     if score_obj.state() != TSScoreState.PROCESSED:
-        messages.error(request, "The requested score is not ready to download.")
+        messages.error(request, "This score is still being generated. Wait for it to finish, then download it.")
         return redirect('index')
 
     try:
@@ -428,7 +428,7 @@ def download_html(request, id, filename):
 def _download_export(request, id, filename, braille):
     score_obj = TSScore(id=id, filename=filename)
     if score_obj.state() != TSScoreState.PROCESSED:
-        messages.error(request, "The requested score is not ready to download.")
+        messages.error(request, "This score is still being generated. Wait for it to finish, then download it.")
         return redirect('index')
     try:
         content = score_obj.export_text(braille=braille)

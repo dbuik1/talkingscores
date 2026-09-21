@@ -1,6 +1,4 @@
-"""
-Essential tests for Talking Scores - focused on critical issues.
-"""
+"""Tests for Talking Scores."""
 
 from django.conf import settings
 from django.test import TestCase, Client, override_settings
@@ -109,7 +107,6 @@ class BasicFunctionalityTests(TestCase):
         self.client = Client()
         
     def test_homepage_loads(self):
-        """Ensure the main page works."""
         response = self.client.get(reverse('index'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Talking Scores')
@@ -216,13 +213,11 @@ class BasicFunctionalityTests(TestCase):
         self.assertEqual(get_example_scores(), ["a.html", "z.html"])
         
     def test_change_log_loads(self):
-        """Test the change log page loads correctly."""
         response = self.client.get(reverse('change-log'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Change log')
 
     def test_contact_us_loads(self):
-        """Test the contact us page loads correctly."""
         response = self.client.get(reverse('contact-us'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'talkingscores@gmail.com')
@@ -282,8 +277,8 @@ class BasicFunctionalityTests(TestCase):
     @patch("talkingscoresapp.views.TSScore.state", return_value="processed")
     def test_process_status_restarts_a_dead_run(self, mock_state, mock_status, mock_start, mock_live):
         mock_status.side_effect = [
-            {"status": "processing", "message": "Generating score."},
-            {"status": "processing", "message": "Generating score."},
+            {"status": "processing", "message": "Writing out the bars."},
+            {"status": "processing", "message": "Writing out the bars."},
         ]
 
         self.client.get(reverse("process-status", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
@@ -292,7 +287,7 @@ class BasicFunctionalityTests(TestCase):
 
     @patch("talkingscoresapp.views.TSScore.generation_is_live", return_value=True)
     @patch("talkingscoresapp.views.TSScore.start_background_processing", return_value=True)
-    @patch("talkingscoresapp.views.TSScore.processing_status", return_value={"status": "processing", "message": "Generating score."})
+    @patch("talkingscoresapp.views.TSScore.processing_status", return_value={"status": "processing", "message": "Writing out the bars."})
     @patch("talkingscoresapp.views.TSScore.state", return_value="processed")
     def test_process_status_leaves_a_live_run_alone(self, mock_state, mock_status, mock_start, mock_live):
         self.client.get(reverse("process-status", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
@@ -552,7 +547,7 @@ class DownloadTests(TestCase):
     def test_process_status_starts_pending_processed_score(self, mock_status, mock_start, mock_state):
         mock_status.side_effect = [
             {"status": "pending", "message": ""},
-            {"status": "processing", "message": "Generating score."},
+            {"status": "processing", "message": "Writing out the bars."},
         ]
         mock_state.return_value = "processed"
 
@@ -694,7 +689,7 @@ class DownloadTests(TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Invalid instrument selection")
+        self.assertContains(response, "Choose only parts listed for this score.")
         mock_clear.assert_not_called()
 
     @patch("talkingscoresapp.views.TSScore.info")
@@ -722,7 +717,7 @@ class DownloadTests(TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Invalid instrument selection")
+        self.assertContains(response, "Choose only parts listed for this score.")
         mock_clear.assert_not_called()
 
     @patch("talkingscoresapp.views.TSScore.info")
@@ -808,11 +803,11 @@ class CacheAndMaintenanceTests(TestCase):
             data_path = os.path.join(temp_dir, VALID_ID, "score.musicxml")
             os.makedirs(os.path.dirname(data_path), exist_ok=True)
             with patch.object(score, "get_data_file_path", return_value=data_path):
-                score._write_processing_status("processing", "Generating score.")
+                score._write_processing_status("processing", "Writing out the bars.")
 
                 status = score.processing_status()
                 self.assertEqual(status["status"], "processing")
-                self.assertEqual(status["message"], "Generating score.")
+                self.assertEqual(status["message"], "Writing out the bars.")
                 self.assertIn("updated", status)
 
     @patch("talkingscoresapp.models.os.replace", side_effect=OSError("replace failed"))
@@ -823,7 +818,7 @@ class CacheAndMaintenanceTests(TestCase):
             os.makedirs(os.path.dirname(data_path), exist_ok=True)
             with patch.object(score, "get_data_file_path", return_value=data_path):
                 with self.assertRaises(OSError):
-                    score._write_processing_status("processing", "Generating score.")
+                    score._write_processing_status("processing", "Writing out the bars.")
 
                 temp_path = mock_replace.call_args.args[0]
                 self.assertFalse(os.path.exists(temp_path))
@@ -862,7 +857,7 @@ class CacheAndMaintenanceTests(TestCase):
                         with self.assertRaises(ValueError):
                             score.html(force_refresh=True, raise_errors=True)
 
-                        self.assertIn("Error generating score", score.html(force_refresh=True))
+                        self.assertIn("The reading could not be generated", score.html(force_refresh=True))
 
     @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
     @patch("talkingscoresapp.models.Music21TalkingScore")
@@ -2553,3 +2548,49 @@ def _raise_or_return(outcome):
     if isinstance(outcome, BaseException):
         raise outcome
     return outcome
+
+
+class RepetitionInContextWordingTests(TestCase):
+    def _make_part(self, bar_count):
+        from lib.musicAnalyser import AnalysePart
+
+        part = AnalysePart()
+        for bar in range(1, bar_count + 1):
+            part.measure_indexes[bar] = bar
+        return part
+
+    def test_full_match_group_uses_plural_verbs_and_last_used_at(self):
+        part = self._make_part(12)
+        part.measure_groups_list = [[[1, 4], [5, 8], [9, 12]]]
+        context = part.describe_repetition_in_context()
+        self.assertIn("Bars 1", context[1])
+        self.assertIn("are used 2 more times", context[1])
+        self.assertIn("were first used at 1", context[5])
+        self.assertIn("were first used at 1 and last used at 5", context[9])
+        for text in context.values():
+            self.assertNotIn(". .", text)
+            self.assertNotIn(".  .", text)
+
+    def test_rhythm_only_group_keeps_qualifier_and_singular_verbs(self):
+        part = self._make_part(16)
+        part.measure_rhythm_not_full_match_groups_list = [[[5, 8], [9, 12], [13, 16]]]
+        context = part.describe_repetition_in_context()
+        self.assertIn("The rhythm in bars 5", context[5])
+        self.assertIn("is used 2 more times", context[5])
+        self.assertIn("was first used at 5", context[9])
+        self.assertIn("was first used at 5 and last used at 9", context[13])
+        for text in context.values():
+            self.assertNotIn(". .", text)
+            self.assertNotIn(".  .", text)
+
+    def test_intervals_only_group_keeps_qualifier_and_plural_verbs(self):
+        part = self._make_part(12)
+        part.measure_intervals_not_full_match_groups_list = [[[1, 4], [5, 8], [9, 12]]]
+        context = part.describe_repetition_in_context()
+        self.assertIn("The intervals in bars 1", context[1])
+        self.assertIn("are used 2 more times", context[1])
+        self.assertIn("were first used at 1", context[5])
+        self.assertIn("were first used at 1 and last used at 5", context[9])
+        for text in context.values():
+            self.assertNotIn(". .", text)
+            self.assertNotIn(".  .", text)

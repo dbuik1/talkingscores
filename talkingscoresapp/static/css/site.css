@@ -418,7 +418,7 @@ input[type="url"].input { width: 100%; max-width: 520px; }
 }
 .card .sample.mono { font-family: "Atkinson Hyperlegible Mono", ui-monospace, Menlo, monospace; font-size: 18px; }
 
-/* Grouped settings behind the disclosure on the set-up page. */
+/* Grouped settings behind the disclosure on the options page. */
 .box-set {
     border: 1px solid var(--rule);
     border-radius: 8px;

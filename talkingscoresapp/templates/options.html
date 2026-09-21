@@ -125,7 +125,7 @@
 
             <fieldset class="box-set">
                 <legend>Parts</legend>
-                <p class="small muted" id="parts-help">At least one part has to be written out.</p>
+                <p class="small muted" id="parts-help">Choose at least one part.</p>
                 <div class="row">
                     {% for instrument in score_info.instruments %}
                     <label class="check"><input type="checkbox" name="instruments" value="{{ forloop.counter }}" aria-describedby="parts-help"{% if instruments_invalid %} aria-invalid="true"{% endif %} checked> {{ instrument }}</label>
