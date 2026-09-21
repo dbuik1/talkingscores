@@ -969,7 +969,8 @@ class AnalysePart:
                         temp += " and last used at " + self.bar_number(group[index-1][0])
                 else:
                     temp = repeat_what_prefix + self.bar_number(usage[0]) + and_or_through + self.bar_number(usage[1])
-                    temp += " " + repeat_what_present_verb + " used " + (str(len(group)-1)) + " more times"
+                    more = len(group) - 1
+                    temp += " " + repeat_what_present_verb + " used " + str(more) + (" more time" if more == 1 else " more times")
 
                 self.insert_or_plus_equals(repetition_in_context, usage[0], temp + ".  ")
 
@@ -982,7 +983,7 @@ class AnalysePart:
     def describe_measure_usage_in_context(self, repeated_measures_not_in_groups_dictionary, repeat_what, repetition_in_context):
         repeat_what_prefix, repeat_what_present_verb, repeat_what_past_verb = repeat_what
         for key, ms in repeated_measures_not_in_groups_dictionary.items():
-            temp = repeat_what_prefix + self.bar_label(key) + " " + repeat_what_present_verb + " used " + str(len(ms)) + " more times.  "
+            temp = repeat_what_prefix + self.bar_label(key) + " " + repeat_what_present_verb + " used " + str(len(ms)) + (" more time.  " if len(ms) == 1 else " more times.  ")
             self.insert_or_plus_equals(repetition_in_context, key, temp)
 
             for index, m in enumerate(ms):

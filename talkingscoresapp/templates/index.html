@@ -47,7 +47,7 @@
     <details>
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Try an example score</h2></summary>
         <div class="panel">
-            <p>Each one is a reading made by this site. Some were made by an earlier version.</p>
+            <p>Each one is a reading made by this site, some of them by an earlier version.</p>
             <ul class="bullets">
                 {% for score in example_scores %}
                 <li><a href="{% static 'data/' %}{{ score }}">{{ score }}</a></li>

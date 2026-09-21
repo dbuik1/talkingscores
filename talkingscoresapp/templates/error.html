@@ -13,7 +13,5 @@
     <a class="btn primary" href="{% url 'index' %}">Open a different score</a>
 </div>
 
-<p class="small muted">Fixes already made are listed on the <a href="{% url 'change-log' %}">change log</a>.</p>
-
-<p class="small muted">To report this score, use the <a href="{% url 'contact-us' %}">contact page</a> and quote the file name {{ filename }}.</p>
+<p class="small muted">To report this score, use the <a href="{% url 'contact-us' %}">contact page</a> and quote the file name {{ filename }}. Fixes already made are listed on the <a href="{% url 'change-log' %}">change log</a>.</p>
 {% endblock content %}

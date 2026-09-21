@@ -27,12 +27,12 @@
 
     <fieldset>
         <legend class="legend prompt">Style</legend>
-        <p class="small muted">Each one shows the same bar written its way.</p>
+        <p class="small muted" id="style-help">Each one shows the same bar written its way.</p>
         <div class="cards">
             {% for choice in style_choices %}
             <div class="card">
                 <input type="radio" name="style" value="{{ choice.id }}" id="style-{{ choice.id }}"
-                       aria-describedby="sample-{{ choice.id }}"{% if choice.id == chosen_style %} checked{% endif %}>
+                       aria-describedby="sample-{{ choice.id }} style-help"{% if choice.id == chosen_style %} checked{% endif %}>
                 <label for="style-{{ choice.id }}"><span class="name">{{ choice.name }}</span><span class="who">{{ choice.summary }}</span></label>
                 <span class="sample{% if choice.mono %} mono{% endif %}" id="sample-{{ choice.id }}">{{ choice.sample }}</span>
             </div>
@@ -98,11 +98,11 @@
                             <option value="words" selected>Written as words</option>
                             <option value="symbols">Written as symbols</option>
                         </select></span>
-                    <span class="setting"><label for="key_signature_accidentals">Say accidentals</label>
+                    <span class="setting"><label for="key_signature_accidentals">Say the accidental</label>
                         <select class="input" name="key_signature_accidentals" id="key_signature_accidentals">
-                            <option value="sounding" selected>Named on every note that sounds sharp or flat</option>
-                            <option value="on_change">Named when they change</option>
-                            <option value="printed">Named only where the music prints one</option>
+                            <option value="sounding" selected>On every note that sounds sharp or flat</option>
+                            <option value="on_change">When it changes</option>
+                            <option value="printed">Only where the music prints one</option>
                         </select></span>
                     <span class="setting"><label for="repetition_mode">Repeated bars</label>
                         <select class="input" name="repetition_mode" id="repetition_mode">

@@ -2571,6 +2571,21 @@ class RepetitionInContextWordingTests(TestCase):
             self.assertNotIn(". .", text)
             self.assertNotIn(".  .", text)
 
+    def test_group_used_once_more_says_one_more_time(self):
+        part = self._make_part(8)
+        part.measure_groups_list = [[[1, 4], [5, 8]]]
+        context = part.describe_repetition_in_context()
+        self.assertIn("are used 1 more time.", context[1])
+        self.assertNotIn("1 more times", context[1])
+
+    def test_single_bar_used_once_more_says_one_more_time(self):
+        part = self._make_part(4)
+        part.repeated_measures_not_in_groups_dictionary = {2: [4]}
+        context = part.describe_repetition_in_context()
+        self.assertIn("is used 1 more time.", context[2])
+        self.assertNotIn("1 more times", context[2])
+        self.assertIn("was first used at 2", context[4])
+
     def test_rhythm_only_group_keeps_qualifier_and_singular_verbs(self):
         part = self._make_part(16)
         part.measure_rhythm_not_full_match_groups_list = [[[5, 8], [9, 12], [13, 16]]]

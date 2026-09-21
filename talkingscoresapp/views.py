@@ -160,13 +160,13 @@ def validate_midi_query_params(query_params):
         except (TypeError, ValueError):
             raise forms.ValidationError(f"The MIDI parameter {param} has to be a whole number.")
         if not 0 <= bars[param] <= MAX_MIDI_BAR_NUMBER:
-            raise forms.ValidationError(f"The MIDI parameter {param} is outside the bars this score has.")
+            raise forms.ValidationError(f"The MIDI parameter {param} has to be between 0 and {MAX_MIDI_BAR_NUMBER}.")
 
     if bars["start"] > bars["end"]:
-        raise forms.ValidationError("MIDI start parameter cannot be after end.")
+        raise forms.ValidationError("The first bar has to come before the last bar.")
 
     if bars["end"] - bars["start"] >= MAX_MIDI_BARS:
-        raise forms.ValidationError(f"MIDI range cannot be longer than {MAX_MIDI_BARS} bars.")
+        raise forms.ValidationError(f"The audio can cover at most {MAX_MIDI_BARS} bars at a time.")
 
 
 def get_example_scores():
@@ -386,7 +386,7 @@ def midi(request, id, filename):
         return HttpResponse("There is nothing to play for that range.", status=404)
     except Exception:
         logger.exception("Unable to generate MIDI: http://%s%s" % (request.get_host(), request.get_full_path()))
-        return HttpResponse("The audio for that range could not be generated. Try a different range.", status=500)
+        return HttpResponse("The audio for those bars could not be generated.", status=500)
     
     if os.path.exists(midi_file_path):
         fr = FileResponse(
@@ -399,14 +399,18 @@ def midi(request, id, filename):
         return fr
     else:
         logger.error(f"MIDI file not found at path: {midi_file_path}")
-        return HttpResponse("There is no audio at that link.", status=404)
+        return HttpResponse("The audio for those bars was not saved. Try playing them again.", status=404)
 
 
 def download_html(request, id, filename):
     score_obj = TSScore(id=id, filename=filename)
 
-    if score_obj.state() != TSScoreState.PROCESSED:
-        messages.error(request, "This score is still being generated. Wait for it to finish, then download it.")
+    state = score_obj.state()
+    if state == TSScoreState.AWAITING_OPTIONS:
+        messages.error(request, "This score has no reading yet. Choose the reading options, then download it.")
+        return redirect('options', id, filename)
+    if state != TSScoreState.PROCESSED:
+        messages.error(request, SCORE_MISSING_MESSAGE)
         return redirect('index')
 
     try:
@@ -427,8 +431,12 @@ def download_html(request, id, filename):
 
 def _download_export(request, id, filename, braille):
     score_obj = TSScore(id=id, filename=filename)
-    if score_obj.state() != TSScoreState.PROCESSED:
-        messages.error(request, "This score is still being generated. Wait for it to finish, then download it.")
+    state = score_obj.state()
+    if state == TSScoreState.AWAITING_OPTIONS:
+        messages.error(request, "This score has no reading yet. Choose the reading options, then download it.")
+        return redirect('options', id, filename)
+    if state != TSScoreState.PROCESSED:
+        messages.error(request, SCORE_MISSING_MESSAGE)
         return redirect('index')
     try:
         content = score_obj.export_text(braille=braille)

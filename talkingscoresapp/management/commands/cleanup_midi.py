@@ -64,7 +64,7 @@ class Command(BaseCommand):
         lowered = name.lower()
         if lowered.endswith(".partial"):
             return self._abandoned(os.path.join(folder_path, name))
-        # .generated files are never read; treat them as stale.
+        # A .generated flag records nothing any code path reads, so removing one cannot lose work.
         if lowered.endswith(".generated"):
             return True
         if not lowered.endswith(".mid"):

@@ -679,7 +679,7 @@ class TSScore(object):
         except Exception:
             if raise_errors:
                 raise
-            return f"<h1>The reading could not be generated</h1><p>{GENERATION_FAILED_MESSAGE} Try a different MusicXML file.</p>"
+            return "<h1>The reading could not be generated</h1><p>This file could not be written out all the way through. Try a different MusicXML file.</p>"
         finally:
             self.release_generation_lock()
 

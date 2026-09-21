@@ -157,7 +157,7 @@
                     {% if score_data.midi %}<a class="btn" id="download-midi" href="{{ score_data.midi.base }}?start={{ score_data.firstBar }}&amp;end={{ score_data.firstBar }}" download>Download as MIDI</a>{% endif %}
                     <button class="btn" type="button" id="print-score">Print every bar</button>
                 </div>
-                {% if not export_mode %}<p class="small muted">The web page works offline and keeps these reading settings. The braille file is uncontracted text for a 40-cell display or embosser.{% if score_data.midi %} The MIDI file holds the group on screen, not the whole score.{% endif %}</p>{% endif %}
+                {% if not export_mode %}<p class="small muted">The web page works offline and keeps the text size and colours you chose here. The braille file is uncontracted text for a 40-cell display or embosser.{% if score_data.midi %} The MIDI file holds the group on screen, not the whole score.{% endif %}</p>{% endif %}
             </div>
         </details>
     </div>
