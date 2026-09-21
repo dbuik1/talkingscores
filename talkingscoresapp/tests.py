@@ -168,7 +168,7 @@ class BasicFunctionalityTests(TestCase):
         self.assertIn('aria-describedby="file-rules"', content)
         self.assertIn('id="file-rules"', content)
         self.assertIn('accept=".xml,.musicxml,.mxl"', content)
-        self.assertIn("Continue", content)
+        self.assertIn("Open score", content)
 
     def test_site_shell_reads_the_stored_colours_before_the_page_paints(self):
         response = self.client.get(reverse("index"))
@@ -201,7 +201,7 @@ class BasicFunctionalityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Talking Scores')
         # Nothing to try, so nothing offers it.
-        self.assertNotContains(response, 'Try an example score')
+        self.assertNotContains(response, 'Example scores')
         mock_logger_warning.assert_called_once()
 
     @patch("talkingscoresapp.views.os.listdir")
@@ -857,7 +857,7 @@ class CacheAndMaintenanceTests(TestCase):
                         with self.assertRaises(ValueError):
                             score.html(force_refresh=True, raise_errors=True)
 
-                        self.assertIn("The reading could not be generated", score.html(force_refresh=True))
+                        self.assertIn("The talking score could not be generated", score.html(force_refresh=True))
 
     @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
     @patch("talkingscoresapp.models.Music21TalkingScore")
@@ -1239,7 +1239,7 @@ class GenerationLockTests(TestCase):
                 with open(data_path + ".opts", "w", encoding="utf-8") as opts_file:
                     opts_file.write('{"bars_at_a_time": 8}')
 
-                score._write_processing_status("complete", "Score ready.", epoch=epoch)
+                score._write_processing_status("complete", "Talking score ready.", epoch=epoch)
                 self.assertFalse(os.path.exists(score.get_processing_status_file_path()))
 
                 with patch("talkingscoresapp.models.Music21TalkingScore"), \
@@ -1480,7 +1480,7 @@ class ReviewedEngineTests(TestCase):
         # The style choice is the page; every other setting is folded away behind it.
         first_disclosure = content.index("<details")
         self.assertLess(content.index('name="style"'), first_disclosure)
-        self.assertIn("Generate the reading", content)
+        self.assertIn("Generate talking score", content)
 
         form = content[content.index('<form class="form"'):]
         outside = re.findall(r'name="([^"]+)"', form[:form.index("<details")])

@@ -1,12 +1,12 @@
 {% extends "base_site.html" %}
 
-{% block title %}Reading options - Talking Scores{% endblock %}
+{% block title %}Options - Talking Scores{% endblock %}
 {% block noindex %}<meta name="robots" content="noindex">{% endblock %}
 
 {% block content %}
 <div>
     <p class="meta"><b>{{ score_info.title }}</b>{% if score_info.composer %} by {{ score_info.composer }}{% endif %} · <a href="{% url 'index' %}">Open a different score</a></p>
-    <h1 style="margin-top: 8px;">Reading options</h1>
+    <h1 style="margin-top: 8px;">Options</h1>
 </div>
 
 {% if form.errors %}
@@ -27,12 +27,11 @@
 
     <fieldset>
         <legend class="legend prompt">Style</legend>
-        <p class="small muted" id="style-help">Each one shows the same bar written its way.</p>
         <div class="cards">
             {% for choice in style_choices %}
             <div class="card">
                 <input type="radio" name="style" value="{{ choice.id }}" id="style-{{ choice.id }}"
-                       aria-describedby="sample-{{ choice.id }} style-help"{% if choice.id == chosen_style %} checked{% endif %}>
+                       aria-describedby="sample-{{ choice.id }}"{% if choice.id == chosen_style %} checked{% endif %}>
                 <label for="style-{{ choice.id }}"><span class="name">{{ choice.name }}</span><span class="who">{{ choice.summary }}</span></label>
                 <span class="sample{% if choice.mono %} mono{% endif %}" id="sample-{{ choice.id }}">{{ choice.sample }}</span>
             </div>
@@ -41,12 +40,12 @@
     </fieldset>
 
     <details{% if form.errors %} open{% endif %}>
-        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Customise the words, parts, playback, colour and layout</h2></summary>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Advanced options</h2></summary>
         <div class="panel">
-            <p class="small muted">Only the Musical terms style follows the wording set here. Every other style fixes its own wording; the parts, playback, colour and layout apply to all of them.</p>
 
-            <fieldset class="box-set">
+            <fieldset class="box-set" aria-describedby="words-help">
                 <legend>Words</legend>
+                <p class="small muted" id="words-help">These change the Musical terms style only</p>
                 <div class="row">
                     <span class="setting"><label for="rhythm_description">Rhythm names</label>
                         <select class="input" name="rhythm_description" id="rhythm_description">
@@ -146,10 +145,9 @@
                 <legend>Colour</legend>
                 <div class="row">
                     <label class="check"><input type="checkbox" name="chk_colourWords" id="colour_words" value="checked"> Colour the words</label>
-                    <span class="small muted">The colour goes behind the word so it reads on any background, and the colour name is always written next to it.</span>
                 </div>
                 <details class="plain" id="colour-detail">
-                    <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Choose the colours</h2></summary>
+                    <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Colours</h2></summary>
                     <div style="display: flex; flex-direction: column; gap: 16px; padding: 12px 0 4px;">
                         <label class="check"><input type="checkbox" name="chk_colourPitch" value="checked" checked> Colour by pitch</label>
                         <fieldset class="field">
@@ -219,15 +217,14 @@
                             {% endfor %}
                         </select></span>
                 </div>
-                <p class="small muted">Text size and colours are set on the reading page itself, where you can see the effect.</p>
+                <p class="small muted">Text size and the light or dark setting are on the talking score page, where you can see the effect.</p>
             </fieldset>
         </div>
     </details>
 
     <div class="actions">
         <label class="check"><input type="checkbox" id="remember-setup"> Remember these settings on this device</label>
-        <button class="btn primary" type="submit">Generate the reading</button>
-        <p class="small muted">Takes about a minute. You can leave the next page and come back to its link later.</p>
+        <button class="btn primary" type="submit">Generate talking score</button>
     </div>
 </form>
 {% endblock content %}

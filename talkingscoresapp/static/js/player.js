@@ -621,7 +621,7 @@
         function play(note) {
             var said = typeof note === "string" ? note : "";
             if (!audio()) {
-                report(said + "This browser cannot sound the score. The bars are written out below.");
+                report(said + "This browser cannot play the audio. The bars are written out below.");
                 return;
             }
             stop(false);
@@ -647,7 +647,7 @@
                     return;
                 }
                 if (!results[0].matches) {
-                    report("The audio for " + label(group) + " does not match this score. Reload the page and try again.");
+                    report("The audio for " + label(group) + " does not match the bars on this page. Reload the page and try again.");
                     return;
                 }
                 start(results[0]);

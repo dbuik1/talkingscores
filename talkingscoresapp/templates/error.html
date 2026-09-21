@@ -1,11 +1,11 @@
 {% extends "base_site.html" %}
 
-{% block title %}The reading could not be generated - Talking Scores{% endblock %}
+{% block title %}The talking score could not be generated - Talking Scores{% endblock %}
 {% block noindex %}<meta name="robots" content="noindex">{% endblock %}
 
 {% block content %}
 <div>
-    <h1>The reading could not be generated</h1>
+    <h1>The talking score could not be generated</h1>
     <p class="lead">The file <b>{{ filename }}</b> was read, but writing out the bars stopped part way through.</p>
 </div>
 
@@ -13,5 +13,5 @@
     <a class="btn primary" href="{% url 'index' %}">Open a different score</a>
 </div>
 
-<p class="small muted">To report this score, use the <a href="{% url 'contact-us' %}">contact page</a> and quote the file name {{ filename }}. Fixes already made are listed on the <a href="{% url 'change-log' %}">change log</a>.</p>
+<p class="small muted">To report this score, use the <a href="{% url 'contact-us' %}">contact page</a> and quote the file name {{ filename }}.</p>
 {% endblock content %}

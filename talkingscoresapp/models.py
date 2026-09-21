@@ -48,7 +48,7 @@ NAT64_NETWORKS = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64
 # the host the request actually connects to.
 NO_PROXIES = {"http": None, "https": None}
 
-GENERATION_FAILED_MESSAGE = "The score could not be generated from this file."
+GENERATION_FAILED_MESSAGE = "The talking score could not be generated from this file."
 
 
 class ScoreGenerationInProgress(Exception):
@@ -632,7 +632,7 @@ class TSScore(object):
         try:
             epoch = self.options_epoch()
             if self._is_html_cache_fresh(self.get_html_cache_file_path(), self.get_data_file_path()):
-                self._write_processing_status("complete", "Score ready.", epoch=epoch)
+                self._write_processing_status("complete", "Talking score ready.", epoch=epoch)
                 self.release_generation_lock()
                 return True
             self._write_processing_status("processing", "Writing out the bars.", epoch=epoch)
@@ -641,7 +641,7 @@ class TSScore(object):
                 try:
                     with self._generation_heartbeat(epoch=epoch, with_status=True):
                         self._generate_html(export_theme=None, export_mode=False, epoch=epoch)
-                    status, message = "complete", "Score ready."
+                    status, message = "complete", "Talking score ready."
                 except Exception:
                     self.logger.exception(f"Background score generation failed for {self.id}/{self.filename}")
                     status, message = "failed", GENERATION_FAILED_MESSAGE
@@ -664,7 +664,7 @@ class TSScore(object):
         """Return the score HTML, generating it under the per-score lock when the cache is missing or stale."""
         data_path = self.get_data_file_path()
         if not data_path:
-            return "<h1>This score is no longer stored here</h1><p>Upload the file again to make a new reading.</p><p><a href=\"/\">Talking Scores home</a></p>"
+            return "<h1>This score is no longer stored here</h1><p>Upload the file again to make a new talking score.</p><p><a href=\"/\">Talking Scores home</a></p>"
 
         html_cache_path = self.get_html_cache_file_path()
         if not export_mode and not force_refresh and self._is_html_cache_fresh(html_cache_path, data_path):
@@ -679,7 +679,7 @@ class TSScore(object):
         except Exception:
             if raise_errors:
                 raise
-            return "<h1>The reading could not be generated</h1><p>This file could not be written out all the way through. Try a different MusicXML file.</p>"
+            return "<h1>The talking score could not be generated</h1><p>This file could not be written out all the way through. Try a different MusicXML file.</p>"
         finally:
             self.release_generation_lock()
 

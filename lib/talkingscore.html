@@ -31,7 +31,7 @@
     {% endif %}
 </head>
 <body class="reader {{ colour_root_class }}">
-<a class="skip" href="#score">Skip to the score</a>
+<a class="skip" href="#score">Skip to the talking score</a>
 <div class="wrap">
     <header class="top">
         {% if export_mode %}
@@ -51,7 +51,7 @@
     {% if music_segments %}
     <noscript><p class="callout noscript">Every bar is on this page. Use your browser's find command or the headings list to move between bars. Playback and the group controls need JavaScript.</p></noscript>
 
-    <div class="toolbar" id="toolbar" role="group" aria-label="Score controls" hidden>
+    <div class="toolbar" id="toolbar" role="group" aria-label="Talking score controls" hidden>
         <label class="goto"><span>Bar number</span><input class="input" type="number" id="goto-bar" min="{{ score_data.firstPrintedBar }}" max="{{ score_data.lastPrintedBar }}" value="{{ score_data.firstPrintedBar }}" aria-describedby="goto-error"></label>
         <button class="btn" type="button" id="goto-go">Go to bar</button>
         <p class="error" id="goto-error"></p>
@@ -122,7 +122,7 @@
                     <p class="small muted" id="stack-locked" hidden>Extra large sets one note per line.</p>
                     <label class="goto"><span>Colours</span><select class="input" id="setting-theme"><option value="system">Match my system</option><option value="light">Light</option><option value="dark">Dark</option><option value="contrast">High contrast</option></select></label>
                 </div>
-                <p class="small muted">Changes apply straight away and are kept on this device.{% if options_url %} The wording is set under <a href="{{ options_url }}">Reading options</a>.{% endif %}</p>
+                <p class="small muted">These stay on this device.{% if options_url %} The wording is set under <a href="{{ options_url }}">Options</a>.{% endif %}</p>
             </form>
         </details>
         {% if score_data.midi %}
@@ -143,7 +143,7 @@
                     <label class="check"><input type="checkbox" id="setting-click">Metronome click</label>
                     <label class="check"><input type="checkbox" id="setting-repeat">Repeat this group</label>
                 </div>
-                <p class="small muted">These choices and the speed are kept on this device. Changing the instruments, the balance or the click while a group is playing starts it again.</p>
+                <p class="small muted">These stay on this device. Changing the instruments, balance or click while a group is playing starts it again.</p>
             </form>
         </details>
         {% endif %}
@@ -162,7 +162,7 @@
         </details>
     </div>
 
-    <div class="score" id="score" tabindex="-1" role="region" aria-label="The score">
+    <div class="score" id="score" tabindex="-1" role="region" aria-label="The talking score">
         {% if not music_segments %}
         <p class="callout">No bars could be read from this file. Check that it is a MusicXML file with at least one part that contains notes, then <a href="/">upload it again</a>.</p>
         {% endif %}

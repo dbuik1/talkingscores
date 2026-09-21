@@ -7,7 +7,7 @@
 {% block content %}
 <div>
     <h1>Sheet music, written out bar by bar</h1>
-    <p class="lead">Open a MusicXML file and Talking Scores writes out every bar: the rhythm, the pitch, the dynamics. Read it with a screen reader, a braille display, a magnifier, or your eyes, and hear any bar on its own.</p>
+    <p class="lead">Open a MusicXML file and Talking Scores writes out every bar: the rhythm, the pitch, the dynamics. Any bar can be played on its own.</p>
 </div>
 
 <p class="callout" id="file-rules"><strong>MusicXML files</strong> (.musicxml, .xml or .mxl) up to 10 MB. Your file stays on this server and is not shared.</p>
@@ -19,14 +19,14 @@
         <input type="file" id="id_filename" name="filename" accept=".xml,.musicxml,.mxl" aria-describedby="file-rules">
     </div>
     <details class="plain">
-        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Or paste a link to a MusicXML file</h2></summary>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Or paste a link</h2></summary>
         <div class="field" style="padding: 12px 0 8px;">
             <label for="id_url">Link to the file</label>
             <input type="url" class="input" id="id_url" name="url" aria-describedby="url-help">
             <p class="small muted" id="url-help">The link has to point at the file itself, not at a page about it</p>
         </div>
     </details>
-    <button class="btn primary" type="submit">Continue</button>
+    <button class="btn primary" type="submit">Open score</button>
 </form>
 
 <div>
@@ -45,9 +45,8 @@
     </details>
     {% if example_scores %}
     <details>
-        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Try an example score</h2></summary>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Example scores</h2></summary>
         <div class="panel">
-            <p>Each one is a reading made by this site, some of them by an earlier version.</p>
             <ul class="bullets">
                 {% for score in example_scores %}
                 <li><a href="{% static 'data/' %}{{ score }}">{{ score }}</a></li>
@@ -57,16 +56,16 @@
     </details>
     {% endif %}
     <details>
-        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>What Talking Scores does and does not do</h2></summary>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>What it does</h2></summary>
         <div class="panel">
-            <p>It writes out the notes, rests, rhythms, dynamics and repeats a MusicXML file holds, bar by bar, in the words you choose. Every bar range can be played back, and the whole reading can be downloaded as a page, as plain text or as uncontracted braille.</p>
-            <p>It does not read PDFs, images or scans, and it does not teach the music. Lyrics, chord symbols and figured bass are read only where the file records them.</p>
+            <p>It writes out the notes, rests, rhythms, dynamics and repeats a MusicXML file holds, bar by bar, in the words you choose. Every bar range can be played back, and the whole talking score can be downloaded as a page, as plain text or as uncontracted braille.</p>
+            <p>It does not teach the music. Lyrics, chord symbols and figured bass are read only where the file records them.</p>
         </div>
     </details>
     <details>
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>What happens to your file</h2></summary>
         <div class="panel">
-            <p>Your file and its reading stay on this server, so your link keeps working. Nothing is listed publicly or shared.</p>
+            <p>Your file and its talking score stay here until they are deleted by hand, so the link keeps working.</p>
             <p><a href="{% url 'privacy-policy' %}">Privacy policy</a></p>
         </div>
     </details>

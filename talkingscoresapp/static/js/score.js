@@ -603,7 +603,7 @@
             }
             var statusText = document.getElementById("playback-status-text");
             if (statusText) {
-                statusText.textContent = "A downloaded page cannot play the score. Open it on the Talking Scores website to hear these bars.";
+                statusText.textContent = "A downloaded page cannot play the music. Open it on the Talking Scores website to hear these bars.";
             }
         }
 

@@ -79,7 +79,7 @@ logger = logging.getLogger("TSScore")
 ALLOWED_MUSICXML_EXTENSIONS = ('.xml', '.musicxml', '.mxl')
 MAX_UPLOADED_SCORE_BYTES = 10 * 1024 * 1024
 
-SCORE_MISSING_MESSAGE = "This score is no longer stored here. Upload the file again to make a new reading."
+SCORE_MISSING_MESSAGE = "This score is no longer stored here. Upload the file again to make a new talking score."
 PRIVATE_ADDRESS_MESSAGE = "The link points at a private or local network address. Enter a link to a file on a public website."
 HOST_NOT_FOUND_MESSAGE = "That web address could not be found. Check the link and try again."
 DOWNLOAD_FAILED_MESSAGE = "The file could not be downloaded from that link. Check the link and try again."
@@ -407,7 +407,7 @@ def download_html(request, id, filename):
 
     state = score_obj.state()
     if state == TSScoreState.AWAITING_OPTIONS:
-        messages.error(request, "This score has no reading yet. Choose the reading options, then download it.")
+        messages.error(request, "Generate the talking score before downloading it.")
         return redirect('options', id, filename)
     if state != TSScoreState.PROCESSED:
         messages.error(request, SCORE_MISSING_MESSAGE)
@@ -433,7 +433,7 @@ def _download_export(request, id, filename, braille):
     score_obj = TSScore(id=id, filename=filename)
     state = score_obj.state()
     if state == TSScoreState.AWAITING_OPTIONS:
-        messages.error(request, "This score has no reading yet. Choose the reading options, then download it.")
+        messages.error(request, "Generate the talking score before downloading it.")
         return redirect('options', id, filename)
     if state != TSScoreState.PROCESSED:
         messages.error(request, SCORE_MISSING_MESSAGE)
