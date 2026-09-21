@@ -202,3 +202,149 @@ test("a delta time that never ends is refused", () => {
     assert.throws(() => parseMidi(Uint8Array.from(header({ tracks: 1 }).concat(chunk("MTrk", events))).buffer),
         /too long|no status/);
 });
+
+/* Playing the whole score alongside a group. */
+
+function control() {
+    const handlers = {};
+    return {
+        addEventListener(type, fn) { handlers[type] = fn; },
+        fire(type) { handlers[type](); }
+    };
+}
+
+function stubAudioContext() {
+    return class {
+        constructor() {
+            this.currentTime = 0;
+            this.state = "running";
+            this.destination = {};
+        }
+        resume() { return Promise.resolve(); }
+        createGain() {
+            return {
+                gain: {
+                    value: 1,
+                    setValueAtTime() {},
+                    setTargetAtTime() {},
+                    linearRampToValueAtTime() {},
+                    exponentialRampToValueAtTime() {},
+                    cancelScheduledValues() {}
+                },
+                connect() {},
+                disconnect() {}
+            };
+        }
+        createOscillator() {
+            return {
+                type: "",
+                frequency: { value: 0, setValueAtTime() {} },
+                connect() {},
+                start() {},
+                stop() {}
+            };
+        }
+    };
+}
+
+// player.js reads the bare name "fetch" rather than "window.fetch", which in a
+// browser is the same binding either way because window is the global object.
+// This harness gives it a separate plain object as "window", so the stub has to
+// replace the real global fetch to be seen by the code under test.
+function stubWindow(buffer, requested) {
+    scope.window.AudioContext = stubAudioContext();
+    scope.window.setInterval = () => 1;
+    scope.window.clearInterval = () => {};
+    globalThis.fetch = (url) => {
+        requested.push(url);
+        return Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(buffer) });
+    };
+}
+
+function playerControls() {
+    const announcements = [];
+    return {
+        status: { textContent: "" },
+        announce: (text) => announcements.push(text),
+        announcements,
+        play: control(),
+        playAll: control(),
+        stop: control(),
+        speed: { value: "100", addEventListener() {} },
+        click: { checked: false, addEventListener() {} },
+        repeat: { checked: false },
+        rangeLabel: (start, end) => "bars " + start + " to " + end,
+        remember() {}
+    };
+}
+
+const wholeScoreData = {
+    firstBar: 1,
+    lastBar: 8,
+    midi: {
+        base: "/midis/x/y.musicxml",
+        parts: [{ index: 0, label: "Part", read: true }],
+        voices: [{ parts: [0], label: "Part" }]
+    }
+};
+
+const wholeScoreBuffer = file([tempo(500000).concat(noteOn(0, 60), noteOff(DIVISION, 60))]);
+
+async function settle() {
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+}
+
+test("the whole-score control loads and plays every bar of the score", async () => {
+    const requested = [];
+    stubWindow(wholeScoreBuffer, requested);
+    const controls = playerControls();
+    const player = scope.window.TalkingScoresPlayer(wholeScoreData, controls);
+    player.groupChanged({ start: 1, end: 2 });
+    controls.playAll.fire("click");
+    assert.deepEqual(requested, ["/midis/x/y.musicxml?start=1&end=8"]);
+    await settle();
+    assert.equal(controls.status.textContent, "Playing the whole score.");
+    assert.ok(controls.announcements.includes("Loading the whole score."));
+});
+
+test("moving to another group while the whole score plays leaves it playing", async () => {
+    const requested = [];
+    stubWindow(wholeScoreBuffer, requested);
+    const controls = playerControls();
+    const player = scope.window.TalkingScoresPlayer(wholeScoreData, controls);
+    player.groupChanged({ start: 1, end: 2 });
+    controls.playAll.fire("click");
+    await settle();
+    player.groupChanged({ start: 3, end: 4 });
+    assert.equal(controls.status.textContent, "Playing the whole score.");
+});
+
+test("playing a group while the whole score plays switches to that group and back", async () => {
+    const requested = [];
+    stubWindow(wholeScoreBuffer, requested);
+    const controls = playerControls();
+    const player = scope.window.TalkingScoresPlayer(wholeScoreData, controls);
+    player.groupChanged({ start: 1, end: 2 });
+    controls.playAll.fire("click");
+    await settle();
+    player.groupChanged({ start: 3, end: 4 });
+    controls.play.fire("click");
+    await settle();
+    assert.equal(requested[requested.length - 1], "/midis/x/y.musicxml?start=3&end=4");
+    assert.equal(controls.status.textContent, "Playing bars 3 to 4.");
+    player.groupChanged({ start: 5, end: 6 });
+    assert.equal(controls.status.textContent, "Playback stopped. Bars 5 to 6 ready to play.");
+});
+
+test("stopping while the whole score plays names the open group, not the whole score", async () => {
+    const requested = [];
+    stubWindow(wholeScoreBuffer, requested);
+    const controls = playerControls();
+    const player = scope.window.TalkingScoresPlayer(wholeScoreData, controls);
+    player.groupChanged({ start: 1, end: 2 });
+    controls.playAll.fire("click");
+    await settle();
+    controls.stop.fire("click");
+    assert.equal(controls.status.textContent, "Playback stopped. Bars 1 to 2 ready to play.");
+});
