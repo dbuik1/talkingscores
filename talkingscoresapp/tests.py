@@ -17,6 +17,7 @@ from io import StringIO
 import tempfile
 import shutil
 import subprocess
+import sys
 import glob
 import os
 import time
@@ -446,7 +447,6 @@ class DownloadTests(TestCase):
             "?end=7",                    # start is missing
             "?start=3",                  # end is missing
             "?start=1&end=999999999",    # past the largest bar number a score can hold
-            "?start=1&end=1000",         # more bars than one press of play ever asks for
         ]
 
         for query_string in invalid_urls:
@@ -499,6 +499,27 @@ class DownloadTests(TestCase):
         self.assertEqual(response.status_code, 200)
         mock_html.assert_called_once_with(export_theme=None, export_mode=True, raise_errors=True)
 
+    @patch("talkingscoresapp.views.MidiHandler.get_or_make_midi_file")
+    def test_midi_accepts_a_range_covering_a_whole_score(self, mock_get_midi):
+        # Playing the whole score asks for every bar at once, however long the score is.
+        midi_dir = tempfile.mkdtemp()
+        midi_path = os.path.join(midi_dir, "score.musicxmlb1e1000.mid")
+        with open(midi_path, "wb") as midi_file:
+            midi_file.write(b"MThd")
+        mock_get_midi.return_value = midi_path
+
+        try:
+            response = self.client.get(
+                reverse("midi", kwargs={"id": VALID_ID, "filename": "score.musicxml"}) + "?start=1&end=1000"
+            )
+        finally:
+            if "response" in locals():
+                response.close()
+            shutil.rmtree(midi_dir, ignore_errors=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("score-bars-1-to-1000.mid", response["Content-Disposition"])
+
     def test_export_template_omits_download_and_midi_controls(self):
         env = Environment(loader=FileSystemLoader(os.path.join(os.getcwd(), "lib")))
         template = env.get_template("talkingscore.html")
@@ -516,6 +537,8 @@ class DownloadTests(TestCase):
         self.assertNotIn("/download/", html)
         self.assertNotIn("/score_options/", html)
         self.assertNotIn('id="play-group"', html)
+        self.assertNotIn('id="play-whole-score"', html)
+        self.assertNotIn('id="download-whole-midi"', html)
         self.assertIn('<html lang="en-GB" data-theme="dark">', html)
         self.assertIn("/* reader */", html)
         self.assertIn("Print every bar", html)
@@ -1962,7 +1985,9 @@ class ReaderPageTests(TestCase):
         self.assertIn('src="/static/js/player.js" defer', html)
         self.assertIn("Metronome click", html)
         self.assertIn('id="setting-repeat"', html)
+        self.assertIn('id="play-whole-score"', html)
         self.assertIn('id="download-midi"', html)
+        self.assertIn('id="download-whole-midi" href="/midis/x/y.musicxml?start=1&amp;end=25"', html)
         self.assertNotIn('id="setting-voice"', html)     # one voice needs no choice
         self.assertNotIn('id="setting-forward"', html)   # one part cannot be brought forward
         self.assertNotIn("midijs.net", html)             # the page sounds the MIDI itself
@@ -2609,3 +2634,14 @@ class RepetitionInContextWordingTests(TestCase):
         for text in context.values():
             self.assertNotIn(". .", text)
             self.assertNotIn(".  .", text)
+
+
+class UserFacingCopyTests(TestCase):
+    """The words a reader sees, and the comments beside them, stay free of the
+    tells the copy scanner knows: rationale leaked into the interface, marketing
+    register, and comments that cite where an instruction came from."""
+
+    def test_user_facing_copy_and_comments_pass_the_scanner(self):
+        scanner = os.path.join(os.getcwd(), "scripts", "check_copy.py")
+        result = subprocess.run([sys.executable, scanner], capture_output=True, text=True, timeout=120)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

@@ -368,6 +368,9 @@
 
     window.TalkingScoresPlayer = function (data, controls) {
         var group = null;
+        // The bars being played or loaded: the open group, or every bar at once.
+        var target = null;
+        var whole = { start: data.firstBar, end: data.lastBar, whole: true };
         var context = null;
         var master = null;
         var partGains = [];
@@ -382,6 +385,9 @@
         var stopAt = 0;
 
         function label(item) {
+            if (item.whole) {
+                return "the whole score";
+            }
             return controls.rangeLabel(item.start, item.end, false);
         }
 
@@ -557,7 +563,7 @@
             }
             playing = false;
             silence();
-            report("Reached the end of " + label(group) + ".");
+            report("Reached the end of " + label(target) + ".");
         }
 
         function repeating() {
@@ -613,41 +619,42 @@
             playing = true;
             origin = context.currentTime + 0.15;
             restart();
-            report("Playing " + label(group) + ".");
+            report("Playing " + label(target) + ".");
         }
 
         // A note said before the state is a note the next message would wipe out, so
         // anything to say about the settings goes in front of the state itself.
-        function play(note) {
+        function play(range, note) {
             var said = typeof note === "string" ? note : "";
             if (!audio()) {
                 report(said + "This browser cannot play the audio. The bars are written out below.");
                 return;
             }
             stop(false);
-            var wanted = group;
+            var wanted = range;
+            target = range;
             pending = true;
-            report(said + "Loading " + label(group) + ".");
-            var loaded = fetchRange(group.start, group.end);
+            report(said + "Loading " + label(range) + ".");
+            var loaded = fetchRange(range.start, range.end);
             // The browser holds the audio clock until a gesture releases it, so
             // playback waits for the resume as well as for the file.
             Promise.all([loaded, context.resume()]).then(function (results) {
-                if (!pending || wanted !== group) {
+                if (!pending || wanted !== target) {
                     return;
                 }
                 pending = false;
                 if (context.state !== "running") {
-                    report("The audio has not started. Press Play this group again.");
+                    report("The audio has not started. Press play again.");
                     return;
                 }
                 // A range of rests still has a length, so it plays as silence with the
                 // click and only a range holding nothing at all is refused.
                 if (!results[0].duration && !results[0].parts.some(function (notes) { return notes.length; })) {
-                    report("There is nothing to play in " + label(group) + ".");
+                    report("There is nothing to play in " + label(wanted) + ".");
                     return;
                 }
                 if (!results[0].matches) {
-                    report("The audio for " + label(group) + " does not match the bars on this page. Reload the page and try again.");
+                    report("The audio for " + label(wanted) + " does not match the bars on this page. Reload the page and try again.");
                     return;
                 }
                 start(results[0]);
@@ -658,7 +665,7 @@
                 } else if (error && error.arrived) {
                     report("The audio for " + label(wanted) + " could not be read. Reload the page and try again.");
                 } else {
-                    report("The audio for " + label(wanted) + " did not arrive. Check your connection and press Play this group again.");
+                    report("The audio for " + label(wanted) + " did not arrive. Check your connection and press play again.");
                 }
             });
         }
@@ -666,14 +673,17 @@
         function replayIfPlaying() {
             var said = reflectBalance() ? "Balance set to every part level. " : "";
             if (playing || pending) {
-                play(said);
+                play(target, said);
             } else if (said) {
                 report(said + capital(label(group)) + " ready to play.");
             }
         }
 
         if (controls.play) {
-            controls.play.addEventListener("click", function () { play(); });
+            controls.play.addEventListener("click", function () { play(group); });
+        }
+        if (controls.playAll) {
+            controls.playAll.addEventListener("click", function () { play(whole); });
         }
         if (controls.stop) {
             controls.stop.addEventListener("click", function () { stop(true); });
@@ -690,9 +700,14 @@
                 if (next === group) {
                     return;
                 }
+                group = next;
+                // The whole score plays on while the reader moves through the bars,
+                // so only a group of its own stops when the page leaves it.
+                if (target && target.whole && (playing || pending)) {
+                    return;
+                }
                 var wasSounding = playing || pending;
                 stop(false);
-                group = next;
                 if (wasSounding) {
                     report("Playback stopped. " + capital(label(group)) + " ready to play.");
                 } else {

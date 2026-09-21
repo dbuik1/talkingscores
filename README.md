@@ -71,6 +71,14 @@ the path; to run them alone:
 node --test talkingscoresapp/static/js/tests/player.test.mjs
 ```
 
+The words a reader sees, and the code comments, are checked for wording that
+belongs in a commit message rather than on the page. The Django suite runs the
+check; to run it alone:
+
+```
+python3 scripts/check_copy.py
+```
+
 In production, set:
 
 ```powershell

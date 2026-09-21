@@ -579,12 +579,14 @@
 
         // Playback of the open group. The player is a separate script when audio is available.
         var playButton = document.getElementById("play-group");
+        var playAllButton = document.getElementById("play-whole-score");
         var stopButton = document.getElementById("stop-playback");
         if (data.midi && window.TalkingScoresPlayer) {
             var playbackControls = {
                 status: document.getElementById("playback-status-text"),
                 announce: announce,
                 play: playButton,
+                playAll: playAllButton,
                 stop: stopButton,
                 speed: document.getElementById("speed"),
                 voice: document.getElementById("setting-voice"),
@@ -598,9 +600,11 @@
             player = window.TalkingScoresPlayer(data, playbackControls);
         } else if (playButton) {
             playButton.disabled = true;
-            if (stopButton) {
-                stopButton.disabled = true;
-            }
+            [playAllButton, stopButton].forEach(function (button) {
+                if (button) {
+                    button.disabled = true;
+                }
+            });
             var statusText = document.getElementById("playback-status-text");
             if (statusText) {
                 statusText.textContent = "A downloaded page cannot play the music. Open it on the Talking Scores website to hear these bars.";

@@ -142,9 +142,8 @@ def parse_selected_instruments(post_data, instrument_count):
     return instrument_ids
 
 
-# A range beyond this is more than a page of music and more than the reading page
-# ever asks for, so writing one is a sign of a caller that is not the reading page.
-MAX_MIDI_BARS = 256
+# A range is cut down to the bars the score holds, so its length costs nothing
+# beyond the score itself; only a bar number no score could reach is refused.
 MAX_MIDI_BAR_NUMBER = 100000
 
 
@@ -164,9 +163,6 @@ def validate_midi_query_params(query_params):
 
     if bars["start"] > bars["end"]:
         raise forms.ValidationError("The first bar has to come before the last bar.")
-
-    if bars["end"] - bars["start"] >= MAX_MIDI_BARS:
-        raise forms.ValidationError(f"The audio can cover at most {MAX_MIDI_BARS} bars at a time.")
 
 
 def get_example_scores():
