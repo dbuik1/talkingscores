@@ -16,7 +16,7 @@
     <p><a id="processing-next-link" class="btn" href="{% url 'index' %}">Open a different score</a></p>
 </div>
 
-<p>Usually about a minute. The talking score opens here when it is ready.</p>
+<p id="processing-wait">Usually about a minute. The talking score opens here when it is ready.</p>
 
 <noscript>
     <p class="noscript">JavaScript is turned off, so this page cannot check on its own. Reload it every minute or so to see whether the talking score is ready.</p>
@@ -43,6 +43,7 @@
         // the message is read out in full before the link rather than being
         // cut off by a focus move to the link alone.
         processingStatus.hidden = true;
+        document.getElementById('processing-wait').hidden = true;
         processingNextMessage.textContent = message;
         if (href) {
             processingNextLink.href = href;

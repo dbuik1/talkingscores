@@ -664,7 +664,7 @@ class TSScore(object):
         """Return the score HTML, generating it under the per-score lock when the cache is missing or stale."""
         data_path = self.get_data_file_path()
         if not data_path:
-            return "<h1>This score is no longer stored here</h1><p>Upload the file again to make a new talking score.</p><p><a href=\"/\">Talking Scores home</a></p>"
+            return "<h1>This score is no longer stored here</h1><p>Open the file again to make a new talking score.</p><p><a href=\"/\">Talking Scores home</a></p>"
 
         html_cache_path = self.get_html_cache_file_path()
         if not export_mode and not force_refresh and self._is_html_cache_fresh(html_cache_path, data_path):
@@ -679,7 +679,7 @@ class TSScore(object):
         except Exception:
             if raise_errors:
                 raise
-            return "<h1>The talking score could not be generated</h1><p>This file could not be written out all the way through. Try a different MusicXML file.</p>"
+            return "<h1>The talking score could not be generated</h1><p>This file could not be written out all the way through. Try a different MusicXML file.</p><p><a href=\"/\">Open a different score</a></p>"
         finally:
             self.release_generation_lock()
 

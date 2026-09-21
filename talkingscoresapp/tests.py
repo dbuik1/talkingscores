@@ -260,7 +260,7 @@ class BasicFunctionalityTests(TestCase):
         )
 
         self.assertRedirects(response, reverse("index"))
-        self.assertContains(response, "Upload the file again")
+        self.assertContains(response, "Open the file again")
 
     @patch("talkingscoresapp.views.TSScore.state", return_value="fetching")
     def test_process_status_reports_a_missing_score(self, mock_state):
@@ -1984,7 +1984,7 @@ class ReaderPageTests(TestCase):
                          [(0, "Flute", True), (1, "Oboe", True), (2, "Cello", False)])
         voices = formatter._playback_voices(parts)
         self.assertEqual([voice["label"] for voice in voices][:3],
-                         ["Every instrument", "The instruments being read", "The other instruments"])
+                         ["Every part", "The parts being read", "The other parts"])
         self.assertEqual(voices[0]["parts"], [0, 1, 2])
         self.assertEqual(voices[1]["parts"], [0, 1])
         self.assertEqual(voices[2]["parts"], [2])

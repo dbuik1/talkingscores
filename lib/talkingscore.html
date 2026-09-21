@@ -132,7 +132,7 @@
                 {% if score_data.midi.voices|length > 1 or score_data.midi.parts|length > 1 %}
                 <div class="row">
                     {% if score_data.midi.voices|length > 1 %}
-                    <label class="goto"><span>Instruments to play</span><select class="input" id="setting-voice">{% for voice in score_data.midi.voices %}<option value="{{ loop.index0 }}">{{ voice.label }}</option>{% endfor %}</select></label>
+                    <label class="goto"><span>Parts to play</span><select class="input" id="setting-voice">{% for voice in score_data.midi.voices %}<option value="{{ loop.index0 }}">{{ voice.label }}</option>{% endfor %}</select></label>
                     {% endif %}
                     {% if score_data.midi.parts|length > 1 %}
                     <label class="goto"><span>Balance</span><select class="input" id="setting-forward"><option value="">Every part level</option>{% for part in score_data.midi.parts %}<option value="{{ part.index }}">{{ part.label }} louder</option>{% endfor %}</select></label>
@@ -143,7 +143,7 @@
                     <label class="check"><input type="checkbox" id="setting-click">Metronome click</label>
                     <label class="check"><input type="checkbox" id="setting-repeat">Repeat this group</label>
                 </div>
-                <p class="small muted">These stay on this device. Changing the instruments, balance or click while a group is playing starts it again.</p>
+                <p class="small muted">These stay on this device. Changing the parts, balance or click while a group is playing starts it again.</p>
             </form>
         </details>
         {% endif %}
@@ -157,14 +157,14 @@
                     {% if score_data.midi %}<a class="btn" id="download-midi" href="{{ score_data.midi.base }}?start={{ score_data.firstBar }}&amp;end={{ score_data.firstBar }}" download>Download as MIDI</a>{% endif %}
                     <button class="btn" type="button" id="print-score">Print every bar</button>
                 </div>
-                {% if not export_mode %}<p class="small muted">The web page works offline and keeps the text size and colours you chose here. The braille file is uncontracted text for a 40-cell display or embosser.{% if score_data.midi %} The MIDI file holds the group on screen, not the whole score.{% endif %}</p>{% endif %}
+                {% if not export_mode %}<p class="small muted">The braille file is uncontracted text for a 40-cell display or embosser.{% if score_data.midi %} The MIDI file holds the group on screen, not the whole score.{% endif %}</p>{% endif %}
             </div>
         </details>
     </div>
 
     <div class="score" id="score" tabindex="-1" role="region" aria-label="The talking score">
         {% if not music_segments %}
-        <p class="callout">No bars could be read from this file. Check that it is a MusicXML file with at least one part that contains notes, then <a href="/">upload it again</a>.</p>
+        <p class="callout">No bars could be read from this file. Check that it is a MusicXML file with at least one part that contains notes, then <a href="/">open it again</a>.</p>
         {% endif %}
         {% for segment in music_segments %}
         <section class="group current" id="group-{{ segment.start_bar }}">

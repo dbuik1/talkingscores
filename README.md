@@ -42,7 +42,7 @@ python .\manage.py cleanup_media --older-than-days 30
 
 Use `--dry-run` first to inspect what would be deleted.
 
-The reading page asks for one MIDI file per range of bars. Files written before
+The talking score page asks for one MIDI file per range of bars. Files written before
 that, whose names carry a selection of instruments, a speed or a click setting,
 are no longer asked for. Remove them with:
 

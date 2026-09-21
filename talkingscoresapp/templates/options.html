@@ -92,17 +92,6 @@
                         </select></span>
                 </div>
                 <div class="row">
-                    <span class="setting"><label for="accidental_style">Accidentals</label>
-                        <select class="input" name="accidental_style" id="accidental_style">
-                            <option value="words" selected>Written as words</option>
-                            <option value="symbols">Written as symbols</option>
-                        </select></span>
-                    <span class="setting"><label for="key_signature_accidentals">Say the accidental</label>
-                        <select class="input" name="key_signature_accidentals" id="key_signature_accidentals">
-                            <option value="sounding" selected>On every note that sounds sharp or flat</option>
-                            <option value="on_change">When it changes</option>
-                            <option value="printed">Only where the music prints one</option>
-                        </select></span>
                     <span class="setting"><label for="repetition_mode">Repeated bars</label>
                         <select class="input" name="repetition_mode" id="repetition_mode">
                             <option value="learning" selected>Say when a bar repeats the one before</option>
@@ -119,6 +108,23 @@
                     <label class="check"><input type="checkbox" name="chk_include_arpeggios" value="checked" checked> Arpeggios</label>
                     <label class="check"><input type="checkbox" name="chk_describe_chords" value="checked" checked> Chords</label>
                     <label class="check"><input type="checkbox" name="chk_include_dynamics" value="checked" checked> Dynamics</label>
+                </div>
+            </fieldset>
+
+            <fieldset class="box-set">
+                <legend>Accidentals</legend>
+                <div class="row">
+                    <span class="setting"><label for="accidental_style">Written as</label>
+                        <select class="input" name="accidental_style" id="accidental_style">
+                            <option value="words" selected>Words</option>
+                            <option value="symbols">Symbols</option>
+                        </select></span>
+                    <span class="setting"><label for="key_signature_accidentals">Say the accidental</label>
+                        <select class="input" name="key_signature_accidentals" id="key_signature_accidentals">
+                            <option value="sounding" selected>On every note that sounds sharp or flat</option>
+                            <option value="on_change">When it changes</option>
+                            <option value="printed">Only where the music prints one</option>
+                        </select></span>
                 </div>
             </fieldset>
 
@@ -147,7 +153,7 @@
                     <label class="check"><input type="checkbox" name="chk_colourWords" id="colour_words" value="checked"> Colour the words</label>
                 </div>
                 <details class="plain" id="colour-detail">
-                    <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Colours</h2></summary>
+                    <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h3>Colours</h3></summary>
                     <div style="display: flex; flex-direction: column; gap: 16px; padding: 12px 0 4px;">
                         <label class="check"><input type="checkbox" name="chk_colourPitch" value="checked" checked> Colour by pitch</label>
                         <fieldset class="field">
@@ -223,7 +229,7 @@
     </details>
 
     <div class="actions">
-        <label class="check"><input type="checkbox" id="remember-setup"> Remember these settings on this device</label>
+        <label class="check"><input type="checkbox" id="remember-setup"> Remember these options on this device</label>
         <button class="btn primary" type="submit">Generate talking score</button>
     </div>
 </form>

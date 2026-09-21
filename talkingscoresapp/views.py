@@ -79,7 +79,7 @@ logger = logging.getLogger("TSScore")
 ALLOWED_MUSICXML_EXTENSIONS = ('.xml', '.musicxml', '.mxl')
 MAX_UPLOADED_SCORE_BYTES = 10 * 1024 * 1024
 
-SCORE_MISSING_MESSAGE = "This score is no longer stored here. Upload the file again to make a new talking score."
+SCORE_MISSING_MESSAGE = "This score is no longer stored here. Open the file again to make a new talking score."
 PRIVATE_ADDRESS_MESSAGE = "The link points at a private or local network address. Enter a link to a file on a public website."
 HOST_NOT_FOUND_MESSAGE = "That web address could not be found. Check the link and try again."
 DOWNLOAD_FAILED_MESSAGE = "The file could not be downloaded from that link. Check the link and try again."

@@ -17,7 +17,7 @@ PARTIAL_GRACE_SECONDS = 3600
 
 
 class Command(BaseCommand):
-    help = "Remove MIDI files that no longer match how the reading page asks for audio."
+    help = "Remove MIDI files that no longer match how the talking score page asks for audio."
 
     def add_arguments(self, parser):
         parser.add_argument(

@@ -1031,11 +1031,11 @@ class HTMLTalkingScoreFormatter:
         others = [part['index'] for part in parts if not part['read']]
         voices = []
         if settings.play_all:
-            voices.append({'parts': every, 'label': "Every instrument"})
+            voices.append({'parts': every, 'label': "Every part"})
         if settings.play_selected and read:
-            voices.append({'parts': read, 'label': "The instruments being read"})
+            voices.append({'parts': read, 'label': "The parts being read"})
         if settings.play_unselected and others:
-            voices.append({'parts': others, 'label': "The other instruments"})
+            voices.append({'parts': others, 'label': "The other parts"})
         for ins in self.score.selected_instruments:
             name, first_part, part_count, part_id = self.score.part_instruments[ins]
             instrument_parts = list(range(first_part, first_part + part_count))
@@ -1045,7 +1045,7 @@ class HTMLTalkingScoreFormatter:
                     voices.append({'parts': [part_index],
                                    'label': self.score.part_name(ins, part_index)})
         if not voices:
-            voices.append({'parts': every, 'label': "Every instrument"})
+            voices.append({'parts': every, 'label': "Every part"})
         return voices
 
     def _score_data(self, web_path, export_mode):

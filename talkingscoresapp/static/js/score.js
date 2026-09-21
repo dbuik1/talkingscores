@@ -207,7 +207,7 @@
                 endline.className = "endline";
                 var text = document.createElement("p");
                 var next = groups[index + 1];
-                text.textContent = positionText(group) + (next ? " Next: " + rangeLabel(next.start, next.end, false) + "." : " This is the end of the score.");
+                text.textContent = positionText(group) + (next ? " Next: " + rangeLabel(next.start, next.end, false) + "." : " This is the last group.");
                 endline.appendChild(text);
                 if (next) {
                     var button = document.createElement("button");
