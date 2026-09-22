@@ -29,8 +29,8 @@ The rules that matter most here, each with the shape to use instead:
 - A confirmation names the object and the consequence; its buttons summarise
   each outcome, never Yes and No.
 - One term per concept, from the termbase below. A changed string is followed
-  by a repo-wide search for the old one across templates, scripts, tests, the
-  design mock-ups and the README; the change log is annotated, not rewritten.
+  by a repo-wide search for the old one across templates, scripts, tests and
+  the README; the change log is annotated, not rewritten.
 - Comments state the constraint and its consequence, never their source. No
   "as discussed", "per the note", plan phases or feedback numbers. Delete the
   pointer: if nothing still constrains anything, write the constraint.

@@ -720,7 +720,7 @@
 
         function readingButton(active) {
             var label = readAloudButton.querySelector(".label") || readAloudButton;
-            label.textContent = active ? "Stop reading aloud" : "Read this group aloud";
+            label.textContent = active ? "Stop reading" : "Read aloud";
         }
 
         // The words of one bar as the page writes them, every note included: a
@@ -794,7 +794,7 @@
                             // The player has said why the bar did not play.
                             reading = null;
                             readingButton(false);
-                            readingState("Stopped at " + barName(number) + ". Press Read this group aloud to start again.");
+                            readingState("Stopped at " + barName(number) + ". Press Read aloud to start again.");
                         }
                     });
                 });
@@ -811,7 +811,7 @@
                 player.stop();
             }
             var said = run && run.bar !== null
-                ? "Stopped reading at " + barName(run.bar) + ". Press Read this group aloud to start the group again."
+                ? "Stopped reading at " + barName(run.bar) + ". Press Read aloud to start the group again."
                 : "Nothing is being read.";
             readingState(said);
             if (spoken) {
