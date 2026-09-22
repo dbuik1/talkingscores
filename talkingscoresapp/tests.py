@@ -48,6 +48,7 @@ def reader_context(**overrides):
         "static_css_url": "/static/css/score.css",
         "static_js_url": "/static/js/score.js",
         "static_player_url": "/static/js/player.js",
+        "static_speech_url": "/static/js/speech.js",
         "static_synth_url": "/static/js/vendor/spessasynth.js",
         "download_html_url": "/download/html/abc123/score.musicxml",
         "download_text_url": "/download/text/abc123/score.musicxml",
@@ -1997,6 +1998,18 @@ class ReaderPageTests(TestCase):
         self.assertNotIn('id="setting-voice"', html)     # one voice needs no choice
         self.assertNotIn('id="setting-forward"', html)   # one part cannot be brought forward
         self.assertNotIn("midijs.net", html)             # the page sounds the MIDI itself
+        self.assertIn('<script src="/static/js/speech.js"></script>', html)
+        self.assertIn('id="read-aloud"', html)
+        self.assertIn('id="setting-reading-speed"', html)
+        self.assertIn('id="setting-read-and-play"', html)
+        self.assertIn('id="setting-say-bars"', html)
+        starts = data["midi"]["barStarts"]
+        self.assertEqual(len(starts), 25)
+        self.assertEqual(starts["1"], 0.0)
+        # Each bar starts after the one before it, measured in crotchets.
+        offsets = [starts[str(number)] for number in range(1, 26)]
+        self.assertEqual(offsets, sorted(offsets))
+        self.assertGreater(offsets[1], 0.0)
 
     def test_the_page_offers_a_way_to_play_each_group_of_instruments(self):
         formatter = self._formatter({"style": "standard", "play_all": True, "play_selected": True,
@@ -2080,6 +2093,9 @@ class ReaderPageTests(TestCase):
         self.assertNotIn("/score_options/", html)
         self.assertIn('"midi": null', html)
         self.assertIn("talkingscores.reader", html)      # the reader script is inlined
+        self.assertIn("TalkingScoresSpeech", html)       # and so is reading aloud
+        self.assertIn('id="read-aloud"', html)
+        self.assertNotIn('id="setting-read-and-play"', html)  # nothing to play after reading
         self.assertIn("--note: 28px", html)              # so is the stylesheet
 
 class ExportDownloadTests(TestCase):

@@ -316,6 +316,9 @@
             channels: channels,
             clicks: clicks,
             duration: seconds(lastTick),
+            // Seconds into the file for a point given in crotchets from its start,
+            // which is how the page gives the start of each bar.
+            at: function (quarters) { return seconds(quarters * midi.division); },
             // A file with a track for every part is the only one the parts can be
             // named from, so a reader is told when it does not line up.
             matches: tracks.length === expectedParts
@@ -408,8 +411,16 @@
         var pending = false;
         var music = null;
         var origin = 0;
-        var cursor = { part: [], click: 0 };
+        var cursor = { part: [], click: 0, bar: 0 };
         var stopAt = 0;
+        // A run asked for by the read-aloud: it ignores Repeat playback, and the
+        // caller hears whether it reached its end or was stopped.
+        var once = false;
+        var whenDone = null;
+        // Where each bar of the run starts, in seconds into its file, for saying
+        // the bar numbers as they arrive.
+        var barTimes = [];
+        var spokenTimers = [];
 
         function label(item) {
             if (item.whole) {
@@ -503,6 +514,8 @@
                 window.clearInterval(timer);
                 timer = null;
             }
+            spokenTimers.forEach(function (id) { window.clearTimeout(id); });
+            spokenTimers = [];
             if (master && context) {
                 var old = master;
                 old.disconnect();
@@ -648,10 +661,48 @@
             } else {
                 cursor.click = music.clicks.length;
             }
+            if (controls.sayBars && controls.sayBars.checked && controls.sayBar) {
+                while (cursor.bar < barTimes.length && origin + barTimes[cursor.bar].at * factor < until) {
+                    var due = origin + barTimes[cursor.bar].at * factor;
+                    if (due >= now - LATE_TOLERANCE) {
+                        spokenTimers.push(window.setTimeout(controls.sayBar.bind(null, barTimes[cursor.bar].number),
+                            Math.max(0, (due - now) * 1000)));
+                    }
+                    cursor.bar++;
+                }
+            } else {
+                cursor.bar = barTimes.length;
+            }
+        }
+
+        // The page gives each bar's start in crotchets from the top of the score,
+        // so the bars of a run are measured from the first bar it plays.
+        function timesOfBars(range, parsed) {
+            var starts = data.midi.barStarts || {};
+            var first = starts[range.start];
+            if (typeof first !== "number" || !parsed.at) {
+                return [];
+            }
+            var times = [];
+            for (var number = range.start; number <= range.end; number++) {
+                if (typeof starts[number] === "number") {
+                    times.push({ number: number, at: parsed.at(starts[number] - first) });
+                }
+            }
+            return times;
+        }
+
+        function settle(finished) {
+            var done = whenDone;
+            whenDone = null;
+            once = false;
+            if (done) {
+                done(finished);
+            }
         }
 
         function restart() {
-            cursor = { part: music.parts.map(function () { return 0; }), click: 0 };
+            cursor = { part: music.parts.map(function () { return 0; }), click: 0, bar: 0 };
             silence(false);
             openGains();
             stopAt = origin + music.duration * speedFactor() + 0.6;
@@ -667,7 +718,7 @@
             if (context.currentTime < stopAt) {
                 return;
             }
-            if (repeating()) {
+            if (repeating() && !once) {
                 origin = context.currentTime + GAP_BEFORE_REPEAT;
                 restart();
                 return;
@@ -675,6 +726,7 @@
             playing = false;
             silence(false);
             report("Reached the end of " + label(target) + ".");
+            settle(true);
         }
 
         function repeating() {
@@ -718,6 +770,7 @@
             pending = false;
             playing = false;
             silence(true);
+            settle(false);
             // Stop answers every press, so a reader who cannot see the button knows
             // it reached the player whether or not anything was sounding.
             if (spoken) {
@@ -727,6 +780,7 @@
 
         function start(parsed, said) {
             music = parsed;
+            barTimes = timesOfBars(target, parsed);
             playing = true;
             // The sampled instruments stay muted while notes from a stopped run are
             // still due, so a fresh run begins once those have passed.
@@ -737,13 +791,18 @@
 
         // A note said before the state is a note the next message would wipe out, so
         // anything to say about the settings goes in front of the state itself.
-        function play(range, note) {
+        function play(range, note, done) {
             var said = typeof note === "string" ? note : "";
             if (!audio()) {
+                if (done) {
+                    done(false);
+                }
                 report(said + "This browser cannot play the audio. The bars are written out below.");
                 return;
             }
             stop(false);
+            once = Boolean(done);
+            whenDone = done || null;
             var wanted = range;
             target = range;
             pending = true;
@@ -758,16 +817,19 @@
                 }
                 pending = false;
                 if (context.state !== "running") {
+                    settle(false);
                     report("The audio has not started. Press play again.");
                     return;
                 }
                 // A range of rests still has a length, so it plays as silence with the
                 // click and only a range holding nothing at all is refused.
                 if (!results[0].duration && !results[0].parts.some(function (notes) { return notes.length; })) {
+                    settle(false);
                     report("There is nothing to play in " + label(wanted) + ".");
                     return;
                 }
                 if (!results[0].matches) {
+                    settle(false);
                     report("The audio for " + label(wanted) + " does not match the bars on this page. Reload the page and try again.");
                     return;
                 }
@@ -779,6 +841,9 @@
                 start(results[0], fell);
             }, function (error) {
                 pending = false;
+                if (wanted === target) {
+                    settle(false);
+                }
                 if (error && error.refused) {
                     report("The server would not send the audio for " + label(wanted) + ". Reload the page and try again.");
                 } else if (error && error.arrived) {
@@ -792,7 +857,11 @@
         function replayIfPlaying() {
             var said = reflectBalance() ? "Balance set to every part level. " : "";
             if (playing || pending) {
-                play(target, said);
+                // A run the read-aloud is waiting on keeps its caller when a setting
+                // starts it again.
+                var waitingOn = whenDone;
+                whenDone = null;
+                play(target, said, waitingOn || undefined);
             } else if (said) {
                 report(said + capital(label(group)) + " ready to play.");
             }
@@ -815,6 +884,12 @@
         reflectBalance();
 
         return {
+            // Plays the range through once, ignoring Repeat playback, and resolves
+            // true at its end or false if it is stopped or cannot play.
+            playOnce: function (range) {
+                return new Promise(function (resolve) { play(range, "", resolve); });
+            },
+            stop: function () { stop(false); },
             groupChanged: function (next) {
                 if (next === group) {
                     return;

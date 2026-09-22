@@ -980,12 +980,14 @@ class HTMLTalkingScoreFormatter:
             'export_mode': export_mode,
             'inline_css': (self._read_static("css", "site.css") + self._read_static("css", "score.css")
                            if export_mode else ""),
-            'inline_js': self._read_static("js", "score.js") if export_mode else "",
+            'inline_js': (self._read_static("js", "speech.js") + self._read_static("js", "score.js")
+                          if export_mode else ""),
             'static_icon_url': f"{django_settings.STATIC_URL}img/icon.svg",
             'static_site_css_url': f"{django_settings.STATIC_URL}css/site.css",
             'static_css_url': f"{django_settings.STATIC_URL}css/score.css",
             'static_js_url': f"{django_settings.STATIC_URL}js/score.js",
             'static_player_url': f"{django_settings.STATIC_URL}js/player.js",
+            'static_speech_url': f"{django_settings.STATIC_URL}js/speech.js",
             'static_synth_url': f"{django_settings.STATIC_URL}js/vendor/spessasynth.js",
             'palette_css': palette.css(),
             'colour_root_class': palette.root_class,
@@ -1049,6 +1051,22 @@ class HTMLTalkingScoreFormatter:
             voices.append({'parts': every, 'label': "Every part"})
         return voices
 
+    def _bar_starts(self):
+        """{bar number: its start in crotchets from the top of the score}.
+
+        A range's audio begins at its first bar, so the player measures every bar
+        of the range from that one; a pickup bar or a bar of another length moves
+        the bars after it, which counting beats from the time signature would miss.
+        """
+        parts = self.score.score.parts
+        if not parts:
+            return {}
+        starts = {}
+        for measure in parts[0].getElementsByClass('Measure'):
+            if measure.number is not None and measure.number not in starts:
+                starts[measure.number] = float(measure.offset)
+        return starts
+
     def _score_data(self, web_path, export_mode):
         """What the reader script needs: the bar range, the grouping and where the audio lives."""
         pickup = next((segment.start_bar for segment in self.segments if segment.is_pickup), None)
@@ -1068,6 +1086,7 @@ class HTMLTalkingScoreFormatter:
                     'processor': f"{django_settings.STATIC_URL}js/vendor/spessasynth_processor.min.js",
                     'bank': f"{django_settings.STATIC_URL}sound/GeneralUserGS.sf3",
                 },
+                'barStarts': self._bar_starts(),
             }
         # A score that is only a pickup bar keeps the go-to range inside the bars that exist.
         first_numbered = min(first_bar + 1, last_bar) if pickup == first_bar else first_bar

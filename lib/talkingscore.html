@@ -24,6 +24,7 @@
 {{ inline_js|safe }}
     </script>
     {% else %}
+    <script src="{{ static_speech_url }}"></script>
     <script src="{{ static_js_url }}"></script>
     {% if score_data.midi %}
     <script src="{{ static_synth_url }}" defer></script>
@@ -70,6 +71,8 @@
         {% endif %}
         <span class="sep"></span>
         <button class="btn" type="button" id="read-again"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7"></path><path d="M4 4v5h5"></path></svg>Read this group again</button>
+        <button class="btn" type="button" id="read-aloud" aria-describedby="read-aloud-status" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16 9a4 4 0 0 1 0 6"></path><path d="M18.5 6.5a8 8 0 0 1 0 11"></path></svg><span class="label">Read this group aloud</span></button>
+        <p class="status" id="read-aloud-status" hidden><b>Reading aloud</b> <span id="read-aloud-status-text">Nothing is being read.</span></p>
     </div>
     <p class="live" id="reader-live" aria-live="polite"></p>
     {% endif %}
@@ -150,6 +153,19 @@
             </form>
         </details>
         {% endif %}
+        <details id="read-aloud-settings" hidden>
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Reading aloud</h2></summary>
+            <form class="panel" id="read-aloud-settings-form" onsubmit="return false">
+                <div class="row">
+                    <label class="goto"><span>Reading speed</span><select class="input" id="setting-reading-speed"><option value="75">75 %</option><option value="100" selected>100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
+                    {% if score_data.midi %}
+                    <label class="check"><input type="checkbox" id="setting-read-and-play">Play each bar after reading it</label>
+                    <label class="check"><input type="checkbox" id="setting-say-bars">Say each bar number during playback</label>
+                    {% endif %}
+                </div>
+                <p class="small muted">These stay on this device. Reading aloud uses the voice your device speaks with; pause your screen reader to hear one voice at a time.</p>
+            </form>
+        </details>
         <details>
             <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>{% if export_mode %}Print{% else %}Download or print{% endif %}</h2></summary>
             <div class="panel">

@@ -292,6 +292,9 @@
                 }
             });
             var group = groups[current];
+            if (reading && reading.group !== group) {
+                stopReading(true);
+            }
             if (position) {
                 position.textContent = positionText(group).replace(/\.$/, "");
             }
@@ -448,7 +451,9 @@
         }
 
         function announce(text) {
-            if (!live) {
+            // A screen reader would speak over the voice reading the bars, so the
+            // live region waits until the reading ends; the status lines still change.
+            if (!live || reading) {
                 return;
             }
             live.textContent = "";
@@ -613,6 +618,228 @@
             }
         }
 
+
+        // Reading aloud: the open group's words in the device's own voice, bar by
+        // bar, with each bar played after its words when the reader asks for it.
+        var readAloudButton = document.getElementById("read-aloud");
+        var readAloudStatus = document.getElementById("read-aloud-status");
+        var readAloudText = document.getElementById("read-aloud-status-text");
+        var readAloudSettings = document.getElementById("read-aloud-settings");
+        var readingSpeed = document.getElementById("setting-reading-speed");
+        var readAndPlay = document.getElementById("setting-read-and-play");
+        var sayBars = document.getElementById("setting-say-bars");
+        var speech = null;
+        var reading = null;
+
+        if (readAloudButton && window.TalkingScoresSpeech && window.TalkingScoresSpeech.available()) {
+            speech = window.TalkingScoresSpeech.create({
+                rate: function () {
+                    var chosen = readingSpeed ? parseInt(readingSpeed.value, 10) : 100;
+                    return (chosen > 0 ? chosen : 100) / 100;
+                }
+            });
+            [readAloudButton, readAloudStatus, readAloudSettings].forEach(function (element) {
+                if (element) {
+                    element.hidden = false;
+                }
+            });
+            restoreReading();
+            readAloudButton.addEventListener("click", function () {
+                if (reading) {
+                    stopReading(true);
+                } else {
+                    readAloud();
+                }
+            });
+            // Playback and reading aloud share the one speaker, so starting either
+            // ends the other.
+            // The player has already acted on these presses, so the reading stops
+            // without stopping the playback the reader has just asked for.
+            [playButton, playAllButton].forEach(function (button) {
+                if (button) {
+                    button.addEventListener("click", function () {
+                        if (reading) {
+                            stopReading(false, true);
+                        }
+                    });
+                }
+            });
+            // The player's own answer to Stop was held back while the voice was
+            // speaking, so the reading gives it instead.
+            if (stopButton) {
+                stopButton.addEventListener("click", function () {
+                    if (reading) {
+                        stopReading(true, true);
+                    }
+                });
+            }
+            if (player && playbackControls) {
+                playbackControls.sayBars = sayBars;
+                playbackControls.sayBar = function (number) {
+                    // Each bar read aloud already starts with its number.
+                    if (!reading) {
+                        speech.say(number === data.pickupBar ? "Pickup" : printedNumber(number));
+                    }
+                };
+            }
+        }
+
+        // The reading settings mean the same in any score, so they are kept once.
+        function restoreReading() {
+            var saved = prefs.readAloud && typeof prefs.readAloud === "object" ? prefs.readAloud : {};
+            [["speed", readingSpeed], ["andPlay", readAndPlay], ["sayBars", sayBars]].forEach(function (pair) {
+                var name = pair[0];
+                var control = pair[1];
+                if (!control) {
+                    return;
+                }
+                if (saved[name] !== undefined) {
+                    if (control.type === "checkbox") {
+                        control.checked = Boolean(saved[name]);
+                    } else {
+                        var written = control.value;
+                        control.value = saved[name];
+                        if (control.selectedIndex === -1) {
+                            control.value = written;
+                        }
+                    }
+                }
+                control.addEventListener("change", function () {
+                    prefs.readAloud = prefs.readAloud && typeof prefs.readAloud === "object" ? prefs.readAloud : {};
+                    prefs.readAloud[name] = control.type === "checkbox" ? control.checked : control.value;
+                    savePrefs();
+                });
+            });
+        }
+
+        function readingState(text) {
+            if (readAloudText) {
+                readAloudText.textContent = text;
+            }
+        }
+
+        function readingButton(active) {
+            var label = readAloudButton.querySelector(".label") || readAloudButton;
+            label.textContent = active ? "Stop reading aloud" : "Read this group aloud";
+        }
+
+        // The words of one bar as the page writes them, every note included: a
+        // closed "Show the notes" still holds the beats, and its summary is only
+        // the control that opens them.
+        function spokenBar(bar) {
+            var lines = [];
+            Array.prototype.forEach.call(bar.querySelectorAll("h3, p, li"), function (element) {
+                if (element.closest("summary") || element.closest("[aria-hidden='true']")) {
+                    return;
+                }
+                var text;
+                var beat = element.tagName === "LI" ? element.querySelector("b") : null;
+                if (beat) {
+                    var notes = element.querySelector(".notes");
+                    text = beat.textContent + ", " + (notes ? notes.textContent : "");
+                } else {
+                    text = element.textContent;
+                }
+                text = text.replace(/\s+/g, " ").trim();
+                if (text) {
+                    lines.push(/[.,;:?]$/.test(text) ? text : text + ".");
+                }
+            });
+            return lines.join(" ");
+        }
+
+        function barName(number) {
+            return number === data.pickupBar ? "the pickup bar" : "bar " + printedNumber(number);
+        }
+
+        function readAloud() {
+            if (player) {
+                player.stop();
+            }
+            var group = groups[current];
+            var withPlayback = Boolean(player && readAndPlay && readAndPlay.checked);
+            var run = { group: group, bar: null };
+            var index = 0;
+            reading = run;
+            readingButton(true);
+
+            function next() {
+                if (reading !== run) {
+                    return;
+                }
+                if (index >= group.members.length) {
+                    finishReading(run);
+                    return;
+                }
+                var bar = group.members[index++];
+                var number = barNumber(bar);
+                run.bar = number;
+                readingState("Reading " + barName(number) + ".");
+                speech.say(spokenBar(bar), function (heard) {
+                    if (!heard || reading !== run) {
+                        return;
+                    }
+                    if (!withPlayback) {
+                        next();
+                        return;
+                    }
+                    readingState("Playing " + barName(number) + ".");
+                    player.playOnce({ start: number, end: number }).then(function (finished) {
+                        if (reading !== run) {
+                            return;
+                        }
+                        if (finished) {
+                            next();
+                        } else {
+                            // The player has said why the bar did not play.
+                            reading = null;
+                            readingButton(false);
+                            readingState("Stopped at " + barName(number) + ". Press Read this group aloud to start again.");
+                        }
+                    });
+                });
+            }
+            next();
+        }
+
+        function stopReading(spoken, playerDone) {
+            var run = reading;
+            reading = null;
+            speech.cancel();
+            readingButton(false);
+            if (!playerDone && run && run.bar !== null && player && readAndPlay && readAndPlay.checked) {
+                player.stop();
+            }
+            var said = run && run.bar !== null
+                ? "Stopped reading at " + barName(run.bar) + ". Press Read this group aloud to start the group again."
+                : "Nothing is being read.";
+            readingState(said);
+            if (spoken) {
+                announce(said);
+            }
+        }
+
+        // The end of a group names where the reading goes next, and puts the reader
+        // on the control that takes them there.
+        function finishReading(run) {
+            reading = null;
+            readingButton(false);
+            var index = groups.indexOf(run.group);
+            var done = "Finished reading " + rangeLabel(run.group.start, run.group.end, false) + ".";
+            var said;
+            if (index >= 0 && index < groups.length - 1) {
+                var following = groups[index + 1];
+                said = done + " Next group is " + rangeLabel(following.start, following.end, false) + ".";
+                var nextButton = document.getElementById("next-group");
+                if (nextButton) {
+                    nextButton.focus();
+                }
+            } else {
+                said = done + " This is the last group.";
+            }
+            readingState(said);
+            announce(said);
+        }
         buildGroups(barsPerGroup);
 
         function barFromHash() {

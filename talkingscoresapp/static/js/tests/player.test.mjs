@@ -361,3 +361,13 @@ test("stopping while the whole score plays names the open group, not the whole s
     controls.stop.fire("click");
     assert.equal(controls.status.textContent, "Playback stopped. Bars 1 to 2 ready to play.");
 });
+
+test("a bar's start in crotchets lands on the file's own clock", () => {
+    // Four crotchets at 120 a minute, then the speed halves.
+    const events = tempo(500000).concat(noteOn(0, 60), noteOff(DIVISION * 4, 60),
+        tempoAfter(0, 1000000), noteOn(0, 62), noteOff(DIVISION * 4, 62));
+    const music = collect(parseMidi(file([events])), 1);
+    assert.equal(music.at(0), 0);
+    assert.equal(music.at(4), 2);
+    assert.equal(music.at(6), 4);
+});
