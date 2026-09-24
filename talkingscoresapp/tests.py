@@ -224,7 +224,7 @@ class BasicFunctionalityTests(TestCase):
     def test_contact_us_loads(self):
         response = self.client.get(reverse('contact-us'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'talkingscores@gmail.com')
+        self.assertContains(response, 'contact@davidbuik.com')
 
     def test_privacy_page_describes_what_the_site_actually_stores(self):
         """The page names the cookies that are set, so it has to track the code."""
