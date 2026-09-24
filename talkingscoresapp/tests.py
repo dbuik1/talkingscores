@@ -169,7 +169,7 @@ class BasicFunctionalityTests(TestCase):
         # The file rules sit above the control they govern, not under it.
         self.assertLess(content.index("up to 10 MB"), content.index('type="file"'))
         # The rules are attached to the control, so they are read out with it.
-        self.assertIn('aria-describedby="file-rules"', content)
+        self.assertIn('aria-describedby="file-rules file-drop-hint"', content)
         self.assertIn('id="file-rules"', content)
         self.assertIn('accept=".xml,.musicxml,.mxl"', content)
         self.assertIn("Open score", content)
@@ -197,25 +197,13 @@ class BasicFunctionalityTests(TestCase):
         self.assertNotIn("bootstrap.bundle.min.js", content)
         self.assertNotIn('script src="https://', content)
 
-    @patch("talkingscoresapp.views.logger.warning")
-    @patch("talkingscoresapp.views.os.listdir", side_effect=OSError("missing"))
-    def test_homepage_loads_when_example_scores_unavailable(self, mock_listdir, mock_logger_warning):
+    def test_home_page_leads_with_where_to_find_a_musicxml_file(self):
         response = self.client.get(reverse('index'))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Talking Scores')
-        # Nothing to try, so nothing offers it.
+        self.assertContains(response, 'Where to find a MusicXML file')
+        self.assertContains(response, 'Find a free score')
         self.assertNotContains(response, 'Example scores')
-        mock_logger_warning.assert_called_once()
 
-    @patch("talkingscoresapp.views.os.listdir")
-    def test_example_scores_are_filtered_and_sorted(self, mock_listdir):
-        from talkingscoresapp.views import get_example_scores
-
-        mock_listdir.return_value = ["z.html", "notes.txt", "a.html"]
-
-        self.assertEqual(get_example_scores(), ["a.html", "z.html"])
-        
     def test_change_log_loads(self):
         response = self.client.get(reverse('change-log'))
         self.assertEqual(response.status_code, 200)
@@ -355,6 +343,49 @@ class SubmissionFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("url", form.errors)
         self.assertIn(".xml", form.errors["url"][0])
+
+    def test_submission_form_accepts_a_github_page_for_the_file(self):
+        from talkingscoresapp.views import MusicXMLSubmissionForm
+
+        form = MusicXMLSubmissionForm(data={
+            "url": "https://github.com/OpenScore/Lieder/blob/main/scores/Schubert,_Franz/Winterreise,_D.911/01_Gute_Nacht/lc5015378.mxl"
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(
+            form.cleaned_data["url"],
+            "https://raw.githubusercontent.com/OpenScore/Lieder/main/scores/Schubert,_Franz/Winterreise,_D.911/01_Gute_Nacht/lc5015378.mxl",
+        )
+
+
+class GitHubUrlRewriteTests(TestCase):
+    def test_blob_url_is_rewritten_to_a_raw_url(self):
+        from talkingscoresapp.views import rewrite_github_file_page_url
+
+        self.assertEqual(
+            rewrite_github_file_page_url("https://github.com/owner/repo/blob/main/path/to/score.musicxml"),
+            "https://raw.githubusercontent.com/owner/repo/main/path/to/score.musicxml",
+        )
+
+    def test_raw_url_form_is_rewritten_too(self):
+        from talkingscoresapp.views import rewrite_github_file_page_url
+
+        self.assertEqual(
+            rewrite_github_file_page_url("https://github.com/owner/repo/raw/main/score.mxl"),
+            "https://raw.githubusercontent.com/owner/repo/main/score.mxl",
+        )
+
+    def test_non_github_url_is_unchanged(self):
+        from talkingscoresapp.views import rewrite_github_file_page_url
+
+        url = "https://example.com/scores/piece.musicxml"
+        self.assertEqual(rewrite_github_file_page_url(url), url)
+
+    def test_already_raw_github_url_is_unchanged(self):
+        from talkingscoresapp.views import rewrite_github_file_page_url
+
+        url = "https://raw.githubusercontent.com/owner/repo/main/score.musicxml"
+        self.assertEqual(rewrite_github_file_page_url(url), url)
 
 
 class FileWriteTests(TestCase):
@@ -2656,6 +2687,83 @@ class RepetitionInContextWordingTests(TestCase):
         for text in context.values():
             self.assertNotIn(". .", text)
             self.assertNotIn(".  .", text)
+
+
+class OpenScoreSearchTests(TestCase):
+    def test_words_are_matched_across_composer_title_and_set(self):
+        from talkingscoresapp import openscore
+
+        matches, total = openscore.search("schubert gute nacht", 50)
+
+        self.assertEqual(total, 1)
+        self.assertEqual(matches[0]["title"], "Gute Nacht")
+        self.assertEqual(matches[0]["composer"], "Franz Schubert")
+
+    def test_accent_insensitive_search_matches_an_accented_title(self):
+        from talkingscoresapp import openscore
+
+        matches, total = openscore.search("erlkonig", 50)
+
+        self.assertGreater(total, 0)
+        self.assertTrue(any("Erlkönig" in match["title"] for match in matches))
+
+    def test_a_nonsense_query_matches_nothing(self):
+        from talkingscoresapp import openscore
+
+        matches, total = openscore.search("zzznosuchscoreexists", 50)
+
+        self.assertEqual((matches, total), ([], 0))
+
+    def test_results_are_capped_at_the_limit_but_total_counts_them_all(self):
+        from talkingscoresapp import openscore
+
+        matches, total = openscore.search("a", 3)
+
+        self.assertLessEqual(len(matches), 3)
+        self.assertGreaterEqual(total, len(matches))
+
+    def test_suggestions_are_a_short_fixed_list_that_exist_in_the_index(self):
+        from talkingscoresapp import openscore
+
+        suggested = openscore.suggestions()
+
+        self.assertTrue(3 <= len(suggested) <= 6)
+        for entry in suggested:
+            self.assertIn("title", entry)
+            self.assertIn("url", entry)
+
+
+class FindAScorePageTests(TestCase):
+    def test_empty_query_shows_suggestions(self):
+        response = self.client.get(reverse("find-a-score"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Scores to start with")
+        self.assertContains(response, "Open talking score")
+
+    def test_a_query_returns_the_matching_score(self):
+        response = self.client.get(reverse("find-a-score"), {"q": "schubert gute nacht"})
+
+        self.assertContains(response, "Gute Nacht")
+        self.assertContains(response, "match")
+
+    def test_accent_insensitive_query_matches_an_accented_title(self):
+        response = self.client.get(reverse("find-a-score"), {"q": "erlkonig"})
+
+        self.assertContains(response, "Erlkönig")
+
+    def test_a_nonsense_query_shows_the_no_match_text(self):
+        response = self.client.get(reverse("find-a-score"), {"q": "zzznosuchscoreexists"})
+
+        self.assertContains(response, "No scores match")
+
+    def test_each_result_posts_a_raw_githubusercontent_url_to_the_link_endpoint(self):
+        response = self.client.get(reverse("find-a-score"), {"q": "schubert gute nacht"})
+        content = response.content.decode("utf-8")
+
+        self.assertIn(f'action="{reverse("index")}"', content)
+        self.assertIn("raw.githubusercontent.com", content)
+        self.assertIn('name="url"', content)
 
 
 class UserFacingCopyTests(TestCase):

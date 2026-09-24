@@ -1,5 +1,4 @@
 {% extends "base_site.html" %}
-{% load static %}
 
 {% block title %}Talking Scores - sheet music written out bar by bar{% endblock %}
 {% block meta-description %}Open a MusicXML file and read every bar as words, with a screen reader, a braille display or a magnifier, and hear any bar on its own.{% endblock %}
@@ -14,47 +13,39 @@
 
 <form id="open" class="form" action="{% url 'index' %}" method="post" enctype="multipart/form-data">
     {% csrf_token %}
-    <div class="field">
+    <div class="field" id="file-field">
         <label for="id_filename">Score file</label>
-        <input type="file" id="id_filename" name="filename" accept=".xml,.musicxml,.mxl" aria-describedby="file-rules">
+        <input type="file" id="id_filename" name="filename" accept=".xml,.musicxml,.mxl" aria-describedby="file-rules file-drop-hint">
+        <p class="small muted" id="file-drop-hint">Or drop the file here</p>
+        <p class="small" id="file-drop-status" aria-live="polite" hidden></p>
     </div>
     <details class="plain">
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Or paste a link</h2></summary>
         <div class="field" style="padding: 12px 0 8px;">
             <label for="id_url">Link to the file</label>
             <input type="url" class="input" id="id_url" name="url" aria-describedby="url-help">
-            <p class="small muted" id="url-help">The link has to point at the file itself, not at a page about it</p>
+            <p class="small muted" id="url-help">The link has to point at the file itself, or at its page on GitHub</p>
         </div>
     </details>
-    <button class="btn primary" type="submit">Open score</button>
+    <button class="btn primary" type="submit" id="open-submit">Open score</button>
 </form>
+
+<p class="small muted">No file to hand? <a href="{% url 'find-a-score' %}">Find a free score</a></p>
 
 <div>
     <details>
-        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>How to get a MusicXML file</h2></summary>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Where to find a MusicXML file</h2></summary>
         <div class="panel">
-            <p>Every notation program writes MusicXML, usually under Export rather than Save.</p>
+            <p>Many scores can be downloaded as MusicXML from a score library.</p>
             <ul class="bullets">
-                <li><b>MuseScore</b> - File, Export, then MusicXML.</li>
-                <li><b>Sibelius</b> - File, Export, MusicXML.</li>
-                <li><b>Finale</b> - File, Export, MusicXML, Uncompressed.</li>
-                <li><b>Dorico</b> - File, Export, MusicXML.</li>
+                <li><a href="https://musescore.com/sheetmusic" rel="noopener noreferrer">MuseScore.com</a> has the most scores. Open a score, choose Download, then MusicXML. A free account is needed, and some scores need a paid plan.</li>
+                <li><a href="{% url 'find-a-score' %}">OpenScore</a> has songs and string quartets that open here directly.</li>
+                <li><a href="https://www.cpdl.org/" rel="noopener noreferrer">CPDL</a> has choral music. Look for MusicXML in the list of files for each edition.</li>
             </ul>
-            <p class="small muted">PDFs and scans cannot be read.</p>
+            <p>In most notation programs, choose File, then Export, then MusicXML.</p>
+            <p class="small muted">A PDF can be turned into MusicXML by a scanning program such as <a href="https://audiveris.github.io/audiveris/" rel="noopener noreferrer">Audiveris</a>, which is free. Scanning programs misread some notes, so the talking score may not match the printed page.</p>
         </div>
     </details>
-    {% if example_scores %}
-    <details>
-        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Example scores</h2></summary>
-        <div class="panel">
-            <ul class="bullets">
-                {% for score in example_scores %}
-                <li><a href="{% static 'data/' %}{{ score }}">{{ score }}</a></li>
-                {% endfor %}
-            </ul>
-        </div>
-    </details>
-    {% endif %}
     <details>
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>What it does</h2></summary>
         <div class="panel">
@@ -64,3 +55,67 @@
     </details>
 </div>
 {% endblock content %}
+
+{% block javascript %}
+<script>
+    // Progressive enhancement: the file input above works with a click and a
+    // keyboard with no script at all. This only adds a second way to fill it.
+    (function () {
+        var field = document.getElementById("file-field");
+        var input = document.getElementById("id_filename");
+        var status = document.getElementById("file-drop-status");
+        var submit = document.getElementById("open-submit");
+        var allowedExtensions = [".musicxml", ".xml", ".mxl"];
+
+        function extensionOf(name) {
+            var dot = name.lastIndexOf(".");
+            return dot === -1 ? "" : name.slice(dot).toLowerCase();
+        }
+
+        function showStatus(text, isError) {
+            status.textContent = text;
+            status.hidden = false;
+            status.classList.toggle("error", isError);
+        }
+
+        ["dragenter", "dragover"].forEach(function (eventName) {
+            field.addEventListener(eventName, function (event) {
+                event.preventDefault();
+                field.classList.add("drag-over");
+            });
+        });
+
+        ["dragleave", "dragend", "drop"].forEach(function (eventName) {
+            field.addEventListener(eventName, function () {
+                field.classList.remove("drag-over");
+            });
+        });
+
+        input.addEventListener("change", function () {
+            status.hidden = true;
+        });
+
+        field.addEventListener("drop", function (event) {
+            event.preventDefault();
+            var files = event.dataTransfer && event.dataTransfer.files;
+            if (!files || !files.length) {
+                return;
+            }
+            var file = files[0];
+            if (allowedExtensions.indexOf(extensionOf(file.name)) === -1) {
+                showStatus("Choose a MusicXML file. The name has to end in .musicxml, .xml or .mxl.", true);
+                return;
+            }
+            try {
+                input.files = files;
+            } catch (error) {
+                // A browser that refuses to set a file input's files this way
+                // leaves the field empty; the file is then chosen the usual way.
+                return;
+            }
+            showStatus(file.name + " chosen", false);
+            submit.focus();
+        });
+    })();
+</script>
+{% endblock %}

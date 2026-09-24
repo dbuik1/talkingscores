@@ -303,6 +303,20 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .contents li a { display: inline-flex; align-items: center; min-height: 44px; }
 .contents li:last-child { border-bottom: 0; }
 .contents .prev { color: var(--muted); font-size: 1.0625rem; }
+.contents .result { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+
+/* Read by a screen reader but not seen; a name for a control whose visible label alone would not say what it acts on. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
 
 .facts { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 6px 24px; margin: 0; }
 .facts dt { font-weight: 700; }
@@ -365,6 +379,10 @@ body:not(.reader) main { display: flex; flex-direction: column; gap: 32px; }
 
 .form { display: flex; flex-direction: column; gap: 24px; }
 .form > .btn { align-self: flex-start; }
+
+/* Shown on the file field while a dragged file is over it; the outline is a shape
+   change, not only a colour change, so it still reads under a colour filter. */
+.field.drag-over { outline: 3px dashed var(--accent); outline-offset: 6px; border-radius: 6px; }
 .actions { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 

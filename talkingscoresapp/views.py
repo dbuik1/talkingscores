@@ -12,14 +12,14 @@ import logging
 import re
 import tempfile
 from functools import lru_cache
-from urllib.parse import urlparse
-from talkingscores.settings import BASE_DIR
+from urllib.parse import urlparse, unquote
 from lib.midiHandler import MidiHandler
 
 import requests
 from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress
 from talkingscoresapp.models import RemoteAddressNotAllowed, RemoteHostNotFound, RemoteFetchRefused
 from talkingscoresapp.models import remove_file_quietly
+from talkingscoresapp import openscore
 from lib.render_settings import DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES
 from lib.style_samples import style_samples
 
@@ -77,6 +77,20 @@ def clean_colours(colours):
 logger = logging.getLogger("TSScore")
 
 ALLOWED_MUSICXML_EXTENSIONS = ('.xml', '.musicxml', '.mxl')
+
+# A file's page on GitHub (blob) and its permalink to the raw bytes (raw) share
+# this shape; both are rewritten to the host that actually serves the file.
+GITHUB_FILE_PAGE_PATTERN = re.compile(
+    r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/(?:blob|raw)/(?P<ref>[^/]+)/(?P<path>[^?#]+)$"
+)
+
+
+def rewrite_github_file_page_url(url):
+    """A GitHub page for a file, rewritten to the raw file the page shows; any other URL is returned unchanged."""
+    match = GITHUB_FILE_PAGE_PATTERN.match(url)
+    if not match:
+        return url
+    return "https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}".format(**match.groupdict())
 MAX_UPLOADED_SCORE_BYTES = 10 * 1024 * 1024
 
 SCORE_MISSING_MESSAGE = "This score is no longer stored here. Open the file again to make a new talking score."
@@ -165,15 +179,6 @@ def validate_midi_query_params(query_params):
         raise forms.ValidationError("The first bar has to come before the last bar.")
 
 
-def get_example_scores():
-    example_score_path = os.path.join(BASE_DIR, 'talkingscoresapp', 'static', 'data')
-    try:
-        return sorted(f for f in os.listdir(example_score_path) if f.endswith('.html'))
-    except OSError:
-        logger.warning("Could not list example scores from %s", example_score_path)
-        return []
-
-
 def write_json_file_atomic(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -214,11 +219,14 @@ class MusicXMLSubmissionForm(forms.Form):
     def clean_url(self):
         url = self.cleaned_data.get('url')
         if url:
+            url = rewrite_github_file_page_url(url)
             parsed_url = urlparse(url)
-            file_extension = os.path.splitext(parsed_url.path)[1].lower()
+            # A path segment can carry a percent-encoded character (an accent in a
+            # composer's name, say), so the extension is read after decoding it.
+            file_extension = os.path.splitext(unquote(parsed_url.path))[1].lower()
             if file_extension not in ALLOWED_MUSICXML_EXTENSIONS:
                 raise forms.ValidationError(
-                    "The link has to end in .musicxml, .xml or .mxl, and point at the file itself."
+                    "The link has to end in .musicxml, .xml or .mxl, or point at that file's page on GitHub."
                 )
         return url
 
@@ -624,6 +632,20 @@ def index(request):
     else:
         form = MusicXMLSubmissionForm()
 
-    example_scores = get_example_scores()
-    context = {'form': form, 'example_scores': example_scores}
+    context = {'form': form}
     return render(request, 'index.html', context)
+
+
+OPENSCORE_SEARCH_LIMIT = 50
+OPENSCORE_QUERY_MAX_LENGTH = 100
+
+
+def find_a_score(request):
+    query = request.GET.get('q', '').strip()[:OPENSCORE_QUERY_MAX_LENGTH]
+    if query:
+        results, total = openscore.search(query, OPENSCORE_SEARCH_LIMIT)
+    else:
+        results, total = openscore.suggestions(), None
+
+    context = {'query': query, 'results': results, 'total': total, 'limit': OPENSCORE_SEARCH_LIMIT}
+    return render(request, 'find-a-score.html', context)

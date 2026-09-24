@@ -1,0 +1,59 @@
+{% extends "base_site.html" %}
+
+{% block title %}Find a score - Talking Scores{% endblock %}
+{% block meta-description %}Search free songs and string quartets from OpenScore and open any of them as a talking score.{% endblock %}
+
+{% block content %}
+<div>
+    <h1>Find a score</h1>
+    <p class="lead">Free songs and string quartets from OpenScore, ready to open as a talking score.</p>
+</div>
+
+<form class="form" action="{% url 'find-a-score' %}" method="get">
+    <div class="field">
+        <label for="id_q">Composer, title or set</label>
+        <input type="search" class="input" id="id_q" name="q" value="{{ query }}" aria-describedby="q-help">
+        <p class="small muted" id="q-help">For example, Schubert or Winterreise</p>
+    </div>
+    <button class="btn primary" type="submit">Search scores</button>
+</form>
+
+{% if query %}
+<p id="search-status" tabindex="-1">
+    {% if total %}
+        {% if total > limit %}
+            {{ total }} scores match &ldquo;{{ query }}&rdquo;. The first {{ limit }} are listed; add a word to narrow the search.
+        {% else %}
+            {{ total }} scores match &ldquo;{{ query }}&rdquo;.
+        {% endif %}
+    {% else %}
+        No scores match &ldquo;{{ query }}&rdquo;. Try a composer's surname or one word from the title.
+    {% endif %}
+</p>
+<script>
+    document.getElementById("search-status").focus();
+</script>
+{% else %}
+<h2 id="search-status">Scores to start with</h2>
+{% endif %}
+
+{% if results %}
+<ol class="contents">
+    {% for item in results %}
+    <li>
+        <div class="result">
+            <strong>{{ item.title }}</strong>
+            <span class="small muted">{{ item.composer }}{% if item.set %} &middot; {{ item.set }}{% endif %}{% if item.collection == "String quartets" %} &middot; String quartets{% endif %}</span>
+        </div>
+        <form method="post" action="{% url 'index' %}">
+            {% csrf_token %}
+            <input type="hidden" name="url" value="{{ item.url }}">
+            <button class="btn" type="submit">Open talking score<span class="visually-hidden"> of {{ item.title }} by {{ item.composer }}</span></button>
+        </form>
+    </li>
+    {% endfor %}
+</ol>
+{% endif %}
+
+<p class="small muted">Scores from <a href="https://musescore.com/openscore-lieder-corpus" rel="noopener noreferrer">OpenScore</a>, free for any use.</p>
+{% endblock content %}

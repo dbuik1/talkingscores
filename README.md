@@ -66,6 +66,21 @@ python .\manage.py cleanup_midi
 It is safe to run while the site is up: a half-written file is left alone until
 an hour has passed, by which time no request can still be writing it.
 
+## OpenScore catalogue
+
+`talkingscoresapp/data/openscore.json` lists every score the "Find a score"
+page can search: one entry per .mxl file in OpenScore's Lieder and String
+Quartets repositories on GitHub, with a raw file URL the site fetches when a
+reader opens one. Rebuild it after OpenScore adds scores:
+
+```bash
+git clone --filter=blob:none https://github.com/OpenScore/Lieder.git
+git clone --filter=blob:none --no-checkout https://github.com/OpenScore/StringQuartets.git
+python3 scripts/build_openscore_index.py --lieder Lieder --string-quartets StringQuartets
+```
+
+Commit the resulting `openscore.json`.
+
 ## Environment settings
 
 `DJANGO_DEBUG` is off unless set, and with debug off the server refuses to start without `DJANGO_SECRET_KEY`. For local development and the test suite, turn debug on:
