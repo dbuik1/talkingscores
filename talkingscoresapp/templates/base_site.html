@@ -38,7 +38,6 @@
         </a>
         <nav aria-label="Site">
             <a href="{% url 'change-log' %}">Change log</a>
-            <a href="{% url 'privacy-policy' %}">Privacy policy</a>
         </nav>
     </header>
 
@@ -61,10 +60,10 @@
     </main>
 
     <footer class="footer">
-        <span>Talking Scores</span>
-        <a href="{% url 'privacy-policy' %}">Privacy policy</a>
+        <span>Talking Scores, adapted from <a href="https://github.com/bentimms/talkingscores" rel="noopener noreferrer">Talking Scores by Ben Timms</a></span>
         <a href="{% url 'change-log' %}">Change log</a>
         <a href="{% url 'contact-us' %}">Contact</a>
+        <a href="{% url 'privacy-policy' %}">Privacy policy</a>
     </footer>
 </div>
 {% block javascript %}{% endblock %}

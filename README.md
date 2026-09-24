@@ -1,5 +1,15 @@
 # Talking Scores
 
+A fork of [Talking Scores by Ben Timms](https://github.com/bentimms/talkingscores),
+which turns a MusicXML score into a talking score: bars written out as words,
+with playback of any range of bars in the browser. This fork adds the reader
+page, styles, downloads, sampled playback and reading aloud listed on the
+change log page.
+
+The original code is copyright 2019 Ben Timms and released under the MIT
+licence in `LICENCE.txt`. That notice stays with every copy of this code,
+including copies of this fork.
+
 ## Prerequisites
 
 1. A working Python 3 installation.

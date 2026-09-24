@@ -347,7 +347,7 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
     html, body { background: #ffffff; color: #000000; }
     body { font-size: 14pt; line-height: 1.45; }
     .wrap { max-width: none; padding: 0; gap: 20px; }
-    .skip, .top nav, .toolbar, .disc-row, .noscript, .live, .footer a { display: none !important; }
+    .skip, .top nav, .toolbar, .disc-row, .noscript, .live, .footer > a { display: none !important; }
     h1 { font-size: 28pt; }
     .meta { font-size: 14pt; }
     a { color: #000; text-decoration: none; }
