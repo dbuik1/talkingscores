@@ -685,6 +685,10 @@ class DownloadTests(TestCase):
                     "figureNoteColours"):
             self.assertIn(key, stored)
         self.assertEqual(len(stored["figureNoteColours"]), 7)
+        # Voices and chord symbols are read on lines of their own unless the reader turns that off.
+        self.assertIs(stored["separate_voices"], True)
+        self.assertIs(stored["chord_symbols_on_own_line"], True)
+        self.assertEqual(stored["chord_symbol_reading"], "name")
 
     @staticmethod
     def _submitted_defaults(html):
@@ -2803,18 +2807,11 @@ CHORD_SYMBOL_SCORE = """<?xml version="1.0" encoding="UTF-8"?>
 class ChordSymbolTests(TestCase):
     """Lead sheets: chord symbols are read, named with flats and sharps, and never stop a score loading."""
 
-    def _text(self, xml):
-        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = os.path.join(temp_dir, "lead-sheet.musicxml")
-            with open(path, "w", encoding="utf-8") as score_file:
-                score_file.write(xml)
-            formatter = HTMLTalkingScoreFormatter(Music21TalkingScore(path), options={"style": "standard"})
-            with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
-                return formatter.render_text()
+    def _text(self, xml, **options):
+        return render_score_text(xml, **options)
 
     def test_a_ninth_altered_on_a_seventh_chord_loads_as_an_added_ninth(self):
-        text = self._text(CHORD_SYMBOL_SCORE)
+        text = self._text(CHORD_SYMBOL_SCORE, chord_symbol_reading="written", chord_symbols_on_own_line=False)
         self.assertIn("chord symbol C7 add ♯9", text)
 
     def test_files_music21_reads_as_written_are_not_rewritten(self):
@@ -2835,6 +2832,144 @@ class ChordSymbolTests(TestCase):
         self.assertEqual(chord_figure_with_symbols("F#m7b5"), "F♯m7b5")
 
     def test_a_bar_of_rests_under_chord_symbols_reads_the_chords(self):
-        text = self._text(CHORD_SYMBOL_SCORE)
+        text = self._text(CHORD_SYMBOL_SCORE, chord_symbol_reading="written", chord_symbols_on_own_line=False)
         self.assertIn("Beat 1 chord symbol B♭m7, minim rest, Beat 3 chord symbol E♭7, minim rest", text)
         self.assertNotIn("Rests for the whole bar", text)
+
+    def test_chord_symbols_are_named_in_words_on_a_line_above_the_part(self):
+        text = self._text(CHORD_SYMBOL_SCORE)
+        self.assertIn("Melody - Chord symbols\nBar 1\nBeat 1 C seventh add sharp ninth\n"
+                      "Bar 2\nBeat 1 B flat minor seventh, Beat 3 E flat seventh\nMelody\n", text)
+        # With the chords on their own line, the melody's bar of rests is read as one.
+        self.assertIn("Melody\nBar 1\nBeat 1 semibreve high C\nBar 2\nRests for the whole bar", text)
+        self.assertNotIn("chord symbol", text)
+
+    def test_the_notes_reading_spells_out_each_chord_from_the_bass_up(self):
+        text = self._text(PIANO_VOICES_SCORE, chord_symbol_reading="notes")
+        self.assertIn("Beat 1 C major, notes C, E and G, "
+                      "Beat 3 B flat seventh over D, notes D, F, A flat and B flat", text)
+
+    def test_symbols_on_either_staff_are_read_once_above_both_hands(self):
+        text = self._text(PIANO_VOICES_SCORE)
+        self.assertIn("Piano - Chord symbols\nBar 1\nBeat 1 C major, Beat 3 B flat seventh over D\n"
+                      "Piano - Right hand\n", text)
+        hands = text.split("Piano - Right hand", 1)[1]
+        self.assertNotIn("C major", hands)
+        self.assertNotIn("seventh", hands)
+        self.assertEqual(text.count("B flat seventh over D"), 1)
+
+    def test_symbols_can_stay_among_the_notes_of_the_staff_they_are_written_on(self):
+        text = self._text(PIANO_VOICES_SCORE, chord_symbols_on_own_line=False)
+        self.assertNotIn("Chord symbols", text)
+        self.assertIn("Beat 1 chord symbol C major, minim high E", text)
+        self.assertIn("Beat 1 chord symbol C major, semibreve low C", text)
+
+    def test_symbols_are_left_out_when_the_reader_turns_them_off(self):
+        text = self._text(PIANO_VOICES_SCORE, chord_symbols=False)
+        self.assertNotIn("Chord symbols", text)
+        self.assertNotIn("B flat seventh", text)
+
+    def test_chord_names_read_slash_basses_and_altered_and_missing_degrees(self):
+        from lib.events import TSChordSymbol
+        from lib.render_settings import RenderSettings
+        from lib.vocabulary import Vocabulary
+        words = Vocabulary(RenderSettings())
+        half_diminished = TSChordSymbol("Cm7b5", root=("C", 0), chord_kind="minor-seventh",
+                                        modifications=[("alter", 5, -1)])
+        self.assertEqual(words.chord_name(half_diminished), "C minor seventh flat fifth")
+        no_third = TSChordSymbol("F#7omit3/A#", root=("F", 1), bass=("A", 1), chord_kind="dominant-seventh",
+                                 modifications=[("subtract", 3, 0)])
+        self.assertEqual(words.chord_name(no_third), "F sharp seventh no third over A sharp")
+        symbols = Vocabulary(RenderSettings(accidental_style="symbols"))
+        self.assertEqual(symbols.chord_name(no_third), "F♯ seventh no third over A♯")
+        self.assertEqual(words.chord_symbol(TSChordSymbol("N.C.", no_chord=True), on_own_line=True), "no chord")
+
+
+class SeparateVoicesTests(TestCase):
+    """A stave holding two voices is read one voice at a time, so each line can be followed through the bar."""
+
+    def test_each_voice_is_read_through_the_bar_on_its_own_line(self):
+        text = render_score_text(PIANO_VOICES_SCORE)
+        self.assertIn("Piano - Right hand\nBar 1\n"
+                      "Voice 1: Beat 1 minim high E slur starts, Beat 3 D slur ends\n"
+                      "Voice 2: Beat 1 crotchet mid G, Beat 2 A, Beat 3 minim F\n", text)
+        # A stave with one voice reads without a voice label.
+        self.assertIn("Piano - Left hand\nBar 1\nBeat 1 semibreve low C", text)
+
+    def test_voices_can_be_read_together_moment_by_moment(self):
+        text = render_score_text(PIANO_VOICES_SCORE, separate_voices=False)
+        self.assertNotIn("Voice 1", text)
+        self.assertIn("Beat 1 minim high E slur starts together with crotchet mid G, Beat 2 A", text)
+
+    def test_hidden_rests_are_skipped_and_stave_marks_go_with_the_first_voice(self):
+        text = render_score_text(TWO_VOICES_WITH_HIDDEN_REST_SCORE)
+        self.assertIn("Voice 1: Beat 1 forte, semibreve high C\n"
+                      "Voice 2: Beat 3 minim mid E\n", text)
+        self.assertNotIn("rest", text)
+
+    def test_the_page_labels_each_voice_above_its_beats(self):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "voices.musicxml")
+            with open(path, "w", encoding="utf-8") as score_file:
+                score_file.write(PIANO_VOICES_SCORE)
+            formatter = HTMLTalkingScoreFormatter(Music21TalkingScore(path), options={"style": "standard"})
+            with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+                html = formatter.generateHTML(web_path="/midis/x/y")
+        self.assertRegex(html, r'<p class="voice">Voice 1</p>\s*<ul class="beats">\s*<li><b>Beat 1</b>')
+        self.assertIn('<p class="voice">Voice 2</p>', html)
+        self.assertIn('<p class="label">Piano - Chord symbols</p>', html)
+
+
+def render_score_text(xml, **options):
+    from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+    with tempfile.TemporaryDirectory() as temp_dir:
+        path = os.path.join(temp_dir, "score.musicxml")
+        with open(path, "w", encoding="utf-8") as score_file:
+            score_file.write(xml)
+        formatter = HTMLTalkingScoreFormatter(Music21TalkingScore(path), options={"style": "standard", **options})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            return formatter.render_text()
+
+
+# Right hand: two voices under C and B flat 7 over D, the upper one slurred. Left hand: one voice,
+# under a C major symbol the file repeats on the lower staff.
+PIANO_VOICES_SCORE = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time>
+        <staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef></attributes>
+      <harmony><root><root-step>C</root-step></root><kind>major</kind><staff>1</staff></harmony>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>half</type><staff>1</staff><notations><slur type="start" number="1"/></notations></note>
+      <harmony><root><root-step>B</root-step><root-alter>-1</root-alter></root><kind>dominant</kind><bass><bass-step>D</bass-step></bass><staff>1</staff></harmony>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>half</type><staff>1</staff><notations><slur type="stop" number="1"/></notations></note>
+      <backup><duration>4</duration></backup>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><voice>2</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><voice>2</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>2</duration><voice>2</voice><type>half</type><staff>1</staff></note>
+      <backup><duration>4</duration></backup>
+      <harmony><root><root-step>C</root-step></root><kind>major</kind><staff>2</staff></harmony>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>4</duration><voice>5</voice><type>whole</type><staff>2</staff></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+TWO_VOICES_WITH_HIDDEN_REST_SCORE = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Flute</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef></attributes>
+      <direction placement="below"><direction-type><dynamics><f/></dynamics></direction-type></direction>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+      <backup><duration>4</duration></backup>
+      <note print-object="no"><rest/><duration>2</duration><voice>2</voice><type>half</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><voice>2</voice><type>half</type></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
