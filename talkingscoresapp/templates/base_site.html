@@ -34,7 +34,7 @@
     <header class="top">
         <a class="brand" href="{% url 'index' %}">
             <svg viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h20M4 13h20M4 18h20M4 23h20"></path><circle cx="17" cy="20.5" r="3" fill="currentColor" stroke="none"></circle><path d="M20 20.5V7l4 2"></path></svg>
-            <span>Talking Scores</span>
+            <span>Talking Scores</span><span class="visually-hidden">, home page</span>
         </a>
         <nav aria-label="Site">
             <a href="{% url 'find-a-score' %}">Find a score</a>
@@ -61,7 +61,7 @@
     </main>
 
     <footer class="footer">
-        <span>Talking Scores, adapted from <a href="https://github.com/bentimms/talkingscores" rel="noopener noreferrer">Talking Scores by Ben Timms</a></span>
+        <span>Based on <a href="https://github.com/bentimms/talkingscores" rel="noopener noreferrer">Talking Scores by Ben Timms</a></span>
         <a href="{% url 'change-log' %}">Change log</a>
         <a href="{% url 'contact-us' %}">Contact</a>
         <a href="{% url 'privacy-policy' %}">Privacy policy</a>

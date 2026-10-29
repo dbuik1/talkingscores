@@ -169,7 +169,9 @@ class BasicFunctionalityTests(TestCase):
         # The file rules sit above the control they govern, not under it.
         self.assertLess(content.index("up to 10 MB"), content.index('type="file"'))
         # The rules are attached to the control, so they are read out with it.
-        self.assertIn('aria-describedby="file-rules file-drop-hint"', content)
+        self.assertIn('aria-describedby="file-rules"', content)
+        # Dragging a file needs a mouse, so its hint is kept from screen readers.
+        self.assertIn('id="file-drop-hint" aria-hidden="true"', content)
         self.assertIn('id="file-rules"', content)
         self.assertIn('accept=".xml,.musicxml,.mxl"', content)
         self.assertIn("Open score", content)
@@ -242,7 +244,7 @@ class BasicFunctionalityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         # role="status" is a polite live region in its own right.
         self.assertContains(response, 'role="status"')
-        self.assertContains(response, "Starting to read the file")
+        self.assertContains(response, "Opening the file")
         mock_start.assert_called_once()
 
     @patch("talkingscoresapp.views.TSScore.state", return_value="fetching")
@@ -914,7 +916,7 @@ class CacheAndMaintenanceTests(TestCase):
                         with self.assertRaises(ValueError):
                             score.html(force_refresh=True, raise_errors=True)
 
-                        self.assertIn("The talking score could not be generated", score.html(force_refresh=True))
+                        self.assertIn("The talking score could not be created", score.html(force_refresh=True))
 
     @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
     @patch("talkingscoresapp.models.Music21TalkingScore")
@@ -1537,7 +1539,7 @@ class ReviewedEngineTests(TestCase):
         # The style choice is the page; every other setting is folded away behind it.
         first_disclosure = content.index("<details")
         self.assertLess(content.index('name="style"'), first_disclosure)
-        self.assertIn("Generate talking score", content)
+        self.assertIn("Create talking score", content)
 
         form = content[content.index('<form class="form"'):]
         outside = re.findall(r'name="([^"]+)"', form[:form.index("<details")])
@@ -2738,7 +2740,7 @@ class FindAScorePageTests(TestCase):
         response = self.client.get(reverse("find-a-score"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Scores to start with")
+        self.assertContains(response, "Scores to try")
         self.assertContains(response, "Open talking score")
 
     def test_a_query_returns_the_matching_score(self):
