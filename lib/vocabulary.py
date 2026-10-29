@@ -5,6 +5,7 @@ Every method returns plain text. Colour classes are attached by the renderer,
 not here, so the same vocabulary serves the page, the text file and braille.
 """
 
+import re
 from fractions import Fraction
 
 BRITISH_DURATIONS = {
@@ -64,6 +65,17 @@ ACCIDENTAL_SYMBOLS = {
 ACCIDENTAL_ABBREVIATIONS = {
     'sharp': 'sh', 'flat': 'fl', 'natural': 'nat', 'double-sharp': 'dsh', 'double-flat': 'dfl',
 }
+
+def chord_figure_with_symbols(figure):
+    """A music21 chord figure with flats and sharps as ♭ and ♯: B-m7 becomes B♭m7.
+
+    music21 writes a flat as a minus sign after the letter, which a screen
+    reader says as "minus"; a sign written before a degree number (add #9) is
+    turned too.
+    """
+    figure = re.sub(r'([A-G])(-+)', lambda m: m.group(1) + '♭' * len(m.group(2)), figure)
+    return figure.replace('#', '♯')
+
 
 TIE_WORDS = {'start': 'tied to next', 'stop': 'tied from previous', 'continue': 'tied through'}
 
@@ -291,6 +303,7 @@ class Vocabulary:
         return f'{count}-note chord'
 
     def chord_symbol(self, figure):
+        figure = chord_figure_with_symbols(figure)
         if self.settings.abbreviations:
             return f'[{figure}]'
         return f'chord symbol {figure}'

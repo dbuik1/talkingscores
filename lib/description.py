@@ -327,13 +327,15 @@ class DescriptionBuilder:
         bar.after_notes = list(self.bar_endings.get(bar_number, []))
         self._add_repeat_notes(bar, part_index, bar_number)
 
-        has_sounding_event = any(
-            event.kind in SOUNDING_KINDS
+        # A chord symbol over rests is still read beat by beat: in a lead sheet
+        # the chords carry on through bars the melody leaves empty.
+        has_event_to_read = any(
+            event.kind in SOUNDING_KINDS or event.kind == "chord_symbol"
             for time_point in time_points
             for events in time_point["voices"].values()
             for event in events
         )
-        if not has_sounding_event:
+        if not has_event_to_read:
             bar.whole_bar_rest = True
             bar.rest_text = self.vocabulary.whole_bar_rest()
             return bar

@@ -2443,7 +2443,7 @@ class MidiFileTests(TestCase):
             with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
                 self._handler_in(temp_dir).make_midi_file(1, 2)
                 second = self._handler_in(temp_dir)
-                with patch("lib.midiHandler.converter.parse") as mock_parse:
+                with patch("lib.midiHandler.parse_score") as mock_parse:
                     self.assertTrue(second.make_midi_file(1, 2).endswith("b1e2.mid"))
                 mock_parse.assert_not_called()
 
@@ -2775,3 +2775,66 @@ class UserFacingCopyTests(TestCase):
         scanner = os.path.join(os.getcwd(), "scripts", "check_copy.py")
         result = subprocess.run([sys.executable, scanner], capture_output=True, text=True, timeout=120)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+CHORD_SYMBOL_SCORE = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Melody</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>-4</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+      <harmony><root><root-step>C</root-step></root><kind text="7">dominant</kind>
+        <degree><degree-value>9</degree-value><degree-alter>1</degree-alter><degree-type>alter</degree-type></degree></harmony>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <harmony><root><root-step>B</root-step><root-alter>-1</root-alter></root><kind>minor-seventh</kind></harmony>
+      <note><rest/><duration>2</duration><type>half</type></note>
+      <harmony><root><root-step>E</root-step><root-alter>-1</root-alter></root><kind>dominant</kind></harmony>
+      <note><rest/><duration>2</duration><type>half</type></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+class ChordSymbolTests(TestCase):
+    """Lead sheets: chord symbols are read, named with flats and sharps, and never stop a score loading."""
+
+    def _text(self, xml):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "lead-sheet.musicxml")
+            with open(path, "w", encoding="utf-8") as score_file:
+                score_file.write(xml)
+            formatter = HTMLTalkingScoreFormatter(Music21TalkingScore(path), options={"style": "standard"})
+            with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+                return formatter.render_text()
+
+    def test_a_ninth_altered_on_a_seventh_chord_loads_as_an_added_ninth(self):
+        text = self._text(CHORD_SYMBOL_SCORE)
+        self.assertIn("chord symbol C7 add ♯9", text)
+
+    def test_files_music21_reads_as_written_are_not_rewritten(self):
+        from talkingscoreslib import parse_score
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "plain.musicxml")
+            with open(path, "w", encoding="utf-8") as score_file:
+                score_file.write(CHORD_SYMBOL_SCORE.replace("<degree-type>alter</degree-type>", "<degree-type>add</degree-type>"))
+            with patch("talkingscoreslib.add_degrees_missing_from_chord") as rewrite:
+                parse_score(path)
+        rewrite.assert_not_called()
+
+    def test_chord_symbols_are_named_with_flat_and_sharp_signs(self):
+        from lib.vocabulary import chord_figure_with_symbols
+        self.assertEqual(chord_figure_with_symbols("B-m7"), "B♭m7")
+        self.assertEqual(chord_figure_with_symbols("E--7/B-"), "E♭♭7/B♭")
+        self.assertEqual(chord_figure_with_symbols("C7 add #9"), "C7 add ♯9")
+        self.assertEqual(chord_figure_with_symbols("F#m7b5"), "F♯m7b5")
+
+    def test_a_bar_of_rests_under_chord_symbols_reads_the_chords(self):
+        text = self._text(CHORD_SYMBOL_SCORE)
+        self.assertIn("Beat 1 chord symbol B♭m7, minim rest, Beat 3 chord symbol E♭7, minim rest", text)
+        self.assertNotIn("Rests for the whole bar", text)
