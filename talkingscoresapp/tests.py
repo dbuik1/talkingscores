@@ -1521,7 +1521,7 @@ class ReviewedEngineTests(TestCase):
                                   "rhythm_range": [], "beat_division_options": []}
         response = self.client.get(reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
         self.assertContains(response, 'name="style"')
-        for name in ("Everyday words", "Musical terms", "Short", "Braille display", "Everything"):
+        for name in ("Everyday words", "Musical terms", "Short", "Braille display", "Every detail"):
             self.assertContains(response, f">{name}<")
 
     @patch("talkingscoresapp.views.TSScore.info")

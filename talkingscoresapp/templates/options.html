@@ -22,11 +22,16 @@
 {{ submitted|json_script:"rejected-settings" }}
 {% endif %}
 
-<form class="form" method="post" id="setup">
-    {% csrf_token %}
+{{ style_values|json_script:"style-values" }}
+<form id="appearance" onsubmit="return false"></form>
 
-    <fieldset>
-        <legend class="legend prompt">Style</legend>
+<form class="form options" method="post" id="setup">
+    {% csrf_token %}
+    <input type="hidden" name="customised" id="customised" value="false">
+
+    <fieldset class="option-section">
+        <legend class="section-title">How bars are written</legend>
+        <p class="hint" id="styles-hint">Each example is the same bar written in that style</p>
         <div class="cards">
             {% for choice in style_choices %}
             <div class="card">
@@ -36,202 +41,262 @@
                 <span class="sample{% if choice.mono %} mono{% endif %}" id="sample-{{ choice.id }}">{{ choice.sample }}</span>
             </div>
             {% endfor %}
+            <div class="card own" id="own-card" hidden>
+                <input type="radio" name="style" value="{{ chosen_style }}" id="style-own" aria-describedby="own-changes">
+                <label for="style-own"><span class="name" id="own-name">Your own</span><span class="who" id="own-changes"></span></label>
+            </div>
         </div>
     </fieldset>
 
-    <details{% if form.errors %} open{% endif %}>
-        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Advanced options</h2></summary>
-        <div class="panel">
+    <section class="option-section" aria-labelledby="text-title">
+        <h2 class="section-title" id="text-title">Text size and colours</h2>
+        <p class="hint">Applies to every score on this device, and to this page as you choose</p>
+        <fieldset class="field">
+            <legend>Text size</legend>
+            <div class="row">
+                <label class="check"><input type="radio" name="size" value="standard" form="appearance" checked>Standard</label>
+                <label class="check"><input type="radio" name="size" value="large" form="appearance">Large</label>
+                <label class="check"><input type="radio" name="size" value="xlarge" form="appearance">Extra large</label>
+                <label class="check"><input type="radio" name="size" value="browser" form="appearance">My browser’s size</label>
+            </div>
+        </fieldset>
+        <label class="check" id="interface-row"><input type="checkbox" id="setting-interface" form="appearance" checked>Make buttons and menus larger too</label>
+        <label class="goto"><span>Colours</span><select class="input" id="setting-theme" form="appearance"><option value="system">Match my system</option><option value="light">Light</option><option value="dark">Dark</option><option value="contrast">High contrast</option></select></label>
+    </section>
 
-            <fieldset class="box-set" aria-describedby="words-help">
-                <legend>Words</legend>
-                <p class="small muted" id="words-help">These change the Musical terms style only</p>
-                <div class="row">
-                    <span class="setting"><label for="rhythm_description">Rhythm names</label>
-                        <select class="input" name="rhythm_description" id="rhythm_description">
-                            <option value="british" selected>British (crotchet)</option>
-                            <option value="american">American (quarter note)</option>
-                            <option value="none">Do not say the rhythm</option>
-                        </select></span>
-                    <span class="setting"><label for="rhythm_announcement">Say the rhythm</label>
-                        <select class="input" name="rhythm_announcement" id="rhythm_announcement">
-                            <option value="onChange" selected>When it changes</option>
-                            <option value="everyNote">On every note</option>
-                        </select></span>
-                    <span class="setting"><label for="dot_position">Dotted rhythms</label>
-                        <select class="input" name="dot_position" id="dot_position">
-                            <option value="before" selected>Dotted crotchet</option>
-                            <option value="after">Crotchet dotted</option>
-                        </select></span>
-                </div>
-                <div class="row">
-                    <span class="setting"><label for="pitch_description">Pitch names</label>
-                        <select class="input" name="pitch_description" id="pitch_description">
-                            <option value="noteName" selected>Letters</option>
-                            <option value="colourNotes">Colours</option>
-                            <option value="phonetic">Phonetic alphabet</option>
-                            <option value="none">Do not say the pitch</option>
-                        </select></span>
-                    <span class="setting"><label for="octave_description">Octaves</label>
-                        <select class="input" name="octave_description" id="octave_description">
-                            <option value="name" selected>Around middle C</option>
-                            <option value="number">Numbered</option>
-                            <option value="none">Do not say the octave</option>
-                        </select></span>
-                    <span class="setting"><label for="octave_announcement">Say the octave</label>
-                        <select class="input" name="octave_announcement" id="octave_announcement">
-                            <option value="onChange" selected>When it changes</option>
-                            <option value="brailleRules">By braille rules</option>
-                            <option value="everyNote">On every note</option>
-                            <option value="firstNote">On the first note of a group</option>
-                        </select></span>
-                    <span class="setting"><label for="octave_position">Octave position</label>
-                        <select class="input" name="octave_position" id="octave_position">
-                            <option value="before" selected>Before the pitch</option>
-                            <option value="after">After the pitch</option>
-                        </select></span>
-                </div>
-                <div class="row">
-                    <span class="setting"><label for="repetition_mode">Repeated bars</label>
-                        <select class="input" name="repetition_mode" id="repetition_mode">
-                            <option value="learning" selected>Say when a bar repeats the one before</option>
-                            <option value="detailed">Summarise every repeat in the piece</option>
-                            <option value="none">Write every bar out in full</option>
-                        </select></span>
-                </div>
-                <div class="row">
-                    <label class="check"><input type="checkbox" name="chk_include_rests" value="checked" checked> Rests</label>
-                    <label class="check"><input type="checkbox" name="chk_include_ties" value="checked" checked> Ties</label>
-                    <label class="check"><input type="checkbox" name="chk_include_slurs" value="checked" checked> Slurs</label>
-                    <label class="check"><input type="checkbox" name="chk_include_articulations" value="checked" checked> Articulations</label>
-                    <label class="check"><input type="checkbox" name="chk_include_directions" value="checked" checked> Written directions</label>
-                    <label class="check"><input type="checkbox" name="chk_include_arpeggios" value="checked" checked> Arpeggios</label>
-                    <label class="check"><input type="checkbox" name="chk_describe_chords" value="checked" checked> Chords</label>
-                    <label class="check"><input type="checkbox" name="chk_include_dynamics" value="checked" checked> Dynamics</label>
-                </div>
-            </fieldset>
+    <section class="option-section" aria-labelledby="details-title">
+        <h2 class="section-title" id="details-title">Change the details</h2>
+        <p class="hint">A change to the wording makes it your own, starting from the style chosen above</p>
 
-            <fieldset class="box-set">
-                <legend>Accidentals</legend>
-                <div class="row">
-                    <span class="setting"><label for="accidental_style">Written as</label>
-                        <select class="input" name="accidental_style" id="accidental_style">
-                            <option value="words" selected>Words</option>
-                            <option value="symbols">Symbols</option>
-                        </select></span>
-                    <span class="setting"><label for="key_signature_accidentals">Say the accidental</label>
-                        <select class="input" name="key_signature_accidentals" id="key_signature_accidentals">
-                            <option value="sounding" selected>On every note that sounds sharp or flat</option>
-                            <option value="on_change">When it changes</option>
-                            <option value="printed">Only where the music prints one</option>
-                        </select></span>
-                </div>
-            </fieldset>
+        <div class="sections">
+        <details class="section" name="option-details">
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="label">Rhythm and pitch</span><span class="current" data-summary="rhythm_description pitch_description"></span></summary>
+            <div class="section-body">
+                <span class="setting"><label for="rhythm_description">Rhythm names</label>
+                    <select class="input" name="rhythm_description" id="rhythm_description">
+                        <option value="british" selected>British (crotchet, quaver)</option>
+                        <option value="american">American (quarter note, eighth note)</option>
+                        <option value="plain">Beats (1 beat, half a beat)</option>
+                        <option value="none">Leave out the rhythm</option>
+                    </select></span>
+                <span class="setting"><label for="rhythm_announcement">Say the rhythm</label>
+                    <select class="input" name="rhythm_announcement" id="rhythm_announcement">
+                        <option value="onChange" selected>When it changes</option>
+                        <option value="everyNote">On every note</option>
+                    </select></span>
+                <span class="setting"><label for="dot_position">Dotted rhythms</label>
+                    <select class="input" name="dot_position" id="dot_position">
+                        <option value="before" selected>Dotted crotchet</option>
+                        <option value="after">Crotchet dotted</option>
+                    </select></span>
+                <span class="setting"><label for="pitch_description">Pitch names</label>
+                    <select class="input" name="pitch_description" id="pitch_description">
+                        <option value="noteName" selected>Letters (C, D, E)</option>
+                        <option value="colourNotes">Colours (red, brown, grey)</option>
+                        <option value="phonetic">Phonetic alphabet (Charlie, Delta, Echo)</option>
+                        <option value="none">Leave out the pitch</option>
+                    </select></span>
+                <span class="setting"><label for="word_order">Order</label>
+                    <select class="input" name="word_order" id="word_order">
+                        <option value="rhythm_first" selected>Rhythm, then pitch (crotchet C)</option>
+                        <option value="pitch_first">Pitch, then rhythm (C crotchet)</option>
+                    </select></span>
+                <span class="setting"><label for="beat_prefix">Beat numbers</label>
+                    <select class="input" name="beat_prefix" id="beat_prefix">
+                        <option value="words" selected>In words (Beat 1)</option>
+                        <option value="short">Short (b1)</option>
+                        <option value="none">Leave out beat numbers</option>
+                    </select></span>
+            </div>
+        </details>
 
-            <fieldset class="box-set">
-                <legend>Parts</legend>
-                <p class="small muted" id="parts-help">Choose at least one part.</p>
-                <div class="row">
-                    {% for instrument in score_info.instruments %}
-                    <label class="check"><input type="checkbox" name="instruments" value="{{ forloop.counter }}" aria-describedby="parts-help"{% if instruments_invalid %} aria-invalid="true"{% endif %} checked> {{ instrument }}</label>
-                    {% endfor %}
-                </div>
-            </fieldset>
+        <details class="section" name="option-details">
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="label">Octaves and accidentals</span><span class="current" data-summary="octave_description accidental_style"></span></summary>
+            <div class="section-body">
+                <span class="setting"><label for="octave_description">Octaves</label>
+                    <select class="input" name="octave_description" id="octave_description">
+                        <option value="name" selected>Low, mid, high</option>
+                        <option value="plain">Low, middle, high</option>
+                        <option value="number">Numbers (middle C is C4)</option>
+                        <option value="none">Leave out the octave</option>
+                    </select></span>
+                <span class="setting"><label for="octave_announcement">Say the octave</label>
+                    <select class="input" name="octave_announcement" id="octave_announcement">
+                        <option value="onChange" selected>When it changes</option>
+                        <option value="brailleRules">By braille rules</option>
+                        <option value="everyNote">On every note</option>
+                        <option value="firstNote">On the first note of a group</option>
+                    </select></span>
+                <span class="setting"><label for="octave_position">Octave position</label>
+                    <select class="input" name="octave_position" id="octave_position">
+                        <option value="before" selected>Before the pitch (high C)</option>
+                        <option value="after">After the pitch (C 5)</option>
+                    </select></span>
+                <span class="setting"><label for="accidental_style">Accidentals</label>
+                    <select class="input" name="accidental_style" id="accidental_style" data-any-style>
+                        <option value="words" selected>Words (sharp, flat)</option>
+                        <option value="symbols">Symbols (♯, ♭)</option>
+                    </select></span>
+                <span class="setting"><label for="key_signature_accidentals">Say the accidental</label>
+                    <select class="input" name="key_signature_accidentals" id="key_signature_accidentals" data-any-style>
+                        <option value="sounding" selected>On every note that sounds sharp or flat</option>
+                        <option value="on_change">When it changes</option>
+                        <option value="printed">Only where the music prints one</option>
+                    </select></span>
+            </div>
+        </details>
 
-            <fieldset class="box-set">
-                <legend>Playback</legend>
-                <div class="row">
-                    <label class="check"><input type="checkbox" name="chk_playAll" value="checked" checked> Play every part together</label>
-                    <label class="check"><input type="checkbox" name="chk_playSelected" value="checked" checked> Play the parts written out</label>
-                    <label class="check"><input type="checkbox" name="chk_playUnselected" value="checked" checked> Play the parts left out</label>
-                </div>
-            </fieldset>
-
-            <fieldset class="box-set">
-                <legend>Colour</legend>
-                <div class="row">
-                    <label class="check"><input type="checkbox" name="chk_colourWords" id="colour_words" value="checked"> Colour the words</label>
-                </div>
-                <details class="plain" id="colour-detail">
-                    <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h3>Colours</h3></summary>
-                    <div style="display: flex; flex-direction: column; gap: 16px; padding: 12px 0 4px;">
-                        <label class="check"><input type="checkbox" name="chk_colourPitch" value="checked" checked> Colour by pitch</label>
-                        <fieldset class="field">
-                            <legend class="legend">Pitch colours</legend>
-                            <label class="check"><input type="radio" name="colorProfile" value="default" checked> Figurenotes</label>
-                            <label class="check"><input type="radio" name="colorProfile" value="classic"> Rainbow</label>
-                            <label class="check"><input type="radio" name="colorProfile" value="custom"> Pick each one</label>
-                            <div class="row" id="pitch-colours">
-                                {% for note in "CDEFGAB" %}
-                                <span class="setting"><label for="color_{{ note }}">{{ note }}</label>
-                                    <input type="color" id="color_{{ note }}" name="color_{{ note }}" value="{% if note == 'C' %}#FF0000{% elif note == 'D' %}#A52A2A{% elif note == 'E' %}#808080{% elif note == 'F' %}#0000FF{% elif note == 'G' %}#000000{% elif note == 'A' %}#FFFF00{% else %}#008000{% endif %}"></span>
-                                {% endfor %}
-                            </div>
-                        </fieldset>
-                        <span class="setting"><label for="rhythm_colour_mode">Colour by rhythm</label>
-                            <select class="input" name="rhythm_colour_mode" id="rhythm_colour_mode">
-                                <option value="none" selected>Off</option>
-                                <option value="inherit">Follow the pitch colours</option>
-                                <option value="custom">Pick each one</option>
-                            </select></span>
-                        {% if score_info.rhythm_range %}
-                        <div class="row" id="rhythm-colours">
-                            {% for rhythm in score_info.rhythm_range %}
-                            <span class="setting"><label for="color_rhythm_{{ rhythm.id_name }}">{{ rhythm.name }}</label>
-                                <input type="color" id="color_rhythm_{{ rhythm.id_name }}" name="color_rhythm_{{ rhythm.id_name }}" value="{{ rhythm.default_color }}"></span>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        <span class="setting"><label for="octave_colour_mode">Colour by octave</label>
-                            <select class="input" name="octave_colour_mode" id="octave_colour_mode">
-                                <option value="none" selected>Off</option>
-                                <option value="inherit">Follow the pitch colours</option>
-                                <option value="custom">Pick each one</option>
-                            </select></span>
-                        <div class="row" id="octave-colours">
-                            {% if score_info.octave_range.max >= 5 %}
-                            <span class="setting"><label for="color_octave_high">High</label>
-                                <input type="color" id="color_octave_high" name="color_octave_high" value="#FF4500"></span>
-                            {% endif %}
-                            {% if score_info.octave_range.min <= 4 and score_info.octave_range.max >= 4 %}
-                            <span class="setting"><label for="color_octave_mid">Middle</label>
-                                <input type="color" id="color_octave_mid" name="color_octave_mid" value="#B8860B"></span>
-                            {% endif %}
-                            {% if score_info.octave_range.min <= 3 %}
-                            <span class="setting"><label for="color_octave_low">Low</label>
-                                <input type="color" id="color_octave_low" name="color_octave_low" value="#4682B4"></span>
-                            {% endif %}
-                        </div>
+        <details class="section" name="option-details">
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="label">What is said</span><span class="current" data-summary="said"></span></summary>
+            <div class="section-body">
+                <fieldset class="field">
+                    <legend>Say these</legend>
+                    <div class="checks">
+                        <label class="check"><input type="checkbox" name="chk_include_ties" value="checked" checked>Ties</label>
+                        <label class="check"><input type="checkbox" name="chk_include_slurs" value="checked" checked>Slurs</label>
+                        <label class="check"><input type="checkbox" name="chk_include_articulations" value="checked" checked>Articulations (staccato, accent)</label>
+                        <label class="check"><input type="checkbox" name="chk_include_directions" value="checked" checked>Written directions (dolce)</label>
+                        <label class="check"><input type="checkbox" name="chk_include_dynamics" value="checked" checked>Dynamics (piano, forte)</label>
+                        <label class="check"><input type="checkbox" name="chk_include_arpeggios" value="checked" checked>Arpeggios</label>
+                        <label class="check"><input type="checkbox" name="chk_describe_chords" value="checked" checked>Number of notes in a chord</label>
                     </div>
-                </details>
-            </fieldset>
+                </fieldset>
+                <span class="setting"><label for="rests">Rests</label>
+                    <select class="input" name="rests" id="rests">
+                        <option value="all" selected>Every rest</option>
+                        <option value="structural">Rests of a beat or more, or that start a bar</option>
+                        <option value="none">Leave out rests</option>
+                    </select></span>
+                <span class="setting"><label for="repetition_mode">Repeated bars</label>
+                    <select class="input" name="repetition_mode" id="repetition_mode">
+                        <option value="learning" selected>Say when a bar repeats the one before</option>
+                        <option value="detailed">Summarise every repeat in the score</option>
+                        <option value="none">Write every bar out in full</option>
+                    </select></span>
+            </div>
+        </details>
 
-            <fieldset class="box-set">
-                <legend>Layout</legend>
-                <div class="row">
-                    <span class="setting"><label for="bars_at_a_time">Bars per group</label>
-                        <select class="input" name="bars_at_a_time" id="bars_at_a_time">
-                            <option value="1">1</option>
-                            <option value="2" selected>2</option>
-                            <option value="4">4</option>
-                            <option value="8">8</option>
-                        </select></span>
-                    <span class="setting"><label for="beat_division">Group the notes by</label>
-                        <select class="input" name="beat_division" id="beat_division">
-                            {% for option in score_info.beat_division_options %}
-                            <option value="{{ option.value }}"{% if forloop.counter == 2 %} selected{% endif %}>{{ option.display }}</option>
+        <details class="section" name="option-details">
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="label">Chords and voices</span><span class="current" data-summary="chord_symbol_reading"></span></summary>
+            <div class="section-body">
+                <label class="check"><input type="checkbox" name="chk_separate_voices" value="checked" data-any-style checked>Each voice on its own line</label>
+                <span class="setting"><label for="chord_symbol_reading">Chord symbols</label>
+                    <select class="input" name="chord_symbol_reading" id="chord_symbol_reading" data-any-style>
+                        <option value="name" selected>Name the chord (C seventh)</option>
+                        <option value="notes">Name the chord and its notes (C seventh, notes C, E, G and B flat)</option>
+                        <option value="written">As written (C7)</option>
+                        <option value="none">Leave them out</option>
+                    </select></span>
+                <label class="check"><input type="checkbox" name="chk_chord_symbol_line" value="checked" data-any-style checked>Chord symbols on their own line</label>
+            </div>
+        </details>
+
+        <details class="section" name="option-details"{% if instruments_invalid %} open{% endif %}>
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="label">Parts and playback</span><span class="current" data-summary="instruments"></span></summary>
+            <div class="section-body">
+                <fieldset class="field" aria-describedby="parts-help">
+                    <legend>Parts to write out</legend>
+                    <p class="hint" id="parts-help">Choose at least one part</p>
+                    <div class="checks">
+                        {% for instrument in score_info.instruments %}
+                        <label class="check"><input type="checkbox" name="instruments" value="{{ forloop.counter }}" data-any-style{% if instruments_invalid %} aria-invalid="true"{% endif %} checked>{{ instrument }}</label>
+                        {% endfor %}
+                    </div>
+                </fieldset>
+                <fieldset class="field" aria-describedby="playback-help">
+                    <legend>Choices under Parts to play</legend>
+                    <p class="hint" id="playback-help">Each one ticked is a choice in the score page’s playback settings</p>
+                    <div class="checks">
+                        <label class="check"><input type="checkbox" name="chk_playAll" value="checked" data-any-style checked>Every part together</label>
+                        <label class="check"><input type="checkbox" name="chk_playSelected" value="checked" data-any-style checked>The parts written out</label>
+                        <label class="check"><input type="checkbox" name="chk_playUnselected" value="checked" data-any-style checked>The parts left out</label>
+                    </div>
+                </fieldset>
+            </div>
+        </details>
+
+        <details class="section" name="option-details">
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="label">Colour the words</span><span class="current" data-summary="colour"></span></summary>
+            <div class="section-body">
+                <label class="check"><input type="checkbox" name="chk_colourWords" id="colour_words" value="checked" data-any-style>Colour the words</label>
+                <div class="colour-detail" id="colour-detail">
+                    <label class="check"><input type="checkbox" name="chk_colourPitch" value="checked" data-any-style checked>Colour by pitch</label>
+                    <fieldset class="field">
+                        <legend>Pitch colours</legend>
+                        <label class="check"><input type="radio" name="colorProfile" value="default" data-any-style checked>Figurenotes (C red, D brown, E grey)</label>
+                        <label class="check"><input type="radio" name="colorProfile" value="classic" data-any-style>Rainbow (C red, D orange, E yellow)</label>
+                        <label class="check"><input type="radio" name="colorProfile" value="custom" data-any-style>Choose my own</label>
+                        <div class="row" id="pitch-colours">
+                            {% for note in "CDEFGAB" %}
+                            <span class="setting"><label for="color_{{ note }}">{{ note }}</label>
+                                <input type="color" id="color_{{ note }}" name="color_{{ note }}" data-any-style value="{% if note == 'C' %}#FF0000{% elif note == 'D' %}#A52A2A{% elif note == 'E' %}#808080{% elif note == 'F' %}#0000FF{% elif note == 'G' %}#000000{% elif note == 'A' %}#FFFF00{% else %}#008000{% endif %}"></span>
                             {% endfor %}
+                        </div>
+                    </fieldset>
+                    <span class="setting"><label for="rhythm_colour_mode">Colour by rhythm</label>
+                        <select class="input" name="rhythm_colour_mode" id="rhythm_colour_mode" data-any-style>
+                            <option value="none" selected>Off</option>
+                            <option value="inherit">Use the pitch colours</option>
+                            <option value="custom">Choose my own</option>
                         </select></span>
+                    {% if score_info.rhythm_range %}
+                    <div class="row" id="rhythm-colours">
+                        {% for rhythm in score_info.rhythm_range %}
+                        <span class="setting"><label for="color_rhythm_{{ rhythm.id_name }}">{{ rhythm.name }}</label>
+                            <input type="color" id="color_rhythm_{{ rhythm.id_name }}" name="color_rhythm_{{ rhythm.id_name }}" data-any-style value="{{ rhythm.default_color }}"></span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <span class="setting"><label for="octave_colour_mode">Colour by octave</label>
+                        <select class="input" name="octave_colour_mode" id="octave_colour_mode" data-any-style>
+                            <option value="none" selected>Off</option>
+                            <option value="inherit">Use the pitch colours</option>
+                            <option value="custom">Choose my own</option>
+                        </select></span>
+                    <div class="row" id="octave-colours">
+                        {% if score_info.octave_range.max >= 5 %}
+                        <span class="setting"><label for="color_octave_high">High</label>
+                            <input type="color" id="color_octave_high" name="color_octave_high" data-any-style value="#FF4500"></span>
+                        {% endif %}
+                        {% if score_info.octave_range.min <= 4 and score_info.octave_range.max >= 4 %}
+                        <span class="setting"><label for="color_octave_mid">Middle</label>
+                            <input type="color" id="color_octave_mid" name="color_octave_mid" data-any-style value="#B8860B"></span>
+                        {% endif %}
+                        {% if score_info.octave_range.min <= 3 %}
+                        <span class="setting"><label for="color_octave_low">Low</label>
+                            <input type="color" id="color_octave_low" name="color_octave_low" data-any-style value="#4682B4"></span>
+                        {% endif %}
+                    </div>
                 </div>
-                <p class="small muted">Text size and the light or dark setting are on the talking score page, where you can see the effect.</p>
-            </fieldset>
+            </div>
+        </details>
+
+        <details class="section" name="option-details">
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="label">Groups</span><span class="current" data-summary="bars_at_a_time beat_division"></span></summary>
+            <div class="section-body">
+                <span class="setting"><label for="bars_at_a_time">Bars per group</label>
+                    <select class="input" name="bars_at_a_time" id="bars_at_a_time" data-any-style>
+                        <option value="1">1</option>
+                        <option value="2" selected>2</option>
+                        <option value="4">4</option>
+                        <option value="8">8</option>
+                    </select></span>
+                <span class="setting"><label for="beat_division">Group the notes by</label>
+                    <select class="input" name="beat_division" id="beat_division" data-any-style>
+                        {% for option in score_info.beat_division_options %}
+                        <option value="{{ option.value }}"{% if forloop.counter == 2 %} selected{% endif %}>{{ option.display }}</option>
+                        {% endfor %}
+                    </select></span>
+            </div>
+        </details>
         </div>
-    </details>
+    </section>
 
     <div class="actions">
-        <label class="check"><input type="checkbox" id="remember-setup"> Remember these options on this device</label>
-        <button class="btn primary" type="submit">Generate talking score</button>
+        <label class="check"><input type="checkbox" id="remember-setup" checked>Remember these options on this device</label>
+        <button class="btn primary" type="submit">Create talking score</button>
     </div>
+    <p class="live" id="options-live" aria-live="polite"></p>
 </form>
 {% endblock content %}
 
@@ -240,7 +305,129 @@
 (function () {
     var form = document.getElementById("setup");
     var remember = document.getElementById("remember-setup");
+    var customised = document.getElementById("customised");
+    var ownCard = document.getElementById("own-card");
+    var ownRadio = document.getElementById("style-own");
+    var ownName = document.getElementById("own-name");
+    var ownChanges = document.getElementById("own-changes");
+    var live = document.getElementById("options-live");
     var STORAGE_KEY = "talkingscores.setup";
+    var READER_KEY = "talkingscores.reader";
+    var styleValues = JSON.parse(document.getElementById("style-values").textContent);
+    var wordingNames = Object.keys(styleValues.standard || {});
+
+    function control(name) {
+        return form.elements.namedItem(name);
+    }
+
+    function presetRadios() {
+        return Array.prototype.filter.call(form.querySelectorAll('input[name="style"]'), function (radio) {
+            return radio !== ownRadio;
+        });
+    }
+
+    function baseStyle() {
+        if (ownRadio.checked) {
+            return ownRadio.value;
+        }
+        var picked = presetRadios().filter(function (radio) { return radio.checked; })[0];
+        return picked ? picked.value : "standard";
+    }
+
+    function styleName(id) {
+        var label = document.querySelector('label[for="style-' + id + '"] .name');
+        return label ? label.textContent : id;
+    }
+
+    function setValue(name, value) {
+        var element = control(name);
+        if (!element) { return; }
+        if (element.type === "checkbox") {
+            element.checked = Boolean(value);
+        } else {
+            element.value = value;
+        }
+    }
+
+    function readValue(name) {
+        var element = control(name);
+        if (!element) { return undefined; }
+        return element.type === "checkbox" ? element.checked : element.value;
+    }
+
+    function fillStyle(id) {
+        var values = styleValues[id];
+        if (!values) { return; }
+        wordingNames.forEach(function (name) { setValue(name, values[name]); });
+    }
+
+    // Names each wording detail that differs from the style it started from,
+    // using the words of the control's own label.
+    function changesFrom(id) {
+        var values = styleValues[id] || {};
+        return wordingNames.filter(function (name) {
+            return readValue(name) !== values[name];
+        }).map(function (name) {
+            var element = control(name);
+            var label = element.type === "checkbox" ? element.closest("label") : form.querySelector('label[for="' + element.id + '"]');
+            return label ? label.textContent.replace(/\s*\(.*\)$/, "").trim() : name;
+        });
+    }
+
+    function showOwn(announceIt) {
+        var base = baseStyle();
+        var changes = changesFrom(base);
+        if (!changes.length) {
+            customised.value = "false";
+            ownCard.hidden = true;
+            var radio = document.getElementById("style-" + base);
+            if (radio) { radio.checked = true; }
+            return;
+        }
+        customised.value = "true";
+        ownRadio.value = base;
+        ownRadio.checked = true;
+        ownCard.hidden = false;
+        ownName.textContent = "Your own, starting from " + styleName(base);
+        ownChanges.textContent = "Changed: " + changes.join(", ").toLowerCase().replace(/^./, function (c) { return c.toUpperCase(); });
+        if (announceIt) {
+            say("Your own wording, starting from " + styleName(base) + ".");
+        }
+    }
+
+    function say(text) {
+        live.textContent = "";
+        window.setTimeout(function () { live.textContent = text; }, 50);
+    }
+
+    // Each closed section names its current choices, so the setting can be heard
+    // without opening it.
+    function summarise() {
+        Array.prototype.forEach.call(form.querySelectorAll("[data-summary]"), function (target) {
+            var parts = target.getAttribute("data-summary").split(" ").map(function (key) {
+                if (key === "said") {
+                    var off = Array.prototype.filter.call(target.closest("details").querySelectorAll('input[type="checkbox"]'), function (box) {
+                        return !box.checked;
+                    }).length + (form.rests.value === "none" ? 1 : 0);
+                    return off ? off + " left out" : "Everything";
+                }
+                if (key === "instruments") {
+                    var parts = form.querySelectorAll('input[name="instruments"]');
+                    var ticked = form.querySelectorAll('input[name="instruments"]:checked');
+                    return ticked.length === parts.length ? "Every part" : ticked.length + " of " + parts.length + " parts";
+                }
+                if (key === "colour") {
+                    return form.chk_colourWords.checked ? "On" : "Off";
+                }
+                var element = control(key);
+                if (!element || !element.options) { return ""; }
+                var option = element.options[element.selectedIndex];
+                var text = option ? option.textContent.replace(/\s*\(.*\)$/, "") : "";
+                return key === "bars_at_a_time" ? text + (text === "1" ? " bar" : " bars") : text;
+            }).filter(Boolean);
+            target.textContent = parts.join(" · ");
+        });
+    }
 
     // The colours only apply once the words are coloured, and the pickers only
     // matter once something is set to use them.
@@ -251,6 +438,7 @@
             && form.colorProfile.value === "custom");
         show("rhythm-colours", colouring && form.rhythm_colour_mode.value === "custom");
         show("octave-colours", colouring && form.octave_colour_mode.value === "custom");
+        summarise();
     }
 
     function show(id, wanted) {
@@ -260,37 +448,52 @@
 
     function settings() {
         var saved = {};
-        Array.prototype.forEach.call(form.elements, function (control) {
-            if (!control.name || control.name === "csrfmiddlewaretoken" || control.name === "instruments") { return; }
-            if (control.type === "checkbox") {
-                saved[control.name] = control.checked;
-            } else if (control.type !== "radio" || control.checked) {
-                saved[control.name] = control.value;
+        Array.prototype.forEach.call(form.elements, function (element) {
+            if (!element.name || element.name === "csrfmiddlewaretoken" || element.name === "instruments") { return; }
+            if (element.type === "checkbox") {
+                saved[element.name] = element.checked;
+            } else if (element.type !== "radio" || element.checked) {
+                saved[element.name] = element.value;
             }
         });
         return saved;
     }
 
-    function restore(saved, tickRemember) {
+    function restore(saved) {
         if (!saved) { return; }
-        if (tickRemember) { remember.checked = true; }
-        Array.prototype.forEach.call(form.elements, function (control) {
-            if (!(control.name in saved)) { return; }
-            if (control.type === "checkbox") {
-                control.checked = Boolean(saved[control.name]);
-            } else if (control.type === "radio") {
-                control.checked = control.value === saved[control.name];
+        Array.prototype.forEach.call(form.elements, function (element) {
+            if (!(element.name in saved) || element === ownRadio) { return; }
+            if (element.type === "checkbox") {
+                element.checked = Boolean(saved[element.name]);
+            } else if (element.type === "radio") {
+                element.checked = element.value === saved[element.name];
             } else {
                 // A score with different parts or a later list of choices leaves the
                 // control on what the page was written with rather than on nothing.
-                var written = control.value;
-                control.value = saved[control.name];
-                if (control.selectedIndex === -1) { control.value = written; }
+                var written = element.value;
+                element.value = saved[element.name];
+                if (element.selectedIndex === -1) { element.value = written; }
             }
         });
+        // Options kept before the details could be changed under every style hold
+        // that style's own wording, not what the hidden form fields said.
+        if (saved.customised !== "true") {
+            fillStyle(baseStyle());
+        }
     }
 
-    form.addEventListener("change", reflect);
+    form.addEventListener("change", function (event) {
+        var target = event.target;
+        if (target.name === "style" && target !== ownRadio) {
+            fillStyle(target.value);
+            customised.value = "false";
+            ownCard.hidden = true;
+        } else if (wordingNames.indexOf(target.name) !== -1) {
+            var wasOwn = customised.value === "true";
+            showOwn(!wasOwn);
+        }
+        reflect();
+    });
     form.addEventListener("submit", function () {
         try {
             if (remember.checked) {
@@ -303,9 +506,9 @@
         }
     });
 
-    function stored() {
+    function stored(key) {
         try {
-            return JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "null");
+            return JSON.parse(window.localStorage.getItem(key) || "null");
         } catch (error) {
             return null;
         }
@@ -316,11 +519,78 @@
     // whatever was kept from the last score.
     var rejected = document.getElementById("rejected-settings");
     if (rejected) {
-        restore(JSON.parse(rejected.textContent), false);
+        restore(JSON.parse(rejected.textContent));
     } else {
-        restore(stored(), true);
+        restore(stored(STORAGE_KEY));
+    }
+    if (customised.value === "true") {
+        showOwn(false);
     }
     reflect();
+
+    // Text size and colours are the reading page's own settings, kept under its key,
+    // and the page takes them on as soon as they are chosen.
+    var appearance = document.getElementById("appearance");
+    var reader = stored(READER_KEY) || {};
+    var root = document.documentElement;
+    var interfaceBox = document.getElementById("setting-interface");
+    var interfaceRow = document.getElementById("interface-row");
+    var theme = document.getElementById("setting-theme");
+    var sizes = document.querySelectorAll('input[name="size"][form="appearance"]');
+
+    function applyReader() {
+        var size = reader.size;
+        if (size === "large" || size === "xlarge" || size === "browser") {
+            root.setAttribute("data-size", size);
+        } else {
+            root.removeAttribute("data-size");
+        }
+        var scaled = (size === "large" || size === "xlarge") && reader.interface !== false;
+        if (scaled) {
+            root.setAttribute("data-interface", size);
+        } else {
+            root.removeAttribute("data-interface");
+        }
+        if (reader.theme && reader.theme !== "system") {
+            root.setAttribute("data-theme", reader.theme);
+        } else {
+            root.removeAttribute("data-theme");
+        }
+        interfaceRow.hidden = !(size === "large" || size === "xlarge");
+    }
+
+    function saveReader() {
+        try {
+            var latest = stored(READER_KEY) || {};
+            latest.size = reader.size;
+            latest.theme = reader.theme;
+            latest.interface = reader.interface;
+            window.localStorage.setItem(READER_KEY, JSON.stringify(latest));
+        } catch (error) {
+            // Without storage the choice lasts until the page is left.
+        }
+    }
+
+    Array.prototype.forEach.call(sizes, function (input) {
+        input.checked = input.value === (reader.size || "standard");
+    });
+    interfaceBox.checked = reader.interface !== false;
+    theme.value = reader.theme || "system";
+    applyReader();
+    // These controls sit inside the options form on the page but belong to the
+    // appearance form, so their change events bubble through the options form.
+    document.addEventListener("change", function (event) {
+        if (event.target.form !== appearance) { return; }
+        if (event.target.name === "size") {
+            reader.size = event.target.value === "standard" ? undefined : event.target.value;
+        } else if (event.target === interfaceBox) {
+            reader.interface = interfaceBox.checked ? undefined : false;
+        } else if (event.target === theme) {
+            reader.theme = theme.value;
+        }
+        applyReader();
+        saveReader();
+    });
 
     // The page comes back with what went wrong at the top, so the reader is put
     // there rather than at the start of a form they have already filled in.

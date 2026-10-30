@@ -74,6 +74,10 @@ html[data-theme="contrast"] {
 html[data-size="large"] { --note: 40px; }
 html[data-size="xlarge"] { --note: 56px; }
 html[data-size="browser"] { --note: 1.75rem; }
+/* Buttons, labels and hints are sized in rem, so raising the root size enlarges
+   everything but the note text, which --note sizes on its own. */
+html[data-interface="large"] { font-size: 125%; }
+html[data-interface="xlarge"] { font-size: 150%; }
 
 * { box-sizing: border-box; }
 
@@ -106,7 +110,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 6px var(--paper); }
 
 .wrap {
-    max-width: 880px;
+    max-width: 55rem;
     margin: 0 auto;
     padding: 40px 40px 64px;
     display: flex;
@@ -147,7 +151,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
     text-decoration: none;
     color: var(--ink);
 }
-.brand svg { width: 28px; height: 28px; }
+.brand svg { width: 1.75rem; height: 1.75rem; }
 .top nav { display: flex; gap: 24px; font-size: 1.0625rem; }
 
 .footer {
@@ -372,10 +376,10 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 
 body:not(.reader) main { display: flex; flex-direction: column; gap: 32px; }
 
-.lead { font-size: 22px; margin-top: 12px; }
+.lead { font-size: 1.375rem; margin-top: 12px; }
 
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.btn.primary { min-height: 60px; padding: 0 28px; font-size: 22px; }
+.btn.primary { min-height: 60px; padding: 0 28px; font-size: 1.375rem; }
 
 .form { display: flex; flex-direction: column; gap: 24px; }
 .form > .btn { align-self: flex-start; }
@@ -393,7 +397,7 @@ body:not(.reader) main { display: flex; flex-direction: column; gap: 32px; }
 .errors { margin: 0; padding-left: 20px; }
 .errors li + li { margin-top: 8px; }
 
-input[type="file"] { font: inherit; font-size: 18px; }
+input[type="file"] { font: inherit; font-size: 1.125rem; }
 input[type="file"]::file-selector-button {
     min-height: 48px;
     padding: 0 16px;
@@ -403,7 +407,7 @@ input[type="file"]::file-selector-button {
     background: var(--paper);
     color: var(--ink);
     font: inherit;
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 700;
     cursor: pointer;
 }
@@ -425,16 +429,16 @@ input[type="url"].input { width: 100%; max-width: 520px; }
 /* The sample sits outside the label, so the name and the line describing the
    style are the whole click target and the whole spoken name of the choice. */
 .card label { cursor: pointer; }
-.card .name { font-weight: 700; font-size: 22px; }
-.card .who { color: var(--muted); font-size: 17px; display: block; }
+.card .name { font-weight: 700; font-size: 1.375rem; }
+.card .who { color: var(--muted); font-size: 1.0625rem; display: block; }
 .card .sample {
     grid-column: 2;
     font-family: var(--font-heading);
-    font-size: 21px;
+    font-size: 1.3125rem;
     padding: 8px 12px;
     border-left: 3px solid var(--rule);
 }
-.card .sample.mono { font-family: "Atkinson Hyperlegible Mono", ui-monospace, Menlo, monospace; font-size: 18px; }
+.card .sample.mono { font-family: "Atkinson Hyperlegible Mono", ui-monospace, Menlo, monospace; font-size: 1.125rem; }
 
 /* Grouped settings behind the disclosure on the options page. */
 .box-set {
@@ -451,13 +455,31 @@ input[type="url"].input { width: 100%; max-width: 520px; }
 .setting { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
 .setting select.input { max-width: 100%; }
 
+/* The options page: three sections, the last a set of closed disclosures that
+   each name their current choices on the closed line. */
+.form.options { gap: 48px; }
+.option-section { display: flex; flex-direction: column; gap: 14px; }
+.section-title { font-family: var(--font-heading); font-size: 1.75rem; font-weight: 500; padding: 0; margin-bottom: 4px; }
+.hint { color: var(--muted); font-size: 1.0625rem; }
+.card.own { border-style: dashed; }
+.sections { display: flex; flex-direction: column; border-bottom: 1px solid var(--rule); }
+.section > summary { min-height: 56px; font-weight: 400; font-size: 1.1875rem; flex-wrap: wrap; column-gap: 12px; row-gap: 0; padding: 4px 0; }
+.section > summary .label { font-weight: 700; }
+.section > summary .current { margin-left: auto; color: var(--muted); font-size: 1.0625rem; }
+.section-body { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 4px 0 24px 2rem; }
+.checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 4px 24px; width: 100%; }
+.checks .check { min-height: 44px; }
+.colour-detail { display: flex; flex-direction: column; gap: 16px; }
 
-.noscript { border: 1px solid var(--rule); padding: 12px 16px; font-size: 18px; background: var(--panel); }
+
+.noscript { border: 1px solid var(--rule); padding: 12px 16px; font-size: 1.125rem; background: var(--panel); }
 
 @media (max-width: 640px) {
     body:not(.reader) main { gap: 20px; }
-    .lead { font-size: 20px; }
+    .lead { font-size: 1.25rem; }
     .card { grid-template-columns: 28px minmax(0, 1fr); padding: 14px 16px; }
+    .section-body { padding-left: 0; }
+    .section > summary .current { margin-left: calc(1em + 12px); flex-basis: 100%; }
 }
 
 .bullets { list-style: disc; padding-left: 24px; display: flex; flex-direction: column; gap: 6px; }
@@ -467,6 +489,6 @@ input[type="url"].input { width: 100%; max-width: 520px; }
 .changelog { display: flex; flex-direction: column; gap: 24px; }
 .entry { display: flex; flex-direction: column; gap: 8px; padding-bottom: 24px; border-bottom: 1px solid var(--rule); }
 .entry:last-child { border-bottom: 0; padding-bottom: 0; }
-.entry h2 { font-size: 20px; color: var(--muted); font-family: var(--font-body); font-weight: 700; }
+.entry h2 { font-size: 1.25rem; color: var(--muted); font-family: var(--font-body); font-weight: 700; }
 
 input[type="color"] { width: 56px; height: 40px; padding: 2px; border: 2px solid var(--muted); border-radius: 6px; background: var(--paper); }

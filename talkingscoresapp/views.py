@@ -20,7 +20,7 @@ from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProg
 from talkingscoresapp.models import RemoteAddressNotAllowed, RemoteHostNotFound, RemoteFetchRefused
 from talkingscoresapp.models import remove_file_quietly
 from talkingscoresapp import openscore
-from lib.render_settings import DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES
+from lib.render_settings import DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES, RenderSettings
 from lib.style_samples import style_samples
 
 
@@ -42,7 +42,7 @@ def submitted_settings(post):
 
 
 CHECKBOX_FIELDS = (
-    "chk_playAll", "chk_playSelected", "chk_playUnselected", "chk_include_rests",
+    "chk_playAll", "chk_playSelected", "chk_playUnselected",
     "chk_include_ties", "chk_include_arpeggios", "chk_include_dynamics",
     "chk_include_slurs", "chk_include_articulations", "chk_include_directions",
     "chk_describe_chords", "chk_colourPitch",
@@ -65,6 +65,53 @@ def style_choices():
         }
         for style_id in STYLE_IDS
     ]
+
+
+# The options form names some engine values differently; these turn a style's
+# own settings into the form's values, so picking a style on the page fills in
+# every detail that style sets.
+FORM_DURATION_FREQUENCY = {"on_change": "onChange", "every_note": "everyNote"}
+FORM_PITCH_NAMES = {"letters": "noteName", "phonetic": "phonetic", "colours": "colourNotes", "none": "none"}
+FORM_OCTAVE_NAMING = {"descriptive": "name", "plain": "plain", "numeric": "number",
+                      "figurenotes": "figureNotes", "none": "none"}
+FORM_OCTAVE_FREQUENCY = {"on_change": "onChange", "every_note": "everyNote",
+                         "first_note": "firstNote", "braille_rules": "brailleRules"}
+REST_CHOICES = ("all", "structural", "none")
+WORD_ORDER_CHOICES = ("rhythm_first", "pitch_first")
+BEAT_PREFIX_CHOICES = ("words", "short", "none")
+
+
+def form_values_for_style(style_id):
+    settings = RenderSettings.for_style(style_id)
+    return {
+        "rhythm_description": settings.duration_names,
+        "rhythm_announcement": FORM_DURATION_FREQUENCY.get(settings.duration_frequency, "onChange"),
+        "dot_position": settings.dot_position,
+        "pitch_description": FORM_PITCH_NAMES.get(settings.pitch_names, "noteName"),
+        "octave_description": FORM_OCTAVE_NAMING.get(settings.octave_naming, "name"),
+        "octave_announcement": FORM_OCTAVE_FREQUENCY.get(settings.octave_frequency, "onChange"),
+        "octave_position": "before" if settings.octave_before_pitch else "after",
+        "repetition_mode": settings.repetition_mode,
+        "rests": settings.rests,
+        "word_order": settings.word_order,
+        "beat_prefix": settings.beat_prefix,
+        "chk_include_ties": settings.ties,
+        "chk_include_slurs": settings.slurs,
+        "chk_include_articulations": settings.articulations,
+        "chk_include_directions": settings.directions,
+        "chk_include_arpeggios": settings.arpeggios,
+        "chk_describe_chords": settings.chords,
+        "chk_include_dynamics": settings.dynamics,
+    }
+
+
+def style_form_values():
+    return {style_id: form_values_for_style(style_id) for style_id in STYLE_IDS}
+
+
+def chosen(post, name, allowed, default):
+    value = post.get(name, default)
+    return value if value in allowed else default
 
 
 HEX_COLOUR_PATTERN = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
@@ -261,7 +308,6 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     chk_playAll = forms.BooleanField(required=False)
     chk_playSelected = forms.BooleanField(required=False)
     chk_playUnselected = forms.BooleanField(required=False)
-    chk_include_rests = forms.BooleanField(required=False)
     chk_include_ties = forms.BooleanField(required=False)
     chk_include_slurs = forms.BooleanField(required=False)
     chk_include_articulations = forms.BooleanField(required=False)
@@ -508,6 +554,7 @@ def options(request, id, filename):
         if not form.is_valid():
             add_rhythm_colour_defaults(score_info)
             context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
+                       'style_values': style_form_values(),
                        'chosen_style': clean_style(request.POST.get('style', '')),
                        'submitted': submitted_settings(request.POST)}
             return render(request, 'options.html', context)
@@ -519,6 +566,7 @@ def options(request, id, filename):
             add_rhythm_colour_defaults(score_info)
             # The part boxes are what the reader has to change, so they are marked as such.
             context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
+                       'style_values': style_form_values(),
                        'chosen_style': clean_style(request.POST.get('style', '')),
                        'submitted': submitted_settings(request.POST),
                        'instruments_invalid': True}
@@ -550,7 +598,10 @@ def options(request, id, filename):
             "octave_description": request.POST.get("octave_description", "name"),
             "octave_position": request.POST.get("octave_position", "before"),
             "octave_announcement": request.POST.get("octave_announcement", "onChange"),
-            "include_rests": "chk_include_rests" in request.POST,
+            "customised": request.POST.get("customised") == "true",
+            "rests": chosen(request.POST, "rests", REST_CHOICES, "all"),
+            "word_order": chosen(request.POST, "word_order", WORD_ORDER_CHOICES, "rhythm_first"),
+            "beat_prefix": chosen(request.POST, "beat_prefix", BEAT_PREFIX_CHOICES, "words"),
             "include_ties": "chk_include_ties" in request.POST,
             "slurs": "chk_include_slurs" in request.POST,
             "articulations": "chk_include_articulations" in request.POST,
@@ -580,6 +631,7 @@ def options(request, id, filename):
 
         form = TalkingScoreGenerationOptionsForm()
         context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
+                       'style_values': style_form_values(),
                    'chosen_style': DEFAULT_STYLE}
         return render(request, 'options.html', context)
 
