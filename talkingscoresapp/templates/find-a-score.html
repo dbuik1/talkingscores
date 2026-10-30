@@ -48,8 +48,8 @@
     {% for item in results %}
     <li>
         <div class="result">
-            <a href="{% url 'library-score' item.id %}"><strong>{{ item.title }}</strong><span class="visually-hidden"> by {{ item.composer }}</span></a>
-            <span class="small muted">{{ item.composer }}{% if item.set and item.set != item.title %} &middot; {{ item.set }}{% endif %} &middot; {{ item.collection }}</span>
+            <a href="{{ item.href }}"><strong>{{ item.title }}</strong>{% if item.composer %}<span class="visually-hidden"> by {{ item.composer }}</span>{% endif %}</a>
+            <span class="small muted">{% if item.composer %}{{ item.composer }} &middot; {% endif %}{% if item.set and item.set != item.title %}{{ item.set }} &middot; {% endif %}{{ item.collection }}{% if item.download %} &middot; <a href="{{ item.download }}">Download MusicXML<span class="visually-hidden"> of {{ item.title }}</span></a>{% endif %}</span>
         </div>
     </li>
     {% endfor %}
@@ -62,5 +62,8 @@
 {% endif %}
 {% endif %}
 
-<p class="small muted">These scores come from <a href="https://musescore.com/openscore-lieder-corpus" rel="noopener noreferrer">OpenScore</a> and from the <a href="https://www.music21.org/music21docs/about/referenceCorpus.html" rel="noopener noreferrer">music21 corpus</a>, and are free to read here.</p>
+{% if collection == shared_collection and not query %}
+<p class="small muted">Readers listed these talking scores themselves. To have one taken down, email <a href="mailto:contact@davidbuik.com">contact@davidbuik.com</a> with its link.</p>
+{% endif %}
+<p class="small muted">Library scores come from <a href="https://musescore.com/openscore-lieder-corpus" rel="noopener noreferrer">OpenScore</a> and from the <a href="https://www.music21.org/music21docs/about/referenceCorpus.html" rel="noopener noreferrer">music21 corpus</a>, and are free to read and download.</p>
 {% endblock content %}

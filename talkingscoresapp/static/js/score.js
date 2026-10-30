@@ -84,6 +84,7 @@
 
         wireSettings();
         wireShareLink();
+        showListing();
         var printButton = document.getElementById("print-score");
         if (printButton) {
             printButton.addEventListener("click", function () { window.print(); });
@@ -500,6 +501,34 @@
                 }
                 copied(done);
             });
+        }
+
+        // The talking score page is cached for every reader, so whether this
+        // browser may change the listing is asked for once the page loads.
+        function showListing() {
+            var field = document.getElementById("share-link");
+            var line = document.getElementById("listing-status");
+            if (!field || !line || !window.fetch) {
+                return;
+            }
+            fetch(field.getAttribute("data-path") + "/listing.json", { credentials: "same-origin" })
+                .then(function (response) { return response.ok ? response.json() : null; })
+                .then(function (listing) {
+                    if (!listing || !listing.known || listing.from_library) {
+                        return;
+                    }
+                    line.textContent = listing.listed
+                        ? "Listed in Find a score. "
+                        : "Private: only people with this link can open it. ";
+                    if (listing.can_change) {
+                        var change = document.createElement("a");
+                        change.href = listing.change_url;
+                        change.textContent = listing.listed ? "Change who can find it" : "Add it to the library";
+                        line.appendChild(change);
+                    }
+                    line.hidden = false;
+                })
+                .catch(function () {});
         }
 
         function wireSettings() {

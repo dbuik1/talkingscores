@@ -3054,6 +3054,202 @@ class ShareNameTests(TestCase):
                 self.assertIsNone(self.sharing.resolve(name, self.root))
 
 
+class LibraryDownloadTests(TestCase):
+    """Every library score's MusicXML can be downloaded from Find a score."""
+
+    def test_a_built_in_score_downloads_as_an_attachment(self):
+        response = self.client.get(reverse("library-musicxml", args=["bach-bwv269"]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment;", response["Content-Disposition"])
+        self.assertRegex(response["Content-Disposition"], r'filename="[^"/]+\.(mxl|xml|musicxml)"')
+        self.assertTrue(response.content)
+
+    def test_an_openscore_score_sends_the_browser_to_openscore(self):
+        from talkingscoresapp import library
+        entry = library.get("openscore-lc5015378")
+
+        response = self.client.get(reverse("library-musicxml", args=["openscore-lc5015378"]))
+
+        self.assertRedirects(response, entry["url"], fetch_redirect_response=False)
+
+    def test_an_unknown_score_goes_back_to_the_search(self):
+        response = self.client.get(reverse("library-musicxml", args=["no-such-score"]))
+
+        self.assertRedirects(response, reverse("find-a-score"), fetch_redirect_response=False)
+
+    def test_each_library_result_offers_its_download(self):
+        response = self.client.get(reverse("find-a-score"), {"q": "maple leaf"})
+
+        self.assertContains(response, 'href="/library/joplin-maple-leaf-rag/musicxml"')
+        self.assertContains(response, "Download MusicXML")
+
+
+class ListingRecordTests(TestCase):
+    """A score starts private, and saving options again keeps whatever listing was chosen."""
+
+    class Score:
+        def __init__(self, id, source=None):
+            self.id = id
+            self.filename = "score.musicxml"
+            self._source = source
+
+        def source(self):
+            return self._source
+
+    def setUp(self):
+        from talkingscoresapp import sharing
+        self.sharing = sharing
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.score = self.Score("c" * 64)
+        os.makedirs(os.path.join(self.root, self.score.id))
+        with open(os.path.join(self.root, self.score.id, self.score.filename), "w") as score_file:
+            score_file.write("<score-partwise/>")
+
+    def test_a_new_record_is_not_listed(self):
+        self.sharing.write_record(self.score, {}, self.root)
+
+        self.assertFalse(self.sharing.read_record("c" * 10, self.root).get("listed"))
+        self.assertEqual(self.sharing.listed_scores(self.root), [])
+
+    def test_saving_options_keeps_the_listing(self):
+        self.sharing.write_record(self.score, {}, self.root)
+        self.sharing.set_listed("c" * 10, True, "Night Song", "A. Reader", self.root)
+
+        self.sharing.write_record(self.score, {"bars_at_a_time": 4}, self.root)
+
+        record = self.sharing.read_record("c" * 10, self.root)
+        self.assertTrue(record["listed"])
+        self.assertEqual(record["title"], "Night Song")
+        self.assertEqual(record["options"], {"bars_at_a_time": 4})
+
+    def test_a_listed_upload_drops_out_once_its_file_is_gone(self):
+        self.sharing.write_record(self.score, {}, self.root)
+        self.sharing.set_listed("c" * 10, True, "Night Song", "", self.root)
+        self.assertEqual([code for code, _ in self.sharing.listed_scores(self.root)], ["c" * 10])
+
+        shutil.rmtree(os.path.join(self.root, self.score.id))
+
+        self.assertEqual(self.sharing.listed_scores(self.root), [])
+
+    def test_listing_a_score_with_no_record_fails(self):
+        with self.assertRaises(FileNotFoundError):
+            self.sharing.set_listed("d" * 10, True, root=self.root)
+
+
+class ScoreListingTests(TestCase):
+    """Only the browser that opened a file can list it, and an upload needs the rights box ticked."""
+
+    ENTRY = "bach-bwv269"
+
+    def setUp(self):
+        from talkingscoresapp import library, sharing
+        self.sharing = sharing
+        entry = library.get(self.ENTRY)
+        self.upload = SimpleUploadedFile(os.path.basename(entry["path"]), library.built_in_bytes(entry))
+        self.links = os.path.join(score_settings.MEDIA_ROOT, "links")
+        self.addCleanup(self.remove_stored)
+
+        response = self.client.post(reverse("index"), {"filename": self.upload})
+        match = re.search(r"/score/([0-9a-f]{64})/", response["Location"])
+        self.assertIsNotNone(match, response["Location"])
+        self.score_id = match.group(1)
+        self.code = self.score_id[:10]
+        score = next(TSScore(id=self.score_id, filename=name) for name in os.listdir(
+            os.path.join(score_settings.MEDIA_ROOT, self.score_id)) if name.endswith(".musicxml"))
+        views_module.write_options(score, views_module.default_options(score.info()))
+        self.name = sharing.share_name(score, "")
+
+    def remove_stored(self):
+        if not getattr(self, "code", None):
+            return
+        shutil.rmtree(os.path.join(score_settings.MEDIA_ROOT, self.score_id), ignore_errors=True)
+        for path in (os.path.join(self.links, f"{self.code}.json"), os.path.join(self.links, f"{self.code}.name"),
+                     os.path.join(self.links, "names", getattr(self, "name", "") or "-")):
+            score_models.remove_file_quietly(path)
+
+    def listing_url(self):
+        return reverse("score-listing", args=[self.name])
+
+    def test_opening_a_file_marks_this_browser_as_its_owner(self):
+        self.assertIn(self.code, views_module.owned_codes(self.client.get(self.listing_url()).wsgi_request))
+
+    def test_a_new_upload_is_private(self):
+        status = self.client.get(reverse("score-listing-status", args=[self.name])).json()
+
+        self.assertEqual(status, {"known": True, "listed": False, "can_change": True, "from_library": False,
+                                  "change_url": self.listing_url()})
+        self.assertContains(self.client.get(self.listing_url()), 'value="private" checked')
+
+    def test_listing_an_upload_needs_the_rights_box(self):
+        response = self.client.post(self.listing_url(), {"listing": "listed"})
+
+        self.assertContains(response, views_module.LISTING_RIGHTS_ERROR, status_code=400)
+        self.assertFalse(self.sharing.read_record(self.code).get("listed"))
+
+    def test_a_listed_upload_appears_in_find_a_score(self):
+        response = self.client.post(self.listing_url(), {"listing": "listed", "rights": "yes"})
+
+        self.assertRedirects(response, f"/s/{self.name}", fetch_redirect_response=False)
+        self.assertTrue(self.sharing.read_record(self.code)["listed"])
+        found = self.client.get(reverse("find-a-score"), {"collection": "Shared by readers"})
+        self.assertContains(found, f'href="/s/{self.name}"')
+        self.assertNotContains(found, f'href="/s/{self.name}/musicxml"')
+        self.assertContains(found, "contact@davidbuik.com")
+
+    def test_making_it_private_again_takes_it_out(self):
+        self.client.post(self.listing_url(), {"listing": "listed", "rights": "yes"})
+        self.client.post(self.listing_url(), {"listing": "private"})
+
+        found = self.client.get(reverse("find-a-score"), {"q": "chorale"})
+        self.assertNotContains(found, f'href="/s/{self.name}"')
+
+    def test_another_browser_cannot_change_the_listing(self):
+        other = Client()
+
+        response = other.post(self.listing_url(), {"listing": "listed", "rights": "yes"})
+
+        self.assertContains(response, "can be changed only in the browser that opened the file")
+        self.assertFalse(self.sharing.read_record(self.code).get("listed"))
+        self.assertFalse(other.get(reverse("score-listing-status", args=[self.name])).json()["can_change"])
+
+    def test_an_unknown_link_has_no_listing(self):
+        self.assertEqual(self.client.get(reverse("score-listing-status", args=["0000000000"])).json(), {"known": False})
+
+
+class LibraryListingTests(TestCase):
+    """A library score is always findable, so its listing cannot be changed."""
+
+    ENTRY = "bach-bwv269"
+
+    def setUp(self):
+        from talkingscoresapp import library
+        self.score = views_module.store_library_entry(library.get(self.ENTRY))
+        self.code = self.score.id[:10]
+        links = os.path.join(score_settings.MEDIA_ROOT, "links")
+        self.addCleanup(lambda: (
+            shutil.rmtree(os.path.dirname(self.score.get_data_file_path()), ignore_errors=True),
+            score_models.remove_file_quietly(os.path.join(links, f"{self.code}.json")),
+            score_models.remove_file_quietly(os.path.join(links, f"{self.code}.name")),
+            score_models.remove_file_quietly(os.path.join(links, "names", "aus-meines-herzens-grunde-bwv-269")),
+        ))
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+    def test_a_library_score_says_it_is_in_the_library(self):
+        response = self.client.post(reverse("score-listing", args=[self.code]), {"listing": "listed"})
+
+        self.assertContains(response, "This score is from the library")
+        self.assertTrue(self.client.get(reverse("score-listing-status", args=[self.code])).json()["from_library"])
+        self.assertFalse(self.client.get(reverse("score-listing-status", args=[self.code])).json()["can_change"])
+
+    def test_the_talking_score_has_a_place_for_the_listing(self):
+        with patch("talkingscoreslib.HTMLTalkingScoreFormatter._trigger_midi_generation"):
+            html = TSScore(id=self.score.id, filename=self.score.filename).html(raise_errors=True)
+
+        self.assertIn('id="listing-status" hidden', html)
+
+
 class MidiPlayerPageTests(TestCase):
     def test_the_page_offers_a_file_field_and_loads_the_synthesizer(self):
         response = self.client.get(reverse("midi-player"))

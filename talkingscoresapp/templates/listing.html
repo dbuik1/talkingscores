@@ -1,0 +1,38 @@
+{% extends "base_site.html" %}
+
+{% block title %}Library listing - Talking Scores{% endblock %}
+{% block noindex %}<meta name="robots" content="noindex">{% endblock %}
+
+{% block content %}
+<div>
+    <h1>Library listing</h1>
+    <p class="lead">Choose who can find this talking score.</p>
+</div>
+
+{% if from_library %}
+<p class="callout">This score is from the library, so anyone can find it in <a href="{% url 'find-a-score' %}">Find a score</a>.</p>
+<p><a href="{{ link }}">Back to the talking score</a></p>
+{% elif not can_change %}
+<p class="callout">{% if record.listed %}This talking score is listed in Find a score.{% else %}This talking score is private. Only people with its link can open it.{% endif %} The listing can be changed only in the browser that opened the file.</p>
+<p><a href="{{ link }}">Back to the talking score</a></p>
+{% else %}
+{% if error %}
+<div class="callout error-callout" id="listing-error" tabindex="-1"><p><a href="#rights">{{ error }}</a></p></div>
+<script>document.getElementById("listing-error").focus();</script>
+{% endif %}
+<form class="form" method="post">
+    {% csrf_token %}
+    <fieldset class="field">
+        <legend>Who can find it</legend>
+        <label class="check"><input type="radio" name="listing" value="private"{% if choice == "private" %} checked{% endif %}> Private: only people with the link can open it</label>
+        <label class="check"><input type="radio" name="listing" value="listed"{% if choice == "listed" %} checked{% endif %}> Listed: anyone can find it in Find a score</label>
+    </fieldset>
+    {% if uploaded %}
+    <label class="check"><input type="checkbox" name="rights" value="yes" id="rights" aria-describedby="rights-hint"{% if error %} aria-invalid="true"{% endif %}> I can share this score</label>
+    <p class="small muted" id="rights-hint">For example, it is out of copyright, or I wrote or arranged it. Needed to list an uploaded file; others can open the talking score, not the file</p>
+    {% endif %}
+    <button class="btn primary" type="submit">Save and go back</button>
+</form>
+<p class="small muted">Saving takes you back to <a href="{{ link }}">the talking score</a>. To have a listed score taken down, email <a href="mailto:contact@davidbuik.com">contact@davidbuik.com</a> with its link.</p>
+{% endif %}
+{% endblock content %}

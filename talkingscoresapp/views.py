@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings as django_settings
 from django.http import HttpResponse, FileResponse, JsonResponse
 from django.template import loader
 from django.shortcuts import redirect, render
@@ -602,7 +603,9 @@ def index(request):
                     score = TSScore.from_url(url)
                 
                 if score:
-                    return redirect('score', id=score.id, filename=score.filename)
+                    response = redirect('score', id=score.id, filename=score.filename)
+                    remember_owner(request, response, score.id)
+                    return response
 
             except Exception as ex:
                 messages.error(request, open_failure_message(ex))
@@ -659,7 +662,7 @@ def find_a_score(request):
         page = max(1, int(request.GET.get('page', '1')))
     except ValueError:
         page = 1
-    context = {'query': query, 'collection': collection, 'collections': collections,
+    context = {'shared_collection': library.SHARED_COLLECTION, 'query': query, 'collection': collection, 'collections': collections,
                'library_size': library.size()}
     if matches is None:
         context.update(results=library.suggestions(), total=None)
@@ -803,6 +806,96 @@ def shared_score(request, name):
         return redirect('score', *stored)
     messages.error(request, SHARED_SCORE_MISSING_MESSAGE)
     return redirect('index')
+
+
+def library_musicxml(request, entry_id):
+    """The score's own file: read from music21's corpus, or fetched by the browser from OpenScore."""
+    entry = library.get(entry_id)
+    if not entry:
+        messages.error(request, "That score is not in the library. Search for it by composer or title.")
+        return redirect('find-a-score')
+    if entry["source"] != "built-in":
+        return redirect(entry["url"])
+    extension = os.path.splitext(entry["path"])[1].lower()
+    content_type = "application/vnd.recordare.musicxml" if extension == ".mxl" else "application/vnd.recordare.musicxml+xml"
+    response = HttpResponse(library.built_in_bytes(entry), content_type=content_type)
+    response['Content-Disposition'] = f'attachment; filename="{safe_export_basename(entry["title"])}{extension}"'
+    return response
+
+
+# The browser that opened a file is the one allowed to list it in the library.
+# A signed cookie holds the codes of the scores it opened, newest last, so the
+# choice survives a restart without a database.
+OWNER_COOKIE = "talkingscores_owned"
+OWNER_COOKIE_SALT = "talkingscores.owned"
+MAX_OWNED_SCORES = 100
+OWNER_COOKIE_AGE = 365 * 24 * 60 * 60
+
+
+def owned_codes(request):
+    value = request.get_signed_cookie(OWNER_COOKIE, default="", salt=OWNER_COOKIE_SALT)
+    return [code for code in value.split(",") if sharing.SHORT_CODE_PATTERN.match(code)]
+
+
+def remember_owner(request, response, score_id):
+    code = sharing.short_code(score_id)
+    codes = [owned for owned in owned_codes(request) if owned != code] + [code]
+    response.set_signed_cookie(
+        OWNER_COOKIE, ",".join(codes[-MAX_OWNED_SCORES:]), salt=OWNER_COOKIE_SALT,
+        max_age=OWNER_COOKIE_AGE, httponly=True, samesite="Lax", secure=not django_settings.DEBUG,
+    )
+
+
+def listing_context(request, name):
+    """(code, record, can change, from the library) for a short link name, or None when it opens nothing."""
+    code = sharing.resolve(name)
+    record = sharing.read_record(code) if code else None
+    if not record:
+        return None
+    from_library = (record.get("source") or {}).get("kind") == "library"
+    return code, record, code in owned_codes(request) and not from_library, from_library
+
+
+def score_listing_status(request, name):
+    found = listing_context(request, name)
+    if not found:
+        return JsonResponse({"known": False})
+    code, record, can_change, from_library = found
+    return JsonResponse({
+        "known": True, "listed": bool(record.get("listed")), "can_change": can_change,
+        "from_library": from_library, "change_url": reverse('score-listing', args=[sharing.link_name(code)]),
+    })
+
+
+LISTING_RIGHTS_ERROR = "Tick the box to confirm you can share this score."
+
+
+def score_listing(request, name):
+    found = listing_context(request, name)
+    if not found:
+        messages.error(request, SHARED_SCORE_MISSING_MESSAGE)
+        return redirect('index')
+    code, record, can_change, from_library = found
+    link = f"/s/{sharing.link_name(code)}"
+    context = {"record": record, "link": link, "can_change": can_change, "from_library": from_library,
+               "uploaded": not record.get("source")}
+    if request.method == "POST" and can_change:
+        listed = request.POST.get("listing") == "listed"
+        if listed and context["uploaded"] and request.POST.get("rights") != "yes":
+            context.update(error=LISTING_RIGHTS_ERROR, choice="listed")
+            return render(request, "listing.html", context, status=400)
+        title, composer = record.get("title", ""), record.get("composer", "")
+        if listed:
+            # A score fetched from a web address may no longer be stored; it keeps the names it had.
+            try:
+                info = TSScore(id=record["id"], filename=record["filename"]).info()
+                title, composer = info.get("title", "") or title, info.get("composer", "") or composer
+            except Exception:
+                logger.exception(f"Could not read the title of {record['id']} to list it")
+        sharing.set_listed(code, listed, title, composer)
+        return redirect(link)
+    context["choice"] = "listed" if record.get("listed") else "private"
+    return render(request, "listing.html", context)
 
 
 def midi_player(request):

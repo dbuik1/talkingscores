@@ -15,7 +15,7 @@ from functools import lru_cache
 from music21 import common
 
 from talkingscores.settings import BASE_DIR
-from talkingscoresapp import openscore
+from talkingscoresapp import openscore, sharing
 
 BUILT_IN_INDEX_PATH = os.path.join(BASE_DIR, "talkingscoresapp", "data", "library.json")
 OPENSCORE_ID_PREFIX = "openscore-"
@@ -36,7 +36,27 @@ def _built_in():
             entries = json.load(index_file)
     except (OSError, json.JSONDecodeError):
         return []
-    return [dict(entry, source="built-in") for entry in entries]
+    return [dict(entry, source="built-in", **_addresses(entry["id"])) for entry in entries]
+
+
+SHARED_COLLECTION = "Shared by readers"
+
+
+def _addresses(entry_id):
+    return {"href": f"/library/{entry_id}", "download": f"/library/{entry_id}/musicxml"}
+
+
+def _shared():
+    """Talking scores readers chose to list. Read on every call, since a listing can change at any time."""
+    return [
+        {
+            "id": f"shared-{code}", "collection": SHARED_COLLECTION, "source": "shared",
+            "title": record.get("title") or "Untitled work", "composer": record.get("composer") or "",
+            "also": "", "set": "", "order": 0,
+            "href": f"/s/{sharing.link_name(code)}", "download": None,
+        }
+        for code, record in sharing.listed_scores()
+    ]
 
 
 def _openscore_id(entry):
@@ -51,7 +71,8 @@ OPENSCORE_COLLECTIONS = {"Lieder": "Songs"}
 def _openscore():
     return [
         dict(entry, id=_openscore_id(entry), source="openscore",
-             collection=OPENSCORE_COLLECTIONS.get(entry["collection"], entry["collection"]))
+             collection=OPENSCORE_COLLECTIONS.get(entry["collection"], entry["collection"]),
+             **_addresses(_openscore_id(entry)))
         for entry in openscore._entries()
     ]
 
@@ -74,11 +95,12 @@ def get(entry_id):
 
 
 def search(query):
-    """Every entry matching every word in query, across both catalogues, case- and accent-insensitively."""
+    """Every entry matching every word in query, across both catalogues and the shared scores, case- and accent-insensitively."""
     words = [openscore._fold(word) for word in query.split() if word]
     if not words:
         return []
-    return [entry for entry, text in _searchable() if all(word in text for word in words)]
+    shared = [(entry, openscore._fold(f"{entry['composer']} {entry['title']} {entry['collection']}")) for entry in _shared()]
+    return [entry for entry, text in _searchable() + shared if all(word in text for word in words)]
 
 
 def suggestions():
@@ -94,12 +116,14 @@ def examples():
 def collections():
     """(collection name, number of scores) for each collection, in the order the index lists them."""
     counts = {}
-    for entry in _built_in() + _openscore():
+    for entry in _built_in() + _openscore() + _shared():
         counts[entry["collection"]] = counts.get(entry["collection"], 0) + 1
     return list(counts.items())
 
 
 def in_collection(name):
+    if name == SHARED_COLLECTION:
+        return _shared()
     return [entry for entry in _built_in() + _openscore() if entry["collection"] == name]
 
 

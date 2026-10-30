@@ -87,7 +87,9 @@ Commit the resulting `openscore.json`.
 download: the MusicXML files music21 installs alongside itself, each named by
 hand or from music21's chorale tables. The "Find a score" page searches it
 together with the OpenScore catalogue, and each score has a lasting address,
-`/library/<id>`, that opens it as a talking score with the default options.
+`/library/<id>`, that opens it as a talking score with the default options,
+and `/library/<id>/musicxml`, that downloads its MusicXML. A built-in score is
+served from music21's corpus; an OpenScore score redirects to OpenScore.
 Rebuild the list after upgrading music21:
 
 ```bash
@@ -118,6 +120,20 @@ of the score, its source and its options under `MEDIA_ROOT/links`, which
 library therefore still opens after its folder has been removed: the file is
 fetched again and the options put back. A short link to an uploaded file works
 while the file is stored; after that its three words can name a new upload.
+
+## Listing a talking score
+
+Every opened score starts private: only people with its short link can open
+it. `/s/<name>/listing` lets the browser that opened the file list it in Find a
+score, under "Shared by readers", or make it private again. That browser is
+known by a signed cookie, `talkingscores_owned`, holding the codes of the last
+100 scores it opened. Listing an uploaded file needs a box ticked to confirm
+the reader can share it, and a listed upload shares its talking score, never
+the file. The choice is kept in the score's record under `MEDIA_ROOT/links`, so
+saving options again keeps it, and a listed upload drops out of Find a score
+once its file has been removed. Library scores are always findable and cannot
+be listed. The talking score page reads `/s/<name>/listing.json` to show the
+current listing, since the page itself is cached for every reader.
 
 ## MIDI player
 

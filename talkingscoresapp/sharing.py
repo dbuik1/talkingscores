@@ -40,17 +40,25 @@ def _record_path(code, root):
     return os.path.join(root, "links", f"{code}.json")
 
 
+# What a reader's choice to list a score in the library adds to its record.
+# Saving options again keeps them.
+LISTING_FIELDS = ("listed", "title", "composer")
+
+
 def write_record(score, options, root=MEDIA_ROOT):
     """Remember what /s/<code> opens: written beside the options each time they are saved."""
     from talkingscoresapp.models import write_text_file_atomic
 
-    record = {
+    code = short_code(score.id)
+    earlier = read_record(code, root) or {}
+    record = {key: earlier[key] for key in LISTING_FIELDS if key in earlier}
+    record.update({
         "id": score.id,
         "filename": score.filename,
         "source": score.source(),
         "options": options,
-    }
-    write_text_file_atomic(_record_path(short_code(score.id), root), json.dumps(record))
+    })
+    write_text_file_atomic(_record_path(code, root), json.dumps(record))
 
 
 def read_record(code, root=MEDIA_ROOT):
@@ -203,3 +211,46 @@ def resolve(name, root=MEDIA_ROOT):
     if SHORT_CODE_PATTERN.match(name):
         return name
     return None
+
+
+def set_listed(code, listed, title="", composer="", root=MEDIA_ROOT):
+    """List a score in Find a score, or take it out. Every score starts unlisted."""
+    from talkingscoresapp.models import write_text_file_atomic
+
+    record = read_record(code, root)
+    if record is None:
+        raise FileNotFoundError(code)
+    record["listed"] = bool(listed)
+    if listed:
+        record["title"] = title
+        record["composer"] = composer
+    write_text_file_atomic(_record_path(code, root), json.dumps(record))
+
+
+def listed_scores(root=MEDIA_ROOT):
+    """(code, record) for every score a reader listed that can still be opened, newest first."""
+    links = os.path.join(root, "links")
+    try:
+        names = os.listdir(links)
+    except OSError:
+        return []
+    found = []
+    for file_name in names:
+        code, extension = os.path.splitext(file_name)
+        if extension != ".json":
+            continue
+        record = read_record(code, root)
+        if not record or not record.get("listed"):
+            continue
+        stored = os.path.isfile(os.path.join(root, record["id"], os.path.basename(record["filename"])))
+        if not record.get("source") and not stored:
+            continue
+        found.append((os.path.getmtime(os.path.join(links, file_name)), code, record))
+    found.sort(reverse=True)
+    return [(code, record) for _, code, record in found]
+
+
+def link_name(code, root=MEDIA_ROOT):
+    """The name a score's short link uses, or its code before it has a name."""
+    chosen = _read_text(_name_of_code_path(code, root))
+    return chosen if chosen and resolve(chosen, root) == code else code
