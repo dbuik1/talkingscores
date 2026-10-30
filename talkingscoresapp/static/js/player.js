@@ -857,7 +857,7 @@
         }
 
         function replayIfPlaying() {
-            var said = reflectBalance() ? "Balance set to every part level. " : "";
+            var said = reflectBalance() ? "Balance set to all parts equal. " : "";
             if (playing || pending) {
                 // A run the read-aloud is waiting on keeps its caller when a setting
                 // starts it again.
