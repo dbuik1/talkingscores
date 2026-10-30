@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings as django_settings
 from django.http import HttpResponse, FileResponse, JsonResponse
 from django.template import loader
 from django.shortcuts import redirect, render
@@ -390,7 +391,14 @@ def score(request, id, filename):
     else:
         try:
             html = score_obj.html(raise_errors=True)
-            return HttpResponse(html)
+            if not django_settings.NATURAL_VOICES:
+                return HttpResponse(html)
+            # The page is written once and served many times, so whether it offers
+            # the natural voices is marked as it is served.
+            response = HttpResponse(html.replace("<html ", "<html data-natural-voices ", 1))
+            if not django_settings.DEBUG:
+                response["Content-Security-Policy"] = django_settings.READER_POLICY_WITH_NATURAL_VOICES
+            return response
         except ScoreGenerationInProgress:
             return redirect('process', id, filename)
         except Exception:

@@ -442,6 +442,7 @@
         // The reading page has one place where messages are spoken, so playback
         // reports through it rather than announcing from the toolbar as well.
         function report(text) {
+            reflectButtons();
             status(text);
             if (controls.announce) {
                 controls.announce(text);
@@ -771,6 +772,7 @@
             playing = false;
             silence(true);
             settle(false);
+            reflectButtons();
             // Stop answers every press, so a reader who cannot see the button knows
             // it reached the player whether or not anything was sounding.
             if (spoken) {
@@ -867,11 +869,47 @@
             }
         }
 
+        // Each play button becomes the stop button for what it started, so the
+        // reader finds Stop where they pressed Play.
+        function soundingFrom(button) {
+            if (!(playing || pending) || !target) {
+                return false;
+            }
+            return button === controls.playAll ? Boolean(target.whole) : !target.whole;
+        }
+
+        function reflectButtons() {
+            [[controls.play, "Play this group"], [controls.playAll, "Play the whole score"]].forEach(function (pair) {
+                var button = pair[0];
+                if (!button) {
+                    return;
+                }
+                var sounding = soundingFrom(button);
+                if (button.classList) {
+                    button.classList.toggle("sounding", sounding);
+                }
+                var label = (button.querySelector && button.querySelector(".label")) || button;
+                label.textContent = sounding ? "Stop playback" : pair[1];
+            });
+        }
+
         if (controls.play) {
-            controls.play.addEventListener("click", function () { play(group); });
+            controls.play.addEventListener("click", function () {
+                if (soundingFrom(controls.play)) {
+                    stop(true);
+                } else {
+                    play(group);
+                }
+            });
         }
         if (controls.playAll) {
-            controls.playAll.addEventListener("click", function () { play(whole); });
+            controls.playAll.addEventListener("click", function () {
+                if (soundingFrom(controls.playAll)) {
+                    stop(true);
+                } else {
+                    play(whole);
+                }
+            });
         }
         if (controls.stop) {
             controls.stop.addEventListener("click", function () { stop(true); });

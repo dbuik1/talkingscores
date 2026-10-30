@@ -223,17 +223,28 @@ select.input { padding-right: 10px; }
 .toolbar {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 10px 24px;
     align-items: center;
     padding: 12px 0;
-    border-top: 1px solid var(--rule);
+    border-top: 2px solid var(--ink);
     border-bottom: 1px solid var(--rule);
     font-size: 1.125rem;
+    background: var(--paper);
 }
-.toolbar .sep { width: 1px; align-self: stretch; background: var(--rule); margin: 0 4px; }
-.pos { font-weight: 700; }
-.status { display: flex; flex-direction: column; gap: 2px; font-size: 1rem; }
-.status b { font-weight: 700; }
+/* On by default and turned off under Settings: a magnified window has little
+   height to spare for a bar that never scrolls away. */
+/* A phone or a magnified window too short to spare the height leaves it in place. */
+@media (min-width: 641px) and (min-height: 600px) {
+    html.pin-controls .toolbar { position: sticky; top: 0; z-index: 2; }
+    html.pin-controls .group { scroll-margin-top: calc(var(--toolbar-height, 0px) + 8px); }
+}
+.toolbar .cluster { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pos { font-weight: 700; color: var(--ink); min-width: 9.5em; text-align: center; padding: 0 4px; }
+.status { flex-basis: 100%; font-size: 1.0625rem; color: var(--muted); }
+.status:empty { display: none; }
+.btn.listen { background: var(--accent); color: var(--accent-ink); }
+.btn .when-sounding, .btn.sounding .when-idle { display: none; }
+.btn.sounding .when-sounding { display: inline; }
 /* The message takes a line of its own whether or not there is one to show, so a
    rejected bar number does not move every button after it. */
 .error { color: var(--error); font-weight: 700; flex-basis: 100%; }
@@ -254,13 +265,10 @@ summary {
 summary::-webkit-details-marker { display: none; }
 summary .chev { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex: none; transition: transform 0.15s; }
 details[open] > summary .chev { transform: rotate(90deg); }
-/* The summary carries the heading a reader jumps between, so the heading sits
-   inside the control and takes the control's own type rather than a title's. */
-summary h2 { font: inherit; margin: 0; letter-spacing: normal; }
 
 .disc-row { display: flex; flex-wrap: wrap; gap: 8px 24px; }
 .disc-row > details { border: 0; }
-.disc-row > details > summary { min-height: 48px; font-size: 1.0625rem; font-weight: 400; }
+.disc-row > details > summary { min-height: 48px; font-size: 1.125rem; font-weight: 400; }
 .disc-row > details[open] { flex-basis: 100%; }
 
 .panel {
@@ -275,13 +283,37 @@ summary h2 { font: inherit; margin: 0; letter-spacing: normal; }
 }
 .panel .row { display: flex; gap: 16px 28px; align-items: center; flex-wrap: wrap; }
 .panel h2 { font-family: var(--font-body); font-size: 1.25rem; font-weight: 700; }
+.goto-row .error:empty { display: none; }
+
+/* Settings on the reading page: one tab list over four panels. */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--edge); margin: -8px 0 0; }
+.tab {
+    min-height: 48px;
+    padding: 0 14px;
+    border: 0;
+    border-bottom: 4px solid transparent;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: 1.125rem;
+    cursor: pointer;
+}
+.tab[aria-selected="true"] { font-weight: 700; border-bottom-color: var(--accent); }
+.tab-panel { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+.goto.stacked { flex-direction: column; align-items: flex-start; font-weight: 700; }
+.goto.stacked select { font-weight: 400; }
+.natural { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 16px; border: 1px solid var(--edge); border-radius: 6px; background: var(--paper); }
+.natural p { flex: 1 1 18rem; }
+.keys { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 20px; margin: 0; }
+.keys dt { font-weight: 700; }
+.keys dd { margin: 0; }
 
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field > legend, .field > .legend { font-weight: 700; padding: 0; }
 .legend.prompt { font-weight: 400; margin-bottom: 12px; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 
-.sizes { display: flex; flex-direction: column; gap: 12px; }
+.sizes { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 10px; width: 100%; }
 .size {
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr);
@@ -335,7 +367,10 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 /* Phone */
 @media (max-width: 640px) {
     .wrap { padding: 20px 16px 48px; gap: 20px; }
+    .toolbar .cluster { flex: 1 1 100%; }
+    .toolbar .pos { order: -1; flex-basis: 100%; text-align: left; padding: 0; }
     .toolbar .btn { flex: 1 1 auto; }
+    .disc-row { flex-direction: column; gap: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

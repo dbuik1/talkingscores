@@ -53,45 +53,121 @@
     <noscript><p class="callout noscript">Every bar is on this page. Use your browser's find command or the headings list to move between bars. Playback and the group controls need JavaScript.</p></noscript>
 
     <div class="toolbar" id="toolbar" role="group" aria-label="Talking score controls" hidden>
-        <label class="goto"><span>Bar number</span><input class="input" type="number" id="goto-bar" min="{{ score_data.firstPrintedBar }}" max="{{ score_data.lastPrintedBar }}" value="{{ score_data.firstPrintedBar }}" aria-describedby="goto-error"></label>
-        <button class="btn" type="button" id="goto-go">Go to bar</button>
-        <p class="error" id="goto-error"></p>
-        <button class="btn" type="button" id="previous-group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Previous group</button>
-        <button class="btn" type="button" id="next-group">Next group<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
-        <label class="goto"><span>Bars per group</span><select class="input" id="bars-per-group">{% for n in score_data.groupSizes %}<option value="{{ n }}"{% if n == score_data.barsPerGroup %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
-        <p class="pos" id="position"></p>
-        {% if score_data.midi %}
-        <span class="sep"></span>
-        <button class="btn" type="button" id="play-group" aria-describedby="playback-status-text"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"></path></svg>Play this group</button>
-        <button class="btn" type="button" id="play-whole-score" aria-describedby="playback-status-text"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l10 8-10 8z"></path><rect x="17" y="4" width="3" height="16"></rect></svg>Play the whole score</button>
-        <button class="btn" type="button" id="stop-playback"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12"></rect></svg>Stop playback</button>
-        <label class="goto"><span>Speed</span><select class="input" id="speed"><option value="25">25 %</option><option value="50">50 %</option><option value="75">75 %</option><option value="100" selected>100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
-        <p class="status"><b>Playback</b> <span id="playback-status-text">Nothing is playing.</span></p>
-        {% endif %}
-        <span class="sep"></span>
-        <button class="btn" type="button" id="read-again"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7"></path><path d="M4 4v5h5"></path></svg>Top of group</button>
-        <button class="btn" type="button" id="read-aloud" aria-describedby="read-aloud-status" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16 9a4 4 0 0 1 0 6"></path><path d="M18.5 6.5a8 8 0 0 1 0 11"></path></svg><span class="label">Read aloud</span></button>
-        <p class="status" id="read-aloud-status" hidden><b>Reading aloud</b> <span id="read-aloud-status-text">Nothing is being read.</span></p>
+        <div class="cluster">
+            <button class="btn" type="button" id="previous-group" aria-keyshortcuts="Alt+P"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Previous group</button>
+            <a class="pos" id="position" href="#score"></a>
+            <button class="btn" type="button" id="next-group" aria-keyshortcuts="Alt+N">Next group<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+        </div>
+        <div class="cluster">
+            <button class="btn listen" type="button" id="read-aloud" aria-keyshortcuts="Alt+R" aria-describedby="status-text" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16 9a4 4 0 0 1 0 6"></path><path d="M18.5 6.5a8 8 0 0 1 0 11"></path></svg><span class="label">Read aloud</span></button>
+            {% if score_data.midi %}
+            <button class="btn" type="button" id="play-group" aria-keyshortcuts="Alt+L" aria-describedby="status-text"><svg class="when-idle" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"></path></svg><svg class="when-sounding" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12"></rect></svg><span class="label">Play this group</span></button>
+            <button class="btn" type="button" id="play-whole-score" aria-describedby="status-text"><svg class="when-idle" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l10 8-10 8z"></path><path d="M18 4v16"></path></svg><svg class="when-sounding" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12"></rect></svg><span class="label">Play the whole score</span></button>
+            {% endif %}
+        </div>
+        <p class="status" id="status-text">{% if score_data.midi %}Nothing is playing.{% endif %}</p>
     </div>
     <p class="live" id="reader-live" aria-live="polite"></p>
     {% endif %}
 
     <div class="disc-row">
         {% if music_segments %}
-        <details>
-            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Contents</h2></summary>
-            <nav aria-label="Contents">
-            <ol class="contents" id="contents-list">
-                {% for segment in music_segments %}
-                <li><a href="#group-{{ segment.start_bar }}">{{ segment.label }}</a></li>
-                {% endfor %}
-            </ol>
-            </nav>
+        <details id="go-to" name="reader-panels">
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Go to a bar</summary>
+            <div class="panel">
+                <div class="row goto-row">
+                    <label class="goto"><span>Bar number</span><input class="input" type="number" id="goto-bar" min="{{ score_data.firstPrintedBar }}" max="{{ score_data.lastPrintedBar }}" value="{{ score_data.firstPrintedBar }}" aria-describedby="goto-error" aria-keyshortcuts="Alt+G"></label>
+                    <button class="btn" type="button" id="goto-go">Go to bar</button>
+                    <p class="error" id="goto-error"></p>
+                </div>
+                <nav aria-label="Groups">
+                <ol class="contents" id="contents-list">
+                    {% for segment in music_segments %}
+                    <li><a href="#group-{{ segment.start_bar }}">{{ segment.label }}</a></li>
+                    {% endfor %}
+                </ol>
+                </nav>
+            </div>
+        </details>
+        <details id="settings" name="reader-panels">
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Settings</summary>
+            <div class="panel settings">
+                <div class="tabs" role="tablist" aria-label="Settings" hidden>
+                    <button class="tab" type="button" role="tab" id="tab-text" aria-controls="panel-text" aria-selected="true">Text and colours</button>
+                    <button class="tab" type="button" role="tab" id="tab-reading" aria-controls="read-aloud-settings" aria-selected="false" tabindex="-1" hidden>Reading aloud</button>
+                    {% if score_data.midi %}<button class="tab" type="button" role="tab" id="tab-playback" aria-controls="panel-playback" aria-selected="false" tabindex="-1">Playback</button>{% endif %}
+                    <button class="tab" type="button" role="tab" id="tab-groups" aria-controls="panel-groups" aria-selected="false" tabindex="-1">Groups and keys</button>
+                </div>
+
+                <form class="tab-panel" id="panel-text" role="tabpanel" aria-labelledby="tab-text" onsubmit="return false">
+                    <fieldset class="field">
+                        <legend>Text size</legend>
+                        <div class="sizes">
+                            <label class="size"><input type="radio" name="size" value="standard" checked><span class="name">Standard</span><span class="demo" style="font-size:1.75rem">crotchet, high C</span></label>
+                            <label class="size"><input type="radio" name="size" value="large"><span class="name">Large</span><span class="demo" style="font-size:2.5rem">crotchet, high C</span></label>
+                            <label class="size"><input type="radio" name="size" value="xlarge"><span class="name">Extra large</span><span class="demo" style="font-size:3.5rem">crotchet, high C</span></label>
+                            <label class="size"><input type="radio" name="size" value="browser"><span class="name">My browser’s size</span><span class="demo hint">Follows your browser zoom or magnifier</span></label>
+                        </div>
+                    </fieldset>
+                    <label class="check" id="interface-row"><input type="checkbox" id="setting-interface" checked>Make buttons and menus larger too</label>
+                    <label class="check"><input type="checkbox" id="setting-stack" aria-describedby="stack-locked">One note per line</label>
+                    <p class="hint" id="stack-locked" hidden>Always on at Extra large</p>
+                    <label class="goto"><span>Colours</span><select class="input" id="setting-theme"><option value="system">Match my system</option><option value="light">Light</option><option value="dark">Dark</option><option value="contrast">High contrast</option></select></label>
+                    <p class="hint">Kept on this device{% if options_url %}; the wording is set under <a href="{{ options_url }}">Options</a>{% endif %}</p>
+                </form>
+
+                <form class="tab-panel" id="read-aloud-settings" role="tabpanel" aria-labelledby="tab-reading" onsubmit="return false" hidden>
+                    <label class="goto stacked"><span>Speaking voice</span><select class="input" id="setting-speaking-voice"><option value="">The device’s usual voice</option></select></label>
+                    <div class="natural" id="natural-voices" hidden>
+                        <p id="natural-voices-text">Natural voices sound closer to a person reading. They download once, about 90 MB, then work in this browser without a connection.</p>
+                        <button class="btn" type="button" id="download-voices"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"></path><path d="M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg>Download natural voices</button>
+                    </div>
+                    <div class="row">
+                        <label class="goto"><span>Reading speed</span><select class="input" id="setting-reading-speed"><option value="75">75 %</option><option value="100" selected>100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
+                        <button class="btn" type="button" id="try-voice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"></path></svg>Hear this voice</button>
+                    </div>
+                    {% if score_data.midi %}
+                    <label class="check"><input type="checkbox" id="setting-read-and-play">Play each bar after reading it</label>
+                    <label class="check"><input type="checkbox" id="setting-say-bars">Say each bar number during playback</label>
+                    {% endif %}
+                    <p class="hint">Pause your screen reader to hear one voice at a time</p>
+                </form>
+
+                {% if score_data.midi %}
+                <form class="tab-panel" id="panel-playback" role="tabpanel" aria-labelledby="tab-playback" onsubmit="return false" hidden>
+                    <div class="row">
+                        <label class="goto"><span>Speed</span><select class="input" id="speed"><option value="25">25 %</option><option value="50">50 %</option><option value="75">75 %</option><option value="100" selected>100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
+                        {% if score_data.midi.voices|length > 1 %}
+                        <label class="goto"><span>Parts to play</span><select class="input" id="setting-voice">{% for voice in score_data.midi.voices %}<option value="{{ loop.index0 }}">{{ voice.label }}</option>{% endfor %}</select></label>
+                        {% endif %}
+                        {% if score_data.midi.parts|length > 1 %}
+                        <label class="goto"><span>Balance</span><select class="input" id="setting-forward"><option value="">All parts equal</option>{% for part in score_data.midi.parts %}<option value="{{ part.index }}">{{ part.label }} louder</option>{% endfor %}</select></label>
+                        {% endif %}
+                    </div>
+                    <label class="check"><input type="checkbox" id="setting-click">Metronome click</label>
+                    <label class="check"><input type="checkbox" id="setting-repeat">Repeat playback</label>
+                    <label class="check"><input type="checkbox" id="setting-sampled" checked>Instrument sounds (an 8 MB download the first time)</label>
+                    <p class="hint">A change while anything is playing starts it again</p>
+                </form>
+                {% endif %}
+
+                <form class="tab-panel" id="panel-groups" role="tabpanel" aria-labelledby="tab-groups" onsubmit="return false" hidden>
+                    <label class="goto"><span>Bars per group</span><select class="input" id="bars-per-group">{% for n in score_data.groupSizes %}<option value="{{ n }}"{% if n == score_data.barsPerGroup %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+                    <label class="check"><input type="checkbox" id="setting-pin" checked>Keep the controls on screen while scrolling</label>
+                    <dl class="keys">
+                        <dt>Alt + N</dt><dd>Next group</dd>
+                        <dt>Alt + P</dt><dd>Previous group</dd>
+                        <dt>Alt + R</dt><dd>Read aloud, or stop reading</dd>
+                        {% if score_data.midi %}<dt>Alt + L</dt><dd>Play this group, or stop playback</dd>{% endif %}
+                        <dt>Alt + G</dt><dd>Go to a bar</dd>
+                    </dl>
+                </form>
+            </div>
         </details>
         {% endif %}
-        <details>
-            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>About this piece</h2></summary>
-            <div class="about">
+        <details id="about" name="reader-panels">
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>About this score</summary>
+            <div class="panel about">
                 <dl class="facts">
                     {% for fact in facts.piece %}<dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd>{% endfor %}
                 </dl>
@@ -106,67 +182,11 @@
                 <dl class="facts">{% for fact in part.facts %}<dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd>{% endfor %}</dl>
                 {% endif %}
                 {% endfor %}
-                <p class="small muted">Words: {{ style_name }}.</p>
+                <p class="hint">Style: {{ style_name }}</p>
             </div>
         </details>
-        <details>
-            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Text and colours</h2></summary>
-            <form class="panel" id="reading-settings-form" onsubmit="return false">
-                <fieldset class="field">
-                    <legend>Text size</legend>
-                    <div class="sizes">
-                        <label class="size"><input type="radio" name="size" value="standard" checked><span><span class="name">Standard</span> <span class="muted small">Fits two bars on a laptop screen.</span></span><span class="demo" style="font-size:1.75rem">crotchet, C above middle C</span></label>
-                        <label class="size"><input type="radio" name="size" value="large"><span><span class="name">Large</span> <span class="muted small">About 30 letters a line.</span></span><span class="demo" style="font-size:2.5rem">crotchet, C above middle C</span></label>
-                        <label class="size"><input type="radio" name="size" value="xlarge"><span><span class="name">Extra large</span> <span class="muted small">One note per line.</span></span><span class="demo" style="font-size:3.5rem">crotchet, C above middle C</span></label>
-                        <label class="size"><input type="radio" name="size" value="browser"><span><span class="name">Follow my browser</span> <span class="muted small">Uses the size set in your browser or magnifier.</span></span></label>
-                    </div>
-                </fieldset>
-                <div class="row">
-                    <label class="check"><input type="checkbox" id="setting-stack" aria-describedby="stack-locked">One note per line</label>
-                    <p class="small muted" id="stack-locked" hidden>Extra large sets one note per line.</p>
-                    <label class="goto"><span>Colours</span><select class="input" id="setting-theme"><option value="system">Match my system</option><option value="light">Light</option><option value="dark">Dark</option><option value="contrast">High contrast</option></select></label>
-                </div>
-                <p class="small muted">These stay on this device.{% if options_url %} The wording is set under <a href="{{ options_url }}">Options</a>.{% endif %}</p>
-            </form>
-        </details>
-        {% if score_data.midi %}
-        <details>
-            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Playback settings</h2></summary>
-            <form class="panel" id="playback-settings-form" onsubmit="return false">
-                {% if score_data.midi.voices|length > 1 or score_data.midi.parts|length > 1 %}
-                <div class="row">
-                    {% if score_data.midi.voices|length > 1 %}
-                    <label class="goto"><span>Parts to play</span><select class="input" id="setting-voice">{% for voice in score_data.midi.voices %}<option value="{{ loop.index0 }}">{{ voice.label }}</option>{% endfor %}</select></label>
-                    {% endif %}
-                    {% if score_data.midi.parts|length > 1 %}
-                    <label class="goto"><span>Balance</span><select class="input" id="setting-forward"><option value="">Every part level</option>{% for part in score_data.midi.parts %}<option value="{{ part.index }}">{{ part.label }} louder</option>{% endfor %}</select></label>
-                    {% endif %}
-                </div>
-                {% endif %}
-                <div class="row">
-                    <label class="check"><input type="checkbox" id="setting-click">Metronome click</label>
-                    <label class="check"><input type="checkbox" id="setting-repeat">Repeat playback</label>
-                    <label class="check"><input type="checkbox" id="setting-sampled" checked>Instrument sounds</label>
-                </div>
-                <p class="small muted">These stay on this device. Changing the parts, balance, click or sounds while anything is playing starts it again. The instrument sounds are an 8 MB download the first time you press play; without them the notes sound as simple tones.</p>
-            </form>
-        </details>
-        {% endif %}
-        <details id="read-aloud-settings" hidden>
-            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Reading aloud</h2></summary>
-            <form class="panel" id="read-aloud-settings-form" onsubmit="return false">
-                <div class="row">
-                    <label class="goto"><span>Reading speed</span><select class="input" id="setting-reading-speed"><option value="75">75 %</option><option value="100" selected>100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
-                    {% if score_data.midi %}
-                    <label class="check"><input type="checkbox" id="setting-read-and-play">Play each bar after reading it</label>
-                    <label class="check"><input type="checkbox" id="setting-say-bars">Say each bar number during playback</label>
-                    {% endif %}
-                </div>
-                <p class="small muted">These stay on this device. Reading aloud uses the voice your device speaks with; pause your screen reader to hear one voice at a time.</p>
-            </form>
-        </details>
-        <details>
-            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>{% if export_mode %}Print{% else %}Download or print{% endif %}</h2></summary>
+        <details id="download" name="reader-panels">
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>{% if export_mode %}Print{% else %}Download or print{% endif %}</summary>
             <div class="panel">
                 <div class="links">
                     {% if download_html_url %}<a class="btn" href="{{ download_html_url }}">Download as a web page</a>{% endif %}
