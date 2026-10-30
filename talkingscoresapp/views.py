@@ -6,6 +6,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.contrib import messages
 from django.utils.text import slugify
+from django.middleware.csrf import get_token
 from pathvalidate import sanitize_filename
 import os
 import json
@@ -108,6 +109,91 @@ def form_values_for_style(style_id):
 
 def style_form_values():
     return {style_id: form_values_for_style(style_id) for style_id in STYLE_IDS}
+
+
+COLOUR_PROFILES = {
+    "default": {"C": "#FF0000", "D": "#A52A2A", "E": "#808080", "F": "#0000FF", "G": "#000000", "A": "#FFFF00", "B": "#008000"},
+    "classic": {"C": "#FF0000", "D": "#FFA500", "E": "#FFFF00", "F": "#008000", "G": "#0000FF", "A": "#4B0082", "B": "#EE82EE"},
+}
+
+# Stored option -> the options form's checkbox that sets it.
+STORED_CHECKBOXES = {
+    "include_ties": "chk_include_ties", "slurs": "chk_include_slurs",
+    "articulations": "chk_include_articulations", "directions": "chk_include_directions",
+    "include_arpeggios": "chk_include_arpeggios", "describe_chords": "chk_describe_chords",
+    "include_dynamics": "chk_include_dynamics", "play_all": "chk_playAll",
+    "play_selected": "chk_playSelected", "play_unselected": "chk_playUnselected",
+    "colour_pitch": "chk_colourPitch", "separate_voices": "chk_separate_voices",
+    "chord_symbols_on_own_line": "chk_chord_symbol_line",
+}
+STORED_CHOICES = (
+    "style", "beat_division", "pitch_description", "rhythm_description", "dot_position",
+    "rhythm_announcement", "octave_description", "octave_position", "octave_announcement",
+    "accidental_style", "repetition_mode", "key_signature_accidentals", "rests", "word_order",
+    "beat_prefix", "rhythm_colour_mode", "octave_colour_mode",
+)
+
+
+def form_state_from_options(stored):
+    """The options form as it stood when these stored options were saved, in the
+    shape the page's script restores, so a score's own choices can be edited."""
+    state = {key: str(stored[key]) for key in STORED_CHOICES if stored.get(key) is not None}
+    if "bars_at_a_time" in stored:
+        state["bars_at_a_time"] = str(stored["bars_at_a_time"])
+    if "rests" not in stored and "include_rests" in stored:
+        state["rests"] = "all" if stored["include_rests"] else "none"
+    for key, checkbox in STORED_CHECKBOXES.items():
+        if key in stored:
+            state[checkbox] = bool(stored[key])
+    if "colour_position" in stored:
+        state["chk_colourWords"] = stored["colour_position"] != "none"
+    if stored.get("chord_symbols") is False:
+        state["chord_symbol_reading"] = "none"
+    elif stored.get("chord_symbol_reading"):
+        state["chord_symbol_reading"] = stored["chord_symbol_reading"]
+    state["customised"] = "true" if stored.get("customised") is True else "false"
+    if isinstance(stored.get("instruments"), list):
+        state["instruments"] = [str(number) for number in stored["instruments"]]
+
+    pitch = stored.get("figureNoteColours") or {}
+    profile = next((name for name, colours in COLOUR_PROFILES.items()
+                    if {k: v.upper() for k, v in pitch.items()} == colours), None)
+    state["colorProfile"] = profile or ("custom" if pitch else "default")
+    for note, colour in pitch.items():
+        state["color_" + note] = colour
+    for key, colour in (stored.get("advanced_rhythm_colours") or {}).items():
+        state["color_rhythm_" + key] = colour
+    for key, colour in (stored.get("advanced_octave_colours") or {}).items():
+        state["color_octave_" + key] = colour
+    return state
+
+
+def stored_options(options_path):
+    try:
+        with open(options_path) as options_file:
+            stored = json.load(options_file)
+        return stored if isinstance(stored, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def restyle(request, score_obj, options_path, id, filename):
+    """The score page's Wording tab: a new style over the options the score was
+    already made with, every other choice kept."""
+    stored = stored_options(options_path)
+    if stored is None:
+        return redirect('options', id, filename)
+    stored["style"] = clean_style(request.POST.get("style"))
+    stored["customised"] = False
+    write_json_file_atomic(options_path, stored)
+    score_obj.clear_generated_html_state()
+    return redirect('process', id, filename)
+
+
+def form_token(request):
+    """A token for the forms on talking score pages, which are written once and
+    served to everyone, so they cannot carry one of their own."""
+    return JsonResponse({"token": get_token(request)})
 
 
 def chosen(post, name, allowed, default):
@@ -557,6 +643,9 @@ def options(request, id, filename):
         logger.exception("Unable to process score before the options screen: http://%s%s " % (request.get_host(), reverse('score', args=[id, filename])))
         return redirect('error', id, filename)
 
+    if request.method == 'POST' and request.POST.get('restyle'):
+        return restyle(request, score_obj, options_path, id, filename)
+
     if request.method == 'POST':
         form = TalkingScoreGenerationOptionsForm(request.POST)
         if not form.is_valid():
@@ -580,16 +669,12 @@ def options(request, id, filename):
                        'instruments_invalid': True}
             return render(request, 'options.html', context)
 
-        color_profiles = {
-            "default": {"C": "#FF0000", "D": "#A52A2A", "E": "#808080", "F": "#0000FF", "G": "#000000", "A": "#FFFF00", "B": "#008000"},
-            "classic": {"C": "#FF0000", "D": "#FFA500", "E": "#FFFF00", "F": "#008000", "G": "#0000FF", "A": "#4B0082", "B": "#EE82EE"}
-        }
         selected_profile = request.POST.get("colorProfile", "default")
         figure_note_colours = {}
         if selected_profile == "custom":
             figure_note_colours = {key.split('_')[1]: val for key, val in request.POST.items() if key.startswith('color_') and not key.startswith('color_rhythm_') and not key.startswith('color_octave_')}
         else:
-            figure_note_colours = color_profiles.get(selected_profile, {})
+            figure_note_colours = COLOUR_PROFILES.get(selected_profile, {})
 
         options_data = {
             "style": clean_style(request.POST.get("style")),
@@ -638,9 +723,13 @@ def options(request, id, filename):
         add_rhythm_colour_defaults(score_info)
 
         form = TalkingScoreGenerationOptionsForm()
+        # A score that already has a talking score opens on the choices it was
+        # made with, so the reader changes only what they came back to change.
+        stored = stored_options(options_path)
+        current = form_state_from_options(stored) if stored else None
         context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
-                       'style_values': style_form_values(),
-                   'chosen_style': DEFAULT_STYLE}
+                   'style_values': style_form_values(), 'current': current,
+                   'chosen_style': clean_style(stored.get('style')) if stored else DEFAULT_STYLE}
         return render(request, 'options.html', context)
 
 

@@ -675,6 +675,34 @@
             select(tabs[0], false);
         }
 
+        // The page is written once and served to everyone, so its Wording form
+        // asks for a form token just before it is sent.
+        var wording = document.getElementById("panel-wording");
+        if (wording) {
+            wording.addEventListener("submit", function (event) {
+                event.preventDefault();
+                var error = document.getElementById("rewrite-error");
+                if (!wording.querySelector('input[name="style"]:checked')) {
+                    error.textContent = "Choose a style to rewrite the talking score in.";
+                    return;
+                }
+                var button = document.getElementById("rewrite-score");
+                button.disabled = true;
+                fetch("/form-token", { credentials: "same-origin" }).then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("no token");
+                    }
+                    return response.json();
+                }).then(function (answer) {
+                    wording.elements.csrfmiddlewaretoken.value = answer.token;
+                    wording.submit();
+                }, function () {
+                    button.disabled = false;
+                    error.textContent = "The talking score could not be rewritten. Check your connection and press Rewrite the talking score again.";
+                });
+            });
+        }
+
         // Playback choices are kept alongside the reading settings, so a reader who
         // needs half speed or the click sets them once. The speed, the click and the
         // repeat and the choice of sounds mean the same in any score. The instruments

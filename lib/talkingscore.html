@@ -40,6 +40,7 @@
         <span class="brand"><svg viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h20M4 13h20M4 18h20M4 23h20"></path><circle cx="17" cy="20.5" r="3" fill="currentColor" stroke="none"></circle><path d="M20 20.5V7l4 2"></path></svg><span>Talking Scores</span></span>
         {% else %}
         <a class="brand" href="/"><svg viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h20M4 13h20M4 18h20M4 23h20"></path><circle cx="17" cy="20.5" r="3" fill="currentColor" stroke="none"></circle><path d="M20 20.5V7l4 2"></path></svg><span>Talking Scores</span></a>
+        {% if options_url %}<nav aria-label="Talking score"><a href="{{ options_url }}">Change the wording</a></nav>{% endif %}
         {% endif %}
     </header>
 
@@ -94,6 +95,7 @@
             <div class="panel settings">
                 <div class="tabs" role="tablist" aria-label="Settings" hidden>
                     <button class="tab" type="button" role="tab" id="tab-text" aria-controls="panel-text" aria-selected="true">Text and colours</button>
+                    {% if options_url %}<button class="tab" type="button" role="tab" id="tab-wording" aria-controls="panel-wording" aria-selected="false" tabindex="-1">Wording</button>{% endif %}
                     <button class="tab" type="button" role="tab" id="tab-reading" aria-controls="read-aloud-settings" aria-selected="false" tabindex="-1" hidden>Reading aloud</button>
                     {% if score_data.midi %}<button class="tab" type="button" role="tab" id="tab-playback" aria-controls="panel-playback" aria-selected="false" tabindex="-1">Playback</button>{% endif %}
                     <button class="tab" type="button" role="tab" id="tab-groups" aria-controls="panel-groups" aria-selected="false" tabindex="-1">Groups and keys</button>
@@ -115,6 +117,26 @@
                     <label class="goto"><span>Colours</span><select class="input" id="setting-theme"><option value="system">Match my system</option><option value="light">Light</option><option value="dark">Dark</option><option value="contrast">High contrast</option></select></label>
                     <p class="hint">Kept on this device{% if options_url %}; the wording is set under <a href="{{ options_url }}">Options</a>{% endif %}</p>
                 </form>
+
+                {% if options_url %}
+                <form class="tab-panel" id="panel-wording" role="tabpanel" aria-labelledby="tab-wording" method="post" action="{{ options_url }}" hidden>
+                    <input type="hidden" name="restyle" value="1">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="">
+                    <fieldset class="field">
+                        <legend>Style</legend>
+                        {% if style_customised %}<p class="hint" id="own-wording">Now your own wording, starting from {{ style_name }}; a style picked here replaces it</p>{% endif %}
+                        {% for choice in style_choices %}
+                        <label class="check style-choice"><input type="radio" name="style" value="{{ choice.id }}"{% if choice.id == style_id and not style_customised %} checked{% endif %}><span><span class="name">{{ choice.name }}</span> <span class="hint">{{ choice.summary }}</span></span></label>
+                        {% endfor %}
+                    </fieldset>
+                    <div class="row">
+                        <button class="btn" type="submit" id="rewrite-score">Rewrite the talking score</button>
+                        <a href="{{ options_url }}">Change every option</a>
+                    </div>
+                    <p class="hint">You come back to the same bar once it is rewritten</p>
+                    <p class="error" id="rewrite-error" role="alert"></p>
+                </form>
+                {% endif %}
 
                 <form class="tab-panel" id="read-aloud-settings" role="tabpanel" aria-labelledby="tab-reading" onsubmit="return false" hidden>
                     <label class="goto stacked"><span>Speaking voice</span><select class="input" id="setting-speaking-voice"><option value="">The device’s usual voice</option></select></label>

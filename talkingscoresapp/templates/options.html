@@ -7,6 +7,7 @@
 <div>
     <p class="meta"><b>{{ score_info.title }}</b>{% if score_info.composer %} by {{ score_info.composer }}{% endif %} · <a href="{% url 'index' %}">Open a different score</a></p>
     <h1 style="margin-top: 8px;">Options</h1>
+    {% if current %}<p class="hint">These are the options this talking score was made with</p>{% endif %}
 </div>
 
 {% if form.errors %}
@@ -23,6 +24,7 @@
 {% endif %}
 
 {{ style_values|json_script:"style-values" }}
+{% if current %}{{ current|json_script:"current-settings" }}{% endif %}
 <form id="appearance" onsubmit="return false"></form>
 
 <form class="form options" method="post" id="setup">
@@ -462,6 +464,10 @@
     function restore(saved) {
         if (!saved) { return; }
         Array.prototype.forEach.call(form.elements, function (element) {
+            if (element.name === "instruments" && Array.isArray(saved.instruments)) {
+                element.checked = saved.instruments.indexOf(element.value) !== -1;
+                return;
+            }
             if (!(element.name in saved) || element === ownRadio) { return; }
             if (element.type === "checkbox") {
                 element.checked = Boolean(saved[element.name]);
@@ -515,11 +521,15 @@
     }
 
     // A rejected submission comes back with what the reader had set, so only the
-    // one control named in the error needs changing. Otherwise the page opens on
-    // whatever was kept from the last score.
+    // one control named in the error needs changing. A score that already has a
+    // talking score opens on the options it was made with; otherwise the page
+    // opens on whatever was kept from the last score.
     var rejected = document.getElementById("rejected-settings");
+    var current = document.getElementById("current-settings");
     if (rejected) {
         restore(JSON.parse(rejected.textContent));
+    } else if (current) {
+        restore(JSON.parse(current.textContent));
     } else {
         restore(stored(STORAGE_KEY));
     }

@@ -725,6 +725,72 @@ class DownloadTests(TestCase):
                 for name in sorted(WORDING_FIELDS - {"chord_symbols", "octave_position"}):
                     self.assertEqual(getattr(own, name), getattr(preset, name), f"{style}: {name}")
 
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_options_reopen_on_the_choices_the_score_was_made_with(
+            self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        from talkingscoresapp.views import form_state_from_options
+        info = {"title": "Score", "composer": "Composer", "instruments": ["Flute", "Cello"],
+                "rhythm_range": [], "beat_division_options": [], "octave_range": {}}
+        url = reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_path = os.path.join(temp_dir, "score.musicxml")
+            mock_data_path.return_value = data_path
+            mock_info.return_value = info
+            fresh = self.client.get(url).content.decode("utf-8")
+            self.assertNotIn('id="current-settings"', fresh)
+            posted = self._submitted_defaults(fresh)
+            posted.update({"style": "compact", "customised": "true", "rests": "none",
+                           "octave_description": "number", "instruments": ["2"]})
+            posted.pop("chk_include_slurs", None)
+            self.client.post(url, posted)
+            with open(data_path + ".opts") as options_file:
+                stored = json.load(options_file)
+            reopened = self.client.get(url).content.decode("utf-8")
+
+        state = json.loads(re.search(r'id="current-settings" type="application/json">(.*?)</script>',
+                                     reopened, re.S).group(1))
+        self.assertEqual(state, form_state_from_options(stored))
+        for name in ("style", "customised", "rests", "octave_description", "rhythm_description",
+                     "bars_at_a_time", "accidental_style"):
+            self.assertEqual(state[name], posted[name], name)
+        self.assertEqual(state["instruments"], ["2"])
+        self.assertFalse(state["chk_include_slurs"])
+        self.assertTrue(state["chk_include_ties"])
+        self.assertIn('value="compact" id="style-compact"\n                       aria-describedby="sample-compact" checked', reopened)
+
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_the_score_page_rewrites_in_a_new_style_keeping_every_other_choice(
+            self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        mock_info.return_value = {"title": "Score", "instruments": ["Flute"]}
+        url = reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_path = os.path.join(temp_dir, "score.musicxml")
+            mock_data_path.return_value = data_path
+            # Nothing stored yet: the reader is sent to the full options page.
+            response = self.client.post(url, {"restyle": "1", "style": "plain"})
+            self.assertRedirects(response, url, fetch_redirect_response=False)
+            with open(data_path + ".opts", "w") as options_file:
+                json.dump({"style": "standard", "customised": True, "rests": "none", "bars_at_a_time": 4}, options_file)
+            response = self.client.post(url, {"restyle": "1", "style": "plain"})
+            with open(data_path + ".opts") as options_file:
+                stored = json.load(options_file)
+        self.assertRedirects(response, reverse("process", kwargs={"id": VALID_ID, "filename": "score.musicxml"}),
+                             fetch_redirect_response=False)
+        self.assertEqual(stored, {"style": "plain", "customised": False, "rests": "none", "bars_at_a_time": 4})
+        mock_clear.assert_called_once()
+
+    def test_a_form_token_is_handed_to_pages_that_cannot_carry_one(self):
+        client = Client(enforce_csrf_checks=True)
+        token = client.get(reverse("form-token")).json()["token"]
+        self.assertTrue(token)
+        self.assertIn("csrftoken", client.cookies)
+
     @staticmethod
     def _submitted_defaults(html):
         """What a browser would send from the rendered page with nothing changed."""

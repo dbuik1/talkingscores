@@ -304,6 +304,11 @@ details[open] > summary .chev { transform: rotate(90deg); }
 .goto.stacked select { font-weight: 400; }
 .natural { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 16px; border: 1px solid var(--edge); border-radius: 6px; background: var(--paper); }
 .natural p { flex: 1 1 18rem; }
+.style-choice { align-items: flex-start; flex-wrap: nowrap; padding: 4px 0; }
+.style-choice input { margin-top: 2px; }
+.style-choice .name { font-weight: 700; }
+.style-choice .hint { display: block; }
+#rewrite-error:empty { display: none; }
 .keys { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 20px; margin: 0; }
 .keys dt { font-weight: 700; }
 .keys dd { margin: 0; }
