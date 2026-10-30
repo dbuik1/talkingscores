@@ -104,12 +104,20 @@ python manage.py generate_examples
 
 ## Short links
 
-Every talking score has a short link, `/s/` and the first ten characters of
-the score id. Saving options also writes a record of the score, its source and
-its options under `MEDIA_ROOT/links`, which `cleanup_media` leaves alone. A
-short link to a score from a web address or the library therefore still opens
-after its folder has been removed: the file is fetched again and the options
-put back. A short link to an uploaded file works while the file is stored.
+Every talking score has a short link that reads as words. A score from the
+library or a web address is named after its title, such as `/s/ode-to-joy`,
+with `-2` and so on when titles clash. An uploaded score gets one word from each
+of three lists in `talkingscoresapp/share_words.py` (tempo or mood, instrument,
+form), such as `/s/presto-cello-fugue`, so the link does not give away what was
+uploaded. Names ignore case. The older links, `/s/` and the first ten
+characters of the score id, still work.
+
+Names live under `MEDIA_ROOT/links/names`. Saving options also writes a record
+of the score, its source and its options under `MEDIA_ROOT/links`, which
+`cleanup_media` leaves alone. A short link to a score from a web address or the
+library therefore still opens after its folder has been removed: the file is
+fetched again and the options put back. A short link to an uploaded file works
+while the file is stored; after that its three words can name a new upload.
 
 ## MIDI player
 

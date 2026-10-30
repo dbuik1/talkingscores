@@ -762,7 +762,7 @@ class TSScore(object):
                 download_text_url=download_text_url,
                 download_braille_url=download_braille_url,
                 options_url=options_url,
-                share_path=sharing.short_path(self.id),
+                share_path="" if export_mode else sharing.share_path(self, mxmlScore.get_title()),
                 share_kept=self.source() is not None,
             )
             # Options that changed during the run belong to a newer run, which writes its own cache.

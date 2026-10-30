@@ -769,7 +769,11 @@ SHARED_SCORE_MISSING_MESSAGE = "The score at that link is no longer stored here.
 SHARED_SCORE_CHANGED_MESSAGE = "The file behind that link has changed since it was shared. Open it again from the library or its web address."
 
 
-def shared_score(request, code):
+def shared_score(request, name):
+    code = sharing.resolve(name)
+    if not code:
+        messages.error(request, SHARED_SCORE_MISSING_MESSAGE)
+        return redirect('index')
     record = sharing.read_record(code)
     if record:
         score_obj = TSScore(id=record["id"], filename=record["filename"])

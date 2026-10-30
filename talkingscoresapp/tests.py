@@ -2835,7 +2835,10 @@ class LibraryScoreTests(TestCase):
         self.folder = os.path.dirname(self.score.get_data_file_path())
         shutil.rmtree(self.folder, ignore_errors=True)
         self.record = os.path.join(score_settings.MEDIA_ROOT, "links", f"{self.score.id[:10]}.json")
-        remove = lambda: (shutil.rmtree(self.folder, ignore_errors=True), score_models.remove_file_quietly(self.record))
+        links = os.path.join(score_settings.MEDIA_ROOT, "links")
+        remove = lambda: (shutil.rmtree(self.folder, ignore_errors=True), score_models.remove_file_quietly(self.record),
+                          score_models.remove_file_quietly(os.path.join(links, f"{self.score.id[:10]}.name")),
+                          score_models.remove_file_quietly(os.path.join(links, "names", "aus-meines-herzens-grunde-bwv-269")))
         self.addCleanup(remove)
         score_models.remove_file_quietly(self.record)
 
@@ -2870,7 +2873,16 @@ class LibraryScoreTests(TestCase):
 
         self.assertRedirects(response, reverse("find-a-score"), fetch_redirect_response=False)
 
-    def test_the_short_link_opens_the_stored_score(self):
+    def test_the_title_link_opens_the_stored_score(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+        with patch("talkingscoreslib.HTMLTalkingScoreFormatter._trigger_midi_generation"):
+            TSScore(id=self.score.id, filename=self.score.filename).html(raise_errors=True)
+
+        response = self.client.get("/s/Aus-Meines-Herzens-Grunde-BWV-269")
+
+        self.assertRedirects(response, reverse("score", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+
+    def test_the_old_code_link_opens_the_stored_score(self):
         self.client.get(reverse("library-score", args=[self.ENTRY]))
 
         response = self.client.get(f"/s/{self.score.id[:10]}")
@@ -2924,7 +2936,7 @@ class LibraryScoreTests(TestCase):
         with patch("talkingscoreslib.HTMLTalkingScoreFormatter._trigger_midi_generation"):
             html = TSScore(id=self.score.id, filename=self.score.filename).html(raise_errors=True)
 
-        self.assertIn(f'data-path="/s/{self.score.id[:10]}"', html)
+        self.assertIn('data-path="/s/aus-meines-herzens-grunde-bwv-269"', html)
         self.assertIn('id="copy-share-link"', html)
         self.assertIn("Opens this talking score with the same wording", html)
         self.assertIn('href="/midi-player"', html)
@@ -2936,6 +2948,110 @@ class LibraryScoreTests(TestCase):
             html = TSScore(id=self.score.id, filename=self.score.filename).html(export_mode=True, raise_errors=True)
 
         self.assertNotIn('id="share-link"', html)
+
+
+class ShareNameTests(TestCase):
+    """Short links read as words: a title for a score anyone can find, three music words for an upload."""
+
+    class Score:
+        def __init__(self, id, source=None):
+            self.id = id
+            self._source = source
+
+        def source(self):
+            return self._source
+
+    LIBRARY = {"kind": "library", "value": "bach-bwv269"}
+
+    def setUp(self):
+        from talkingscoresapp import sharing
+        self.sharing = sharing
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+
+    def score(self, digit, source=LIBRARY):
+        return self.Score(digit * 64, source)
+
+    def test_a_library_score_is_named_after_its_title(self):
+        name = self.sharing.share_name(self.score("a"), "Ode to Joy", self.root)
+
+        self.assertEqual(name, "ode-to-joy")
+        self.assertEqual(self.sharing.resolve("ode-to-joy", self.root), "a" * 10)
+
+    def test_a_second_score_with_the_same_title_gets_a_number(self):
+        self.sharing.share_name(self.score("a"), "Ode to Joy", self.root)
+
+        self.assertEqual(self.sharing.share_name(self.score("b"), "Ode to Joy", self.root), "ode-to-joy-2")
+        self.assertEqual(self.sharing.resolve("ode-to-joy", self.root), "a" * 10)
+
+    def test_a_score_keeps_its_name(self):
+        first = self.sharing.share_name(self.score("a", None), "Private", self.root)
+
+        self.assertEqual(self.sharing.share_name(self.score("a", None), "Private", self.root), first)
+
+    def test_an_upload_is_named_with_one_word_from_each_list_and_not_its_title(self):
+        from talkingscoresapp import share_words
+
+        name = self.sharing.share_name(self.score("a", None), "My secret song", self.root)
+
+        mood, instrument, form = name.split("-")
+        self.assertIn(mood, share_words.TEMPOS_AND_MOODS)
+        self.assertIn(instrument, share_words.INSTRUMENTS)
+        self.assertIn(form, share_words.FORMS)
+
+    def test_the_word_lists_hold_about_a_hundred_distinct_words_each_and_no_piano(self):
+        from talkingscoresapp import share_words
+
+        lists = (share_words.TEMPOS_AND_MOODS, share_words.INSTRUMENTS, share_words.FORMS)
+        every = [word for words in lists for word in words]
+        for words in lists:
+            self.assertGreaterEqual(len(words), 90)
+        self.assertEqual(len(every), len(set(every)))
+        self.assertNotIn("piano", every)
+        self.assertTrue(all(word.isascii() and word.isalpha() and word.islower() for word in every))
+
+    def test_a_name_is_found_whatever_its_case(self):
+        self.sharing.share_name(self.score("a"), "Ode to Joy", self.root)
+
+        self.assertEqual(self.sharing.resolve("Ode-To-JOY", self.root), "a" * 10)
+        self.assertEqual(self.sharing.resolve("AAAAAAAAAA", self.root), "a" * 10)
+
+    def test_a_title_that_is_a_site_page_or_untitled_falls_back_to_words(self):
+        for title in ("Find a score", "Untitled work", "", "???"):
+            with self.subTest(title=title):
+                self.assertEqual(self.sharing.title_name(title), "")
+        name = self.sharing.share_name(self.score("a"), "Find a score", self.root)
+        self.assertEqual(len(name.split("-")), 3)
+
+    def test_a_title_that_looks_like_a_code_is_not_used(self):
+        self.assertEqual(self.sharing.title_name("deadbeef12"), "")
+
+    def test_a_long_title_is_cut_at_a_word(self):
+        name = self.sharing.title_name("Sonata in A major for violin and piano with a very long subtitle indeed")
+
+        self.assertLessEqual(len(name), self.sharing.MAX_TITLE_NAME_LENGTH)
+        self.assertFalse(name.endswith("-"))
+        self.assertTrue(name.startswith("sonata-in-a-major"))
+
+    def test_an_upload_takes_over_three_words_whose_score_has_gone(self):
+        gone = self.score("a", None)
+        with patch.object(self.sharing, "word_name", return_value="presto-cello-fugue"):
+            self.sharing.share_name(gone, "", self.root)
+            self.assertEqual(self.sharing.share_name(self.score("b", None), "", self.root), "presto-cello-fugue")
+        self.assertEqual(self.sharing.resolve("presto-cello-fugue", self.root), "b" * 10)
+
+    def test_three_words_whose_score_is_stored_stay_with_it(self):
+        os.makedirs(os.path.join(self.root, "a" * 64))
+        open(os.path.join(self.root, "a" * 64, "score.musicxml"), "w").close()
+        names = iter(["presto-cello-fugue", "largo-oboe-waltz"])
+        with patch.object(self.sharing, "word_name", side_effect=lambda: next(names)):
+            self.sharing.share_name(self.score("a", None), "", self.root)
+            self.assertEqual(self.sharing.share_name(self.score("b", None), "", self.root), "largo-oboe-waltz")
+
+    def test_an_unknown_name_resolves_to_nothing(self):
+        for name in ("no-such-score", "../etc", "", "x" * 200):
+            with self.subTest(name=name):
+                self.assertIsNone(self.sharing.resolve(name, self.root))
 
 
 class MidiPlayerPageTests(TestCase):
