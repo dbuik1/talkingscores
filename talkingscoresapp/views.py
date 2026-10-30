@@ -542,7 +542,7 @@ def contact_us(request):
 
 def privacy_policy(request):
     template = loader.get_template('privacy-policy.html')
-    context = {}
+    context = {'natural_voices': django_settings.NATURAL_VOICES}
     return HttpResponse(template.render(context, request))
 
 
