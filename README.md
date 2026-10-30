@@ -81,6 +81,42 @@ python3 scripts/build_openscore_index.py --lieder Lieder --string-quartets Strin
 
 Commit the resulting `openscore.json`.
 
+## Built-in library
+
+`talkingscoresapp/data/library.json` lists the scores that open without a
+download: the MusicXML files music21 installs alongside itself, each named by
+hand or from music21's chorale tables. The "Find a score" page searches it
+together with the OpenScore catalogue, and each score has a lasting address,
+`/library/<id>`, that opens it as a talking score with the default options.
+Rebuild the list after upgrading music21:
+
+```bash
+python3 scripts/build_library_index.py --check
+```
+
+`--check` opens every score the way the site does and leaves out any that fail.
+The home page links to three examples from this list. Create their talking
+scores ahead of the first visitor with:
+
+```bash
+python manage.py generate_examples
+```
+
+## Short links
+
+Every talking score has a short link, `/s/` and the first ten characters of
+the score id. Saving options also writes a record of the score, its source and
+its options under `MEDIA_ROOT/links`, which `cleanup_media` leaves alone. A
+short link to a score from a web address or the library therefore still opens
+after its folder has been removed: the file is fetched again and the options
+put back. A short link to an uploaded file works while the file is stored.
+
+## MIDI player
+
+`/midi-player` plays a MIDI file the reader chooses, in the browser, with the
+same synthesizer and sound bank as the talking score page. The file is not
+uploaded.
+
 ## Environment settings
 
 `DJANGO_DEBUG` is off unless set, and with debug off the server refuses to start without `DJANGO_SECRET_KEY`. For local development and the test suite, turn debug on:

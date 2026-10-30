@@ -1,0 +1,46 @@
+{% extends "base_site.html" %}
+{% load static %}
+
+{% block title %}MIDI player - Talking Scores{% endblock %}
+{% block meta-description %}Play a MIDI file in the browser with instrument sounds, at any speed, with a keyboard or a screen reader.{% endblock %}
+
+{% block content %}
+<div>
+    <h1>MIDI player</h1>
+    <p class="lead">Plays a MIDI file on this device with instrument sounds, such as one saved from a talking score.</p>
+</div>
+
+<noscript><p class="callout">The MIDI player needs JavaScript. Turn it on for this site, or open the file in the music app on your device.</p></noscript>
+
+<form class="form" id="midi-open" onsubmit="return false">
+    <div class="field" id="midi-field">
+        <label for="midi-file">MIDI file</label>
+        <input type="file" id="midi-file" accept=".mid,.midi,audio/midi" aria-describedby="midi-file-hint">
+        <p class="small muted" id="midi-file-hint">A file ending in .mid or .midi</p>
+        <p class="small muted" aria-hidden="true">Or drag the file here</p>
+    </div>
+</form>
+
+<div class="toolbar" id="midi-controls" role="group" aria-label="Playback controls" hidden>
+    <p class="pos" id="midi-name"></p>
+    <button class="btn primary" type="button" id="midi-play" aria-describedby="midi-status-text">Play</button>
+    <button class="btn" type="button" id="midi-restart">Back to the start</button>
+    <label class="goto"><span>Speed</span><select class="input" id="midi-speed"><option value="0.5">50 %</option><option value="0.75">75 %</option><option value="1" selected>100 %</option><option value="1.25">125 %</option><option value="1.5">150 %</option><option value="2">200 %</option></select></label>
+    <label class="goto wide"><span>Position</span><input type="range" id="midi-position" min="0" max="0" step="1" value="0"></label>
+    <label class="check"><input type="checkbox" id="midi-repeat">Repeat playback</label>
+    <p class="status"><b>Playback</b> <span id="midi-status-text">Nothing is playing.</span></p>
+</div>
+
+<p class="small muted">The file stays on this device. The instrument sounds are an 8 MB download the first time you press Play. To read the notes as words, <a href="{% url 'index' %}">open the MusicXML file</a> the MIDI file was made from.</p>
+{% endblock content %}
+
+{% block javascript %}
+<script>
+    window.TalkingScoresSounds = {
+        processor: "{% static 'js/vendor/spessasynth_processor.min.js' %}",
+        bank: "{% static 'sound/GeneralUserGS.sf3' %}"
+    };
+</script>
+<script src="{% static 'js/vendor/spessasynth.js' %}" defer></script>
+<script src="{% static 'js/midi-player.js' %}" defer></script>
+{% endblock %}

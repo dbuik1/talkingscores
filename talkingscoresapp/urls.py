@@ -20,6 +20,9 @@ register_converter(ScoreIdConverter, "scoreid")
 urlpatterns = [
     path('', views.index, name='index'),
     path('find-a-score', views.find_a_score, name='find-a-score'),
+    path('library/<slug:entry_id>', views.library_score, name='library-score'),
+    path('s/<str:code>', views.shared_score, name='shared-score'),
+    path('midi-player', views.midi_player, name='midi-player'),
     path('change-log', views.change_log, name='change-log'),
     path('contact-us', views.contact_us, name='contact-us'),
     path('privacy-policy', views.privacy_policy, name='privacy-policy'),

@@ -2738,8 +2738,8 @@ class FindAScorePageTests(TestCase):
         response = self.client.get(reverse("find-a-score"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Scores to start with")
-        self.assertContains(response, "Open talking score")
+        self.assertContains(response, "Scores to try")
+        self.assertContains(response, 'href="/library/')
 
     def test_a_query_returns_the_matching_score(self):
         response = self.client.get(reverse("find-a-score"), {"q": "schubert gute nacht"})
@@ -2757,13 +2757,200 @@ class FindAScorePageTests(TestCase):
 
         self.assertContains(response, "No scores match")
 
-    def test_each_result_posts_a_raw_githubusercontent_url_to_the_link_endpoint(self):
+    def test_each_result_links_to_its_library_address(self):
         response = self.client.get(reverse("find-a-score"), {"q": "schubert gute nacht"})
-        content = response.content.decode("utf-8")
 
-        self.assertIn(f'action="{reverse("index")}"', content)
-        self.assertIn("raw.githubusercontent.com", content)
-        self.assertIn('name="url"', content)
+        self.assertContains(response, 'href="/library/openscore-lc5015378"')
+
+    def test_a_search_covers_the_built_in_scores_too(self):
+        response = self.client.get(reverse("find-a-score"), {"q": "maple leaf"})
+
+        self.assertContains(response, "Maple Leaf Rag")
+        self.assertContains(response, 'href="/library/joplin-maple-leaf-rag"')
+
+    def test_a_collection_is_listed_fifty_at_a_time(self):
+        first = self.client.get(reverse("find-a-score"), {"collection": "Bach chorales"})
+        second = self.client.get(reverse("find-a-score"), {"collection": "Bach chorales", "page": "2"})
+
+        self.assertEqual(len(first.context["results"]), 50)
+        self.assertContains(first, "Showing 1 to 50")
+        self.assertContains(first, "Next scores")
+        self.assertContains(second, "Showing 51 to 100")
+        self.assertContains(second, "Previous scores")
+
+    def test_an_unknown_collection_shows_the_scores_to_try(self):
+        response = self.client.get(reverse("find-a-score"), {"collection": "<script>"})
+
+        self.assertContains(response, "Scores to try")
+        self.assertNotContains(response, "<script>:")
+
+
+class LibraryTests(TestCase):
+    def test_openscore_songs_and_built_in_songs_share_one_collection(self):
+        from talkingscoresapp import library
+
+        names = dict(library.collections())
+
+        self.assertIn("Songs", names)
+        self.assertNotIn("Lieder", names)
+        sources = {entry["source"] for entry in library.in_collection("Songs")}
+        self.assertEqual(sources, {"built-in", "openscore"})
+
+    def test_every_built_in_entry_points_at_a_file_music21_installed(self):
+        from talkingscoresapp import library
+
+        for entry in library._built_in():
+            with self.subTest(entry=entry["id"]):
+                self.assertTrue(library.built_in_bytes(entry))
+
+    def test_a_built_in_path_cannot_leave_the_corpus_folder(self):
+        from talkingscoresapp import library
+
+        with self.assertRaises(FileNotFoundError):
+            library.built_in_bytes({"path": "../../../../etc/passwd"})
+
+    def test_each_example_is_in_the_library(self):
+        from talkingscoresapp import library
+
+        self.assertEqual(len(library.examples()), len(library.EXAMPLES))
+
+    def test_the_home_page_links_to_each_example(self):
+        from talkingscoresapp import library
+
+        response = self.client.get(reverse("index"))
+
+        for example in library.examples():
+            self.assertContains(response, f'href="/library/{example["id"]}"')
+
+
+class LibraryScoreTests(TestCase):
+    """Opening a library score goes straight to the talking score, and its short link outlives the stored copy."""
+
+    ENTRY = "bach-bwv269"
+
+    def setUp(self):
+        from talkingscoresapp import library
+        self.entry = library.get(self.ENTRY)
+        self.score = views_module.store_library_entry(self.entry)
+        self.folder = os.path.dirname(self.score.get_data_file_path())
+        shutil.rmtree(self.folder, ignore_errors=True)
+        self.record = os.path.join(score_settings.MEDIA_ROOT, "links", f"{self.score.id[:10]}.json")
+        remove = lambda: (shutil.rmtree(self.folder, ignore_errors=True), score_models.remove_file_quietly(self.record))
+        self.addCleanup(remove)
+        score_models.remove_file_quietly(self.record)
+
+    def test_opening_a_library_score_chooses_the_default_options(self):
+        response = self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        self.assertRedirects(response, reverse("process", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+        with open(self.score.get_data_file_path() + ".opts", encoding="utf-8") as options_file:
+            options = json.load(options_file)
+        self.assertEqual(options["instruments"], [1, 2, 3, 4])
+        self.assertEqual(options["bars_at_a_time"], 2)
+
+    def test_a_library_score_carries_the_library_title_and_composer(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        info = TSScore(id=self.score.id, filename=self.score.filename).info()
+        self.assertEqual(info["title"], self.entry["title"])
+        self.assertEqual(info["composer"], "Johann Sebastian Bach")
+
+    def test_opening_it_again_keeps_the_stored_file_and_its_options(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+        data_path = self.score.get_data_file_path()
+        written = (os.path.getmtime(data_path), os.path.getmtime(data_path + ".opts"))
+
+        response = self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        self.assertRedirects(response, reverse("score", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+        self.assertEqual((os.path.getmtime(data_path), os.path.getmtime(data_path + ".opts")), written)
+
+    def test_an_unknown_library_id_goes_back_to_the_search(self):
+        response = self.client.get(reverse("library-score", args=["no-such-score"]))
+
+        self.assertRedirects(response, reverse("find-a-score"), fetch_redirect_response=False)
+
+    def test_the_short_link_opens_the_stored_score(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        response = self.client.get(f"/s/{self.score.id[:10]}")
+
+        self.assertRedirects(response, reverse("score", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+
+    def test_the_short_link_restores_a_cleaned_up_score_with_its_options(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+        data_path = self.score.get_data_file_path()
+        with open(data_path + ".opts", encoding="utf-8") as options_file:
+            options = json.load(options_file)
+        options["bars_at_a_time"] = 8
+        views_module.write_options(self.score, options)
+        shutil.rmtree(self.folder)
+
+        response = self.client.get(f"/s/{self.score.id[:10]}")
+
+        self.assertRedirects(response, reverse("process", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+        with open(data_path + ".opts", encoding="utf-8") as options_file:
+            self.assertEqual(json.load(options_file)["bars_at_a_time"], 8)
+
+    def test_a_short_link_to_an_upload_that_was_cleaned_up_says_so(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+        with open(self.record, encoding="utf-8") as record_file:
+            record = json.load(record_file)
+        record["source"] = None
+        score_models.write_text_file_atomic(self.record, json.dumps(record))
+        shutil.rmtree(self.folder)
+
+        response = self.client.get(f"/s/{self.score.id[:10]}", follow=True)
+
+        self.assertContains(response, views_module.SHARED_SCORE_MISSING_MESSAGE)
+
+    def test_the_short_link_finds_a_stored_score_that_has_no_record(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+        os.remove(self.record)
+
+        response = self.client.get(f"/s/{self.score.id[:10]}")
+
+        self.assertRedirects(response, reverse("score", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+
+    def test_a_malformed_or_unknown_code_goes_home_with_a_message(self):
+        for code in ("0000000000", "NOTHEX0000", "abc"):
+            with self.subTest(code=code):
+                response = self.client.get(f"/s/{code}", follow=True)
+                self.assertContains(response, views_module.SHARED_SCORE_MISSING_MESSAGE)
+
+    def test_the_talking_score_offers_its_short_link_and_the_midi_player(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        with patch("talkingscoreslib.HTMLTalkingScoreFormatter._trigger_midi_generation"):
+            html = TSScore(id=self.score.id, filename=self.score.filename).html(raise_errors=True)
+
+        self.assertIn(f'data-path="/s/{self.score.id[:10]}"', html)
+        self.assertIn('id="copy-share-link"', html)
+        self.assertIn("Opens this talking score with the same wording", html)
+        self.assertIn('href="/midi-player"', html)
+
+    def test_a_downloaded_talking_score_has_no_short_link(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        with patch("talkingscoreslib.HTMLTalkingScoreFormatter._trigger_midi_generation"):
+            html = TSScore(id=self.score.id, filename=self.score.filename).html(export_mode=True, raise_errors=True)
+
+        self.assertNotIn('id="share-link"', html)
+
+
+class MidiPlayerPageTests(TestCase):
+    def test_the_page_offers_a_file_field_and_loads_the_synthesizer(self):
+        response = self.client.get(reverse("midi-player"))
+
+        self.assertContains(response, 'id="midi-file"')
+        self.assertContains(response, "js/vendor/spessasynth.js")
+        self.assertContains(response, "js/midi-player.js")
+        self.assertContains(response, "sound/GeneralUserGS.sf3")
+
+    def test_the_site_navigation_links_to_it(self):
+        response = self.client.get(reverse("index"))
+
+        self.assertContains(response, f'href="{reverse("midi-player")}"')
 
 
 class UserFacingCopyTests(TestCase):

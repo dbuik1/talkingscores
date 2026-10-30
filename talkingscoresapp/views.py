@@ -19,7 +19,7 @@ import requests
 from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress
 from talkingscoresapp.models import RemoteAddressNotAllowed, RemoteHostNotFound, RemoteFetchRefused
 from talkingscoresapp.models import remove_file_quietly
-from talkingscoresapp import openscore
+from talkingscoresapp import library, sharing
 from lib.render_settings import DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES
 from lib.style_samples import style_samples
 
@@ -571,6 +571,7 @@ def options(request, id, filename):
         }
 
         write_json_file_atomic(options_path, options_data)
+        remember_share_link(score_obj, options_data)
 
         score_obj.clear_generated_html_state()
         return redirect('process', id, filename)
@@ -603,25 +604,8 @@ def index(request):
                 if score:
                     return redirect('score', id=score.id, filename=score.filename)
 
-            except RemoteAddressNotAllowed as ex:
-                logger.warning(f"Rejected a link to a non-public address: {ex}")
-                messages.error(request, PRIVATE_ADDRESS_MESSAGE)
-                return redirect('index')
-            except RemoteHostNotFound as ex:
-                logger.warning(f"Link host not found: {ex}")
-                messages.error(request, HOST_NOT_FOUND_MESSAGE)
-                return redirect('index')
-            except RemoteFetchRefused as ex:
-                logger.warning(f"Link refused: {ex}")
-                messages.error(request, str(ex))
-                return redirect('index')
-            except requests.RequestException as ex:
-                logger.warning(f"Link download failed: {ex}")
-                messages.error(request, DOWNLOAD_FAILED_MESSAGE)
-                return redirect('index')
             except Exception as ex:
-                logger.error(f"File Processing Error: {ex}", exc_info=True)
-                messages.error(request, UNREADABLE_SCORE_MESSAGE)
+                messages.error(request, open_failure_message(ex))
                 return redirect('index')
         else:
             for field, error_list in form.errors.items():
@@ -632,20 +616,186 @@ def index(request):
     else:
         form = MusicXMLSubmissionForm()
 
-    context = {'form': form}
+    context = {'form': form, 'examples': library.examples()}
     return render(request, 'index.html', context)
 
 
-OPENSCORE_SEARCH_LIMIT = 50
-OPENSCORE_QUERY_MAX_LENGTH = 100
+def open_failure_message(ex):
+    """What the reader is told when a link or a library score could not be opened."""
+    if isinstance(ex, RemoteAddressNotAllowed):
+        logger.warning(f"Rejected a link to a non-public address: {ex}")
+        return PRIVATE_ADDRESS_MESSAGE
+    if isinstance(ex, RemoteHostNotFound):
+        logger.warning(f"Link host not found: {ex}")
+        return HOST_NOT_FOUND_MESSAGE
+    if isinstance(ex, RemoteFetchRefused):
+        logger.warning(f"Link refused: {ex}")
+        return str(ex)
+    if isinstance(ex, requests.RequestException):
+        logger.warning(f"Link download failed: {ex}")
+        return DOWNLOAD_FAILED_MESSAGE
+    logger.error(f"File Processing Error: {ex}", exc_info=True)
+    return UNREADABLE_SCORE_MESSAGE
+
+
+SEARCH_PAGE_SIZE = 50
+SEARCH_QUERY_MAX_LENGTH = 100
 
 
 def find_a_score(request):
-    query = request.GET.get('q', '').strip()[:OPENSCORE_QUERY_MAX_LENGTH]
+    query = request.GET.get('q', '').strip()[:SEARCH_QUERY_MAX_LENGTH]
+    collection = request.GET.get('collection', '')
+    collections = library.collections()
+    if collection not in dict(collections):
+        collection = ''
     if query:
-        results, total = openscore.search(query, OPENSCORE_SEARCH_LIMIT)
+        matches = library.search(query)
+    elif collection:
+        matches = library.in_collection(collection)
     else:
-        results, total = openscore.suggestions(), None
+        matches = None
 
-    context = {'query': query, 'results': results, 'total': total, 'limit': OPENSCORE_SEARCH_LIMIT}
+    try:
+        page = max(1, int(request.GET.get('page', '1')))
+    except ValueError:
+        page = 1
+    context = {'query': query, 'collection': collection, 'collections': collections,
+               'library_size': library.size()}
+    if matches is None:
+        context.update(results=library.suggestions(), total=None)
+    else:
+        last_page = max(1, -(-len(matches) // SEARCH_PAGE_SIZE))
+        page = min(page, last_page)
+        first = (page - 1) * SEARCH_PAGE_SIZE
+        context.update(
+            results=matches[first:first + SEARCH_PAGE_SIZE], total=len(matches),
+            first=first + 1, last=min(first + SEARCH_PAGE_SIZE, len(matches)),
+            next_page=page + 1 if page < last_page else None,
+            previous_page=page - 1 if page > 1 else None,
+        )
     return render(request, 'find-a-score.html', context)
+
+
+def default_options(score_info):
+    """The options a reader gets by pressing the button on the options page without changing anything."""
+    beat_options = score_info.get('beat_division_options') or []
+    beat_division = beat_options[1] if len(beat_options) > 1 else (beat_options[0] if beat_options else None)
+    return {
+        "style": DEFAULT_STYLE,
+        "bars_at_a_time": 2,
+        "beat_division": beat_division.get("value") if isinstance(beat_division, dict) else beat_division,
+        "play_all": True,
+        "play_selected": True,
+        "play_unselected": True,
+        "instruments": list(range(1, len(score_info.get('instruments', [])) + 1)),
+        "pitch_description": "noteName",
+        "rhythm_description": "british",
+        "dot_position": "before",
+        "rhythm_announcement": "onChange",
+        "octave_description": "name",
+        "octave_position": "before",
+        "octave_announcement": "onChange",
+        "include_rests": True,
+        "include_ties": True,
+        "slurs": True,
+        "articulations": True,
+        "directions": True,
+        "include_arpeggios": True,
+        "describe_chords": True,
+        "include_dynamics": True,
+        "accidental_style": "words",
+        "repetition_mode": "learning",
+        "colour_position": "none",
+        "colour_pitch": True,
+        "rhythm_colour_mode": "none",
+        "octave_colour_mode": "none",
+        "key_signature_accidentals": "sounding",
+        "advanced_rhythm_colours": {},
+        "advanced_octave_colours": {},
+        "figureNoteColours": {"C": "#FF0000", "D": "#A52A2A", "E": "#808080", "F": "#0000FF", "G": "#000000", "A": "#FFFF00", "B": "#008000"},
+    }
+
+
+def remember_share_link(score_obj, options_data):
+    # A short link that cannot be recorded still opens the score while it is stored.
+    try:
+        sharing.write_record(score_obj, options_data)
+    except OSError:
+        logger.exception(f"Could not record the short link for {score_obj.id}")
+
+
+def write_options(score_obj, options_data):
+    write_json_file_atomic(score_obj.get_data_file_path() + '.opts', options_data)
+    remember_share_link(score_obj, options_data)
+    score_obj.clear_generated_html_state()
+
+
+def store_library_entry(entry):
+    if entry["source"] == "built-in":
+        return TSScore.from_bytes(
+            library.built_in_bytes(entry), os.path.basename(entry["path"]),
+            source={"kind": "library", "value": entry["id"]},
+            names={"title": entry["title"], "composer": entry["composer"]},
+        )
+    return TSScore.from_url(entry["url"])
+
+
+def open_with_defaults(score_obj):
+    """Straight to the talking score: a score nobody has chosen options for gets the defaults."""
+    if score_obj.state() == TSScoreState.AWAITING_OPTIONS:
+        write_options(score_obj, default_options(score_obj.info()))
+        return redirect('process', score_obj.id, score_obj.filename)
+    return redirect('score', score_obj.id, score_obj.filename)
+
+
+def library_score(request, entry_id):
+    entry = library.get(entry_id)
+    if not entry:
+        messages.error(request, "That score is not in the library. Search for it by composer or title.")
+        return redirect('find-a-score')
+    try:
+        score_obj = store_library_entry(entry)
+    except Exception as ex:
+        messages.error(request, open_failure_message(ex))
+        return redirect('find-a-score')
+    return open_with_defaults(score_obj)
+
+
+SHARED_SCORE_MISSING_MESSAGE = "The score at that link is no longer stored here. Ask for the file and open it again."
+SHARED_SCORE_CHANGED_MESSAGE = "The file behind that link has changed since it was shared. Open it again from the library or its web address."
+
+
+def shared_score(request, code):
+    record = sharing.read_record(code)
+    if record:
+        score_obj = TSScore(id=record["id"], filename=record["filename"])
+        if score_obj.state() != TSScoreState.FETCHING:
+            return redirect('score', score_obj.id, score_obj.filename)
+        source = record.get("source") or {}
+        try:
+            if source.get("kind") == "library" and library.get(source.get("value")):
+                restored = store_library_entry(library.get(source["value"]))
+            elif source.get("kind") == "url" and isinstance(source.get("value"), str):
+                restored = TSScore.from_url(source["value"])
+            else:
+                messages.error(request, SHARED_SCORE_MISSING_MESSAGE)
+                return redirect('index')
+        except Exception as ex:
+            messages.error(request, open_failure_message(ex))
+            return redirect('index')
+        if restored.id != record["id"]:
+            messages.error(request, SHARED_SCORE_CHANGED_MESSAGE)
+            return redirect('index')
+        if isinstance(record.get("options"), dict):
+            write_options(restored, record["options"])
+        return redirect('process', restored.id, restored.filename)
+
+    stored = sharing.stored_score(code)
+    if stored:
+        return redirect('score', *stored)
+    messages.error(request, SHARED_SCORE_MISSING_MESSAGE)
+    return redirect('index')
+
+
+def midi_player(request):
+    return render(request, 'midi-player.html', {})

@@ -30,7 +30,7 @@
     <button class="btn primary" type="submit" id="open-submit">Open score</button>
 </form>
 
-<p class="small muted">No file to hand? <a href="{% url 'find-a-score' %}">Find a free score</a></p>
+<p class="small muted">No file yet? <a href="{% url 'find-a-score' %}">Find a free score</a>, or open an example: {% for example in examples %}<a href="{% url 'library-score' example.id %}">{{ example.label }}</a>{% if forloop.revcounter > 2 %}, {% elif forloop.revcounter == 2 %} or {% endif %}{% endfor %}.</p>
 
 <div>
     <details>
@@ -39,7 +39,7 @@
             <p>Many scores can be downloaded as MusicXML from a score library.</p>
             <ul class="bullets">
                 <li><a href="https://musescore.com/sheetmusic" rel="noopener noreferrer">MuseScore.com</a> has the most scores. Open a score, choose Download, then MusicXML. A free account is needed, and some scores need a paid plan.</li>
-                <li><a href="{% url 'find-a-score' %}">OpenScore</a> has songs and string quartets that open here directly.</li>
+                <li><a href="{% url 'find-a-score' %}">Find a score</a> on this site has over 2,000 free scores that open here directly: piano pieces, songs, string quartets and Bach chorales.</li>
                 <li><a href="https://www.cpdl.org/" rel="noopener noreferrer">CPDL</a> has choral music. Look for MusicXML in the list of files for each edition.</li>
             </ul>
             <p>In most notation programs, choose File, then Export, then MusicXML.</p>

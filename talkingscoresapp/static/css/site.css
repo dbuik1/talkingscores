@@ -386,6 +386,10 @@ body:not(.reader) main { display: flex; flex-direction: column; gap: 32px; }
 .actions { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 
+/* The whole link stays visible where there is room, and wraps under its button on a phone. */
+.share .input { flex: 1 1 18rem; min-width: 0; }
+.goto.wide input[type="range"] { width: 16rem; max-width: 100%; min-height: 44px; accent-color: var(--accent); }
+
 .error-callout { border-left-color: var(--error); }
 .callout p { margin: 0 0 8px; }
 .callout p:last-child { margin-bottom: 0; }

@@ -166,8 +166,19 @@
             </form>
         </details>
         <details>
-            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>{% if export_mode %}Print{% else %}Download or print{% endif %}</h2></summary>
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>{% if export_mode %}Print{% else %}Share, download or print{% endif %}</h2></summary>
             <div class="panel">
+                {% if share_path %}
+                <div class="field share">
+                    <label for="share-link">Link to this talking score</label>
+                    <div class="row">
+                        <input class="input" type="text" id="share-link" value="{{ share_path }}" data-path="{{ share_path }}" readonly aria-describedby="share-link-hint">
+                        <button class="btn" type="button" id="copy-share-link">Copy link</button>
+                    </div>
+                    <p class="small muted" id="share-link-hint">{% if share_kept %}Opens this talking score with the same wording{% else %}Opens this talking score while the uploaded file is stored here{% endif %}</p>
+                    <p class="small" id="share-link-status" aria-live="polite"></p>
+                </div>
+                {% endif %}
                 <div class="links">
                     {% if download_html_url %}<a class="btn" href="{{ download_html_url }}">Download as a web page</a>{% endif %}
                     {% if download_text_url %}<a class="btn" href="{{ download_text_url }}">Download as text</a>{% endif %}
@@ -175,7 +186,7 @@
                     {% if score_data.midi %}<a class="btn" id="download-midi" href="{{ score_data.midi.base }}?start={{ score_data.firstBar }}&amp;end={{ score_data.firstBar }}" download>Download as MIDI</a> <a class="btn" id="download-whole-midi" href="{{ score_data.midi.base }}?start={{ score_data.firstBar }}&amp;end={{ score_data.lastBar }}" download>Download the whole score as MIDI</a>{% endif %}
                     <button class="btn" type="button" id="print-score">Print every bar</button>
                 </div>
-                {% if not export_mode %}<p class="small muted">The braille file is uncontracted text for a 40-cell display or embosser.{% if score_data.midi %} The first MIDI file holds the group on screen.{% endif %}</p>{% endif %}
+                {% if not export_mode %}<p class="small muted">The braille file is uncontracted text for a 40-cell display or embosser.{% if score_data.midi %} The first MIDI file holds the group on screen. A saved MIDI file plays in the <a href="/midi-player">MIDI player</a>.{% endif %}</p>{% endif %}
             </div>
         </details>
     </div>
