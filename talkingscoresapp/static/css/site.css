@@ -313,7 +313,7 @@ details[open] > summary .chev { transform: rotate(90deg); }
 .legend.prompt { font-weight: 400; margin-bottom: 12px; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 
-.sizes { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 10px; width: 100%; }
+.sizes { display: flex; flex-direction: column; gap: 10px; width: 100%; }
 .size {
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr);
@@ -359,7 +359,7 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .facts dt, .facts dd { overflow-wrap: anywhere; }
 .facts dd { margin: 0; }
 .about { display: flex; flex-direction: column; gap: 16px; }
-.about h3 { font-family: var(--font-body); font-size: 1.125rem; font-weight: 700; margin-top: 8px; }
+.about h2 { font-family: var(--font-body); font-size: 1.125rem; font-weight: 700; margin-top: 8px; }
 .links { display: flex; flex-wrap: wrap; gap: 12px; }
 
 .live { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
@@ -471,7 +471,7 @@ input[type="url"].input { width: 100%; max-width: 520px; }
     font-family: var(--font-heading);
     font-size: 1.3125rem;
     padding: 8px 12px;
-    border-left: 3px solid var(--rule);
+    border-left: 1px solid var(--edge);
 }
 .card .sample.mono { font-family: "Atkinson Hyperlegible Mono", ui-monospace, Menlo, monospace; font-size: 1.125rem; }
 
