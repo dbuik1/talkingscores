@@ -109,6 +109,19 @@
                     <label class="check"><input type="checkbox" name="chk_describe_chords" value="checked" checked> Chords</label>
                     <label class="check"><input type="checkbox" name="chk_include_dynamics" value="checked" checked> Dynamics</label>
                 </div>
+                <div class="row">
+                    <span class="setting"><label for="chord_symbol_reading">Chord symbols</label>
+                        <select class="input" name="chord_symbol_reading" id="chord_symbol_reading">
+                            <option value="name" selected>Name the chord, such as C seventh</option>
+                            <option value="notes">Name the chord and its notes</option>
+                            <option value="written">As written, such as C7</option>
+                            <option value="none">Leave them out</option>
+                        </select></span>
+                </div>
+                <div class="row">
+                    <label class="check"><input type="checkbox" name="chk_separate_voices" value="checked" checked> Each voice on its own line</label>
+                    <label class="check"><input type="checkbox" name="chk_chord_symbol_line" value="checked" checked> Chord symbols on their own line</label>
+                </div>
             </fieldset>
 
             <fieldset class="box-set">

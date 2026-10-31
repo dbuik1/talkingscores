@@ -16,7 +16,7 @@ from abc import ABCMeta, abstractmethod
 from types import SimpleNamespace
 
 from jinja2 import Environment, FileSystemLoader
-from music21 import converter, duration, environment, key, meter, stream
+from music21 import converter, duration, environment, harmony, key, meter, stream
 from music21 import pitch as pitch_module
 from music21.stream import makeNotation
 from music21.stream.enums import ShowNumber
@@ -214,6 +214,109 @@ def ending_label(number):
     return f"{' and '.join(words)} time"
 
 
+def chord_kind_degrees(kind):
+    """The degrees music21 builds a MusicXML chord kind from, such as {1, 3, 5, 7} for dominant.
+
+    None when music21 does not know the kind.
+    """
+    name = harmony.CHORD_ALIASES.get(kind, kind)
+    entry = harmony.CHORD_TYPES.get(name)
+    if entry is None:
+        return None
+    return {int(re.sub(r"\D", "", degree)) for degree in entry[0].split(",")}
+
+
+def add_degrees_missing_from_chord(root):
+    """Turn each altered degree the chord does not contain into an added one.
+
+    Notation programs write C7♯9 either as a C7 that adds a sharpened 9th or as
+    one that alters its 9th. A dominant seventh has no 9th, and music21 refuses
+    the second form, which would reject the whole score for one chord symbol.
+    Read as an added degree, the chord sounds and is named the same.
+    """
+    for mx_harmony in root.iter("harmony"):
+        degrees = chord_kind_degrees((mx_harmony.findtext("kind") or "").strip())
+        if degrees is None:
+            continue
+        for mx_degree in mx_harmony.findall("degree"):
+            degree_type = mx_degree.find("degree-type")
+            if degree_type is None or (degree_type.text or "").strip() != "alter":
+                continue
+            try:
+                value = int((mx_degree.findtext("degree-value") or "").strip())
+            except ValueError:
+                continue
+            if value not in degrees:
+                degree_type.text = "add"
+
+
+def parse_score(musicxml_filepath):
+    """Read a MusicXML file into a music21 score.
+
+    A file whose chord symbols alter a degree the chord lacks is read again with
+    those degrees added; files music21 reads as written are never rewritten.
+    """
+    try:
+        return converter.parse(musicxml_filepath)
+    except harmony.ChordStepModificationException:
+        root = ElementTree.parse(musicxml_filepath).getroot()
+    add_degrees_missing_from_chord(root)
+    return converter.parseData(ElementTree.tostring(root, encoding="unicode"), format="musicxml")
+
+
+def _step_and_alter(pitch):
+    if pitch is None:
+        return None
+    return (pitch.step, int(pitch.alter or 0))
+
+
+def chord_symbol_event(symbol):
+    """The facts of a music21 chord symbol, enough to name it or spell out its notes."""
+    if type(symbol).__name__ == 'NoChord':
+        return TSChordSymbol(symbol.figure or "N.C.", no_chord=True)
+    root = _step_and_alter(symbol.root())
+    bass = _step_and_alter(symbol.bass())
+    modifications = []
+    for modification in symbol.chordStepModifications:
+        semitones = modification.interval.semitones if modification.interval is not None else 0
+        modifications.append((modification.modType, modification.degree, int(semitones)))
+    notes = [_step_and_alter(pitch) for pitch in symbol.pitches]
+    return TSChordSymbol(symbol.figure, root=root, bass=bass if bass != root else None,
+                         chord_kind=symbol.chordKind or "", modifications=modifications, notes=notes)
+
+
+def slur_key(element):
+    """Bar, offset and pitches: two voices start notes at the same moment, so
+    the offset alone would hang one voice's slur on the other voice's note too."""
+    pitches = tuple(pitch.nameWithOctave for pitch in getattr(element, 'pitches', ()))
+    return (element.measureNumber, element.offset, pitches)
+
+
+def take_chord_symbols(events_by_bar, chord_symbols):
+    """Move the chord symbols out of one part's events into chord_symbols.
+
+    Both take the {bar: [time point, ...]} shape. An instrument's chord symbols
+    can be attached to any of its staves; gathered here, they read once for the
+    instrument, and a symbol two staves both carry is read once.
+    """
+    for bar, time_points in events_by_bar.items():
+        for time_point in time_points:
+            for voice, events in time_point["voices"].items():
+                symbols = [event for event in events if event.kind == "chord_symbol"]
+                if not symbols:
+                    continue
+                time_point["voices"][voice] = [event for event in events if event.kind != "chord_symbol"]
+                points = chord_symbols.setdefault(bar, [])
+                point = next((p for p in points if abs(p["offset"] - time_point["offset"]) < 1e-6), None)
+                if point is None:
+                    point = {"offset": time_point["offset"], "beat": time_point["beat"], "voices": {1: []}}
+                    points.append(point)
+                    points.sort(key=lambda p: p["offset"])
+                for symbol in symbols:
+                    if all(held.figure != symbol.figure for held in point["voices"][1]):
+                        point["voices"][1].append(symbol)
+
+
 def repeat_expression_text(expression):
     """The words a repeat mark is written with, such as Segno or Da Capo al fine."""
     try:
@@ -280,7 +383,7 @@ class Music21TalkingScore(TalkingScoreBase):
 
     def __init__(self, musicxml_filepath, settings=None):
         self.filepath = os.path.realpath(musicxml_filepath)
-        self.score = converter.parse(musicxml_filepath)
+        self.score = parse_score(musicxml_filepath)
         self.timeSigs = {}
         self.part_instruments = {}
         self.part_names = {}
@@ -689,7 +792,7 @@ class Music21TalkingScore(TalkingScoreBase):
             for element, edge in ((spanner.getFirst(), 'start'), (spanner.getLast(), 'stop')):
                 if element is None or element.measureNumber is None:
                     continue
-                key = (element.measureNumber, element.offset)
+                key = slur_key(element)
                 # One note can close one slur and open the next.
                 edges[key] = edge if edges.get(key, edge) == edge else 'both'
         return edges
@@ -804,16 +907,16 @@ class Music21TalkingScore(TalkingScoreBase):
             event.expressions = [exp.name for exp in element.expressions if getattr(exp, 'name', None)]
             return event
         if element_type == 'Rest':
-            return TSRest()
+            return TSRest(hidden=bool(element.style.hideObjectOnPrint))
         if element_type == 'Unpitched':
             return TSUnpitched(names=[self._unpitched_name(element)])
         if element_type == 'PercussionChord':
             return TSUnpitched(count=len(element.notes),
                                names=[self._unpitched_name(drum) for drum in element.notes])
-        if element_type == 'ChordSymbol':
+        if element_type in ('ChordSymbol', 'NoChord'):
             if not self.settings.chord_symbols:
                 return None
-            return TSChordSymbol(element.figure)
+            return chord_symbol_event(element)
         if element_type == 'Chord':
             event = TSChord()
             event.pitches = []
@@ -853,7 +956,7 @@ class Music21TalkingScore(TalkingScoreBase):
             event.articulations = [
                 articulation.name for articulation in getattr(element, 'articulations', ())
                 if getattr(articulation, 'name', None)]
-        event.slur = self.slur_edges.get((element.measureNumber, element.offset))
+        event.slur = self.slur_edges.get(slur_key(element))
         beams = getattr(element, 'beams', None)
         if beams is not None and beams.beamsList:
             beam_type = beams.beamsList[0].type
@@ -1289,13 +1392,25 @@ class HTMLTalkingScoreFormatter:
             instrument = InstrumentDescription(number=ins, name=self.score.part_instruments[ins][0])
             first_part_index = self.score.part_instruments[ins][1]
             part_count = self.score.part_instruments[ins][2]
+            beat_lengths = {bar: self.score.beat_quarter_length(bar) for bar in range(start_bar, end_bar + 1)}
+            chord_symbols = {}
+            chord_lengths = {}
             for part_index in range(first_part_index, first_part_index + part_count):
                 events = self.score.get_events_for_bar_range(start_bar, end_bar, part_index)
                 lengths = self.score.bar_lengths(start_bar, end_bar, part_index)
-                beat_lengths = {bar: self.score.beat_quarter_length(bar) for bar in range(start_bar, end_bar + 1)}
+                if self.settings.chord_symbols and self.settings.chord_symbols_on_own_line:
+                    take_chord_symbols(events, chord_symbols)
+                    for bar, length in lengths.items():
+                        chord_lengths.setdefault(bar, length)
                 instrument.parts.append(self.builder.build_part(
                     part_index, self.score.part_name(ins, part_index), events, lengths,
                     beat_lengths, pickup_bar=pickup_bar))
+            if chord_symbols:
+                name = f"{self.score.part_instruments[ins][0]} - {self.builder.vocabulary.chord_symbol_line_label()}"
+                chord_part = self.builder.build_chord_symbol_part(
+                    name, chord_symbols, chord_lengths, beat_lengths, pickup_bar=pickup_bar)
+                if chord_part.bars:
+                    instrument.parts.insert(0, chord_part)
             segment.instruments.append(instrument)
         return segment
 

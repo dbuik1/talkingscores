@@ -1,5 +1,16 @@
+{% if part.bar.voices %}
+{% for voice in part.bar.voices %}
+<p class="voice">{{ voice.label }}</p>
+<ul class="beats">
+{% for beat in voice.beats %}
+    <li{% if not beat.label %} class="unlabelled"{% endif %}>{% if beat.label %}<b>{{ beat.label }}</b> {% endif %}<span class="notes">{{ beat.html|safe }}</span></li>
+{% endfor %}
+</ul>
+{% endfor %}
+{% else %}
 <ul class="beats">
 {% for beat in part.bar.beats %}
     <li{% if not beat.label %} class="unlabelled"{% endif %}>{% if beat.label %}<b>{{ beat.label }}</b> {% endif %}<span class="notes">{{ beat.html|safe }}</span></li>
 {% endfor %}
 </ul>
+{% endif %}
