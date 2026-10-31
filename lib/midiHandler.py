@@ -5,12 +5,12 @@ import logging
 import os
 import tempfile
 
-from music21 import converter, stream, tempo
+from music21 import stream, tempo
 
 from pathvalidate import sanitize_filename
 
 from talkingscores.settings import MEDIA_ROOT
-from talkingscoreslib import Music21TalkingScore, join_split_bars, number_bars_in_order
+from talkingscoreslib import Music21TalkingScore, join_split_bars, number_bars_in_order, parse_score
 
 logger = logging.getLogger("TSScore")
 
@@ -72,7 +72,7 @@ class MidiHandler:
             return self.midi_path(start, end)
 
         if not self.score:
-            self.score = converter.parse(os.path.join(MEDIA_ROOT, self.folder, self.filename))
+            self.score = parse_score(os.path.join(MEDIA_ROOT, self.folder, self.filename))
         # The page asks for bars by the number they are read under, so the score the
         # audio is cut from has to be counted the same way. A score handed over by a
         # caller has been counted already, and counting it again changes nothing.

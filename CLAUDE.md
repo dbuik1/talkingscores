@@ -44,6 +44,8 @@ The rules that matter most here, each with the shape to use instead:
 | A run of bars on screen | group | chunk, section, segment |
 | Bar zero | pickup bar | anacrusis, upbeat, bar 0 |
 | An instrument's line | part | track, voice, staff |
+| A line of notes within one part | voice | layer |
+| A chord name written above the stave | chord symbol | chord name, harmony |
 | Sounding the bars | playback, play | listen, preview, sound out |
 | Every bar at once | the whole score | whole tune, full piece, everything |
 | The ticking pulse | metronome click | click track, beat |
