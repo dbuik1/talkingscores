@@ -1,6 +1,6 @@
 from django import forms
 from django.conf import settings as django_settings
-from django.http import HttpResponse, FileResponse, JsonResponse
+from django.http import Http404, HttpResponse, FileResponse, JsonResponse
 from django.template import loader
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -21,7 +21,7 @@ import requests
 from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress
 from talkingscoresapp.models import RemoteAddressNotAllowed, RemoteHostNotFound, RemoteFetchRefused
 from talkingscoresapp.models import remove_file_quietly
-from talkingscoresapp import library, sharing
+from talkingscoresapp import library, reading, sharing
 from lib.render_settings import DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES, RenderSettings
 from lib.style_samples import style_samples
 
@@ -332,6 +332,12 @@ def write_json_file_atomic(path, data):
         raise
 
 
+def accepted_upload_extensions():
+    if reading.reader_is_set_up():
+        return ALLOWED_MUSICXML_EXTENSIONS + reading.ALLOWED_PAGE_EXTENSIONS
+    return ALLOWED_MUSICXML_EXTENSIONS
+
+
 class MusicXMLSubmissionForm(forms.Form):
     filename = forms.FileField(label='MusicXML file', widget=forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.xml,.musicxml,.mxl'}),
                                required=False)
@@ -342,7 +348,21 @@ class MusicXMLSubmissionForm(forms.Form):
         uploaded_file = self.cleaned_data.get('filename')
         if uploaded_file:
             file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+            if reading.reader_is_set_up() and reading.is_page_file(uploaded_file.name):
+                if uploaded_file.size > reading.MAX_UPLOADED_PAGE_BYTES:
+                    raise forms.ValidationError(
+                        "The file is too large. Choose a PDF or photo smaller than 20 MB."
+                    )
+                if not reading.has_page_signature(uploaded_file, file_extension):
+                    raise forms.ValidationError(
+                        "This file could not be opened as a PDF or photo. Save it again as a PDF, PNG or JPEG, then choose it again."
+                    )
+                return uploaded_file
             if file_extension not in ALLOWED_MUSICXML_EXTENSIONS:
+                if reading.reader_is_set_up():
+                    raise forms.ValidationError(
+                        "Choose a MusicXML file, a PDF or a photo. The name has to end in .musicxml, .xml, .mxl, .pdf, .png or .jpg."
+                    )
                 raise forms.ValidationError(
                     "Choose a MusicXML file. The name has to end in .musicxml, .xml or .mxl."
                 )
@@ -753,6 +773,10 @@ def index(request):
                 uploaded_file = form.cleaned_data.get('filename')
                 url = form.cleaned_data.get('url')
 
+                if uploaded_file and reading.reader_is_set_up() and reading.is_page_file(uploaded_file.name):
+                    page_reading = reading.ImageReading.from_uploaded_file(uploaded_file)
+                    page_reading.start()
+                    return redirect('reading', id=page_reading.id)
                 if uploaded_file:
                     uploaded_file.seek(0)
                     score = TSScore.from_uploaded_file(uploaded_file)
@@ -776,7 +800,12 @@ def index(request):
     else:
         form = MusicXMLSubmissionForm()
 
-    context = {'form': form, 'examples': library.examples()}
+    context = {
+        'form': form,
+        'examples': library.examples(),
+        'reads_images': reading.reader_is_set_up(),
+        'accepted_extensions': ",".join(accepted_upload_extensions()),
+    }
     return render(request, 'index.html', context)
 
 
@@ -796,6 +825,42 @@ def open_failure_message(ex):
         return DOWNLOAD_FAILED_MESSAGE
     logger.error(f"File Processing Error: {ex}", exc_info=True)
     return UNREADABLE_SCORE_MESSAGE
+
+
+def page_reading_or_404(id):
+    page_reading = reading.ImageReading(id)
+    if not page_reading.exists():
+        raise Http404("No page was uploaded with this id.")
+    return page_reading
+
+
+def reading_page(request, id):
+    page_reading = page_reading_or_404(id)
+    return render(request, 'reading.html', {'id': id, 'name': page_reading.name()})
+
+
+def reading_status(request, id):
+    page_reading = page_reading_or_404(id)
+    status = page_reading.status()
+    current = status.get("status")
+    if current == "complete":
+        score = TSScore(id=status.get("score_id"), filename=status.get("score_filename"))
+        if score.state() == TSScoreState.FETCHING:
+            # The score made from this page has been cleared away; the page is read again.
+            page_reading.clear_status()
+            page_reading.start()
+            return JsonResponse(page_reading.status())
+        response = JsonResponse({"status": "complete", "score_url": reverse('score', args=[score.id, score.filename])})
+        # Only the reader who uploaded the page knows its reading id, so they own the score made from it.
+        remember_owner(request, response, score.id)
+        return response
+    if current == "failed":
+        return JsonResponse({"status": "failed", "message": status.get("message", ""), "next_url": reverse('index')})
+    if not page_reading.is_running():
+        # A reading whose thread died with the server is started again.
+        page_reading.start()
+        status = page_reading.status()
+    return JsonResponse({"status": "reading", "message": status.get("message", "")})
 
 
 SEARCH_PAGE_SIZE = 50

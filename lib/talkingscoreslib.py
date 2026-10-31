@@ -1061,7 +1061,7 @@ class HTMLTalkingScoreFormatter:
 
     def generateHTML(self, output_path="", web_path="", download_html_url="", export_theme=None,
                      export_mode=False, download_text_url="", download_braille_url="", options_url="",
-                     share_path="", share_kept=False):
+                     share_path="", share_kept=False, read_from_image=False):
         template = self._setup_template_environment(export_mode=export_mode)
         self.build(output_path, web_path)
         palette = self.builder.palette
@@ -1086,6 +1086,7 @@ class HTMLTalkingScoreFormatter:
             'options_url': options_url,
             'share_path': share_path,
             'share_kept': share_kept,
+            'read_from_image': read_from_image,
             'export_theme': export_theme,
             'export_mode': export_mode,
             'inline_css': (self._read_static("css", "site.css") + self._read_static("css", "score.css")

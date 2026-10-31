@@ -12,7 +12,7 @@ SCORE_FOLDER_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class Command(BaseCommand):
-    help = "Remove old generated score media folders."
+    help = "Remove old generated score media folders and uploaded pages."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -39,10 +39,17 @@ class Command(BaseCommand):
         removed = 0
         skipped = 0
 
-        for name in os.listdir(MEDIA_ROOT):
-            path = os.path.join(MEDIA_ROOT, name)
-            # Only score folders are removed; the media root also holds the log
-            # and music21's own cache, which this command does not own.
+        # Uploaded PDFs and photos are kept per reading under readings/, named
+        # the same way as score folders, and age out the same way.
+        readings_root = os.path.join(MEDIA_ROOT, "readings")
+        candidates = [(MEDIA_ROOT, name) for name in os.listdir(MEDIA_ROOT)]
+        if os.path.isdir(readings_root):
+            candidates += [(readings_root, name) for name in os.listdir(readings_root)]
+
+        for parent, name in candidates:
+            path = os.path.join(parent, name)
+            # Only score and reading folders are removed; the media root also holds
+            # the log and music21's own cache, which this command does not own.
             if not os.path.isdir(path) or not SCORE_FOLDER_PATTERN.match(name):
                 skipped += 1
                 continue

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/2.2/ref/settings/
 """
 
+import json
 import os
 
 import sys
@@ -232,3 +233,18 @@ STORAGES = {
     },
 }
 
+
+
+# Reading scores from images. A reader is a program that takes a PDF or photo
+# of printed music and writes MusicXML. It is set as a JSON list, the command
+# and its arguments, where {image} is the page and {workdir} an empty folder
+# the program runs in. With no reader set, the upload form takes MusicXML only.
+# Audiveris, for example:
+#   DJANGO_SCORE_READER_COMMAND='["/opt/audiveris/bin/Audiveris", "-batch", "-export", "-output", "{workdir}", "--", "{image}"]'
+#   DJANGO_SCORE_READER_OUTPUT='**/*.mxl'
+SCORE_READER_COMMAND = json.loads(os.environ.get('DJANGO_SCORE_READER_COMMAND', '[]') or '[]')
+SCORE_READER_OUTPUT = os.environ.get('DJANGO_SCORE_READER_OUTPUT', '**/*.mxl')
+SCORE_READER_TIMEOUT = int(os.environ.get('DJANGO_SCORE_READER_TIMEOUT', '600'))
+# Readers such as Audiveris use a gigabyte or more of memory each, so only
+# this many run at once in each server process; the rest wait their turn.
+SCORE_READER_CONCURRENCY = int(os.environ.get('DJANGO_SCORE_READER_CONCURRENCY', '1'))
