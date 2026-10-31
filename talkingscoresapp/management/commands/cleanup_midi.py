@@ -4,12 +4,14 @@ import time
 
 from django.core.management.base import BaseCommand
 
+from lib.midiHandler import MIDI_FORMAT
 from talkingscores.settings import MEDIA_ROOT
 
-# A current file is named for the score and the range of bars it holds. Anything
-# else ending in .mid was written for a selection of instruments, a speed and a
-# click setting the browser now applies itself, so nothing asks for it again.
-CURRENT_MIDI = re.compile(r"b\d+e\d+\.mid$")
+# A current file is named for the score, the way it was written and the range of
+# bars it holds. Anything else ending in .mid was written by code that sounded
+# the score differently, or for a selection of instruments, a speed and a click
+# setting the browser now applies itself, so nothing asks for it again.
+CURRENT_MIDI = re.compile(r"p%dr?b\d+e\d+\.mid$" % MIDI_FORMAT)
 SCORE_SUFFIXES = (".xml", ".musicxml", ".mxl")
 # A half-written file is still being written until it is put in place, so one is
 # only counted as abandoned once no request could still be holding it open.

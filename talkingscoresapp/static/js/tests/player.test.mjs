@@ -9,7 +9,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const source = fs.readFileSync(path.join(here, "..", "player.js"), "utf8");
 const scope = { window: {} };
 new Function("window", source)(scope.window);
-const { parseMidi, collect } = scope.window.TalkingScoresPlayer.reading;
+const { parseMidi, collect, assignChannels } = scope.window.TalkingScoresPlayer.reading;
 
 const DIVISION = 96;
 
@@ -77,7 +77,8 @@ test("two voices holding one pitch at once are both heard", () => {
     const music = collect(parseMidi(file([events])), 1);
     assert.equal(music.parts[0].length, 2);
     assert.deepEqual(music.parts[0].map(n => Math.round(n.start * 1000)), [0, 250]);
-    assert.deepEqual(music.parts[0].map(n => Math.round(n.end * 1000)), [500, 1000]);
+    // The second voice strikes the pitch again, and it sounds until the later of the two ends.
+    assert.deepEqual(music.parts[0].map(n => Math.round(n.end * 1000)), [246, 1000]);
 });
 
 test("a note off written as a note on with no force ends the note", () => {
@@ -248,6 +249,14 @@ function stubAudioContext() {
                 disconnect() {}
             };
         }
+        createDynamicsCompressor() {
+            const setting = () => ({ value: 0 });
+            return {
+                threshold: setting(), knee: setting(), ratio: setting(), attack: setting(), release: setting(),
+                connect() {},
+                disconnect() {}
+            };
+        }
         createOscillator() {
             return {
                 type: "",
@@ -308,14 +317,14 @@ async function settle() {
     await new Promise((resolve) => setImmediate(resolve));
 }
 
-test("the whole-score control loads and plays every bar of the score", async () => {
+test("the whole-score control loads and plays every bar of the score, with its repeats", async () => {
     const requested = [];
     stubWindow(wholeScoreBuffer, requested);
     const controls = playerControls();
     const player = scope.window.TalkingScoresPlayer(wholeScoreData, controls);
     player.groupChanged({ start: 1, end: 2 });
     controls.playAll.fire("click");
-    assert.deepEqual(requested, ["/midis/x/y.musicxml?start=1&end=8"]);
+    assert.deepEqual(requested, ["/midis/x/y.musicxml?start=1&end=8&repeats=1"]);
     await settle();
     assert.equal(controls.status.textContent, "Playing the whole score.");
     assert.ok(controls.announcements.includes("Loading the whole score."));
@@ -370,4 +379,58 @@ test("a bar's start in crotchets lands on the file's own clock", () => {
     assert.equal(music.at(0), 0);
     assert.equal(music.at(4), 2);
     assert.equal(music.at(6), 4);
+});
+
+const marker = (delta, text) => variable(delta).concat([0xff, 0x06, text.length], [...text].map(c => c.charCodeAt(0)));
+
+test("a note written as stopping before it starts ends where it starts", () => {
+    // A grace note can be written this way: the stop, then the start, at one instant.
+    const events = noteOff(0, 74).concat(noteOn(0, 74), noteOn(0, 72), noteOff(DIVISION * 4, 72));
+    const music = collect(parseMidi(file([events])), 1);
+    const grace = music.parts[0].find(n => n.note === 74);
+    assert.equal(grace.end, grace.start);
+    assert.equal(Math.round(music.parts[0].find(n => n.note === 72).end * 1000), 2000);
+});
+
+test("two voices starting one pitch together sound it once", () => {
+    const events = noteOn(0, 60).concat(noteOn(0, 60, 70), noteOff(DIVISION, 60), noteOff(DIVISION, 60));
+    const music = collect(parseMidi(file([events])), 1);
+    assert.equal(music.parts[0].length, 1);
+    assert.equal(music.parts[0][0].velocity, 90);
+});
+
+test("a note struck again as the last one stops is let go first", () => {
+    const events = noteOn(0, 60).concat(noteOff(DIVISION, 60), noteOn(0, 60), noteOff(DIVISION, 60));
+    const music = collect(parseMidi(file([events])), 1);
+    assert.ok(music.parts[0][0].end < music.parts[0][1].start);
+});
+
+test("the bar markers name each bar as it is reached and belong to no part", () => {
+    const conductor = tempo(500000);
+    const notes = noteOn(0, 60).concat(noteOff(DIVISION * 4, 60), noteOn(0, 62), noteOff(DIVISION * 4, 62),
+        noteOn(0, 60), noteOff(DIVISION * 4, 60));
+    const markers = marker(0, "bar 1").concat(marker(DIVISION * 4, "bar 2"), marker(DIVISION * 4, "bar 1"));
+    const music = collect(parseMidi(file([conductor, notes, markers])), 1);
+    assert.equal(music.matches, true);
+    assert.equal(music.parts.length, 1);
+    assert.deepEqual(music.bars.map(b => [b.number, b.at]), [[1, 0], [2, 2], [1, 4]]);
+});
+
+test("every part gets a channel of its own, and percussion stays on its channel", () => {
+    // Two violins written on one channel, a piano's two staves on another, and a drum kit.
+    const written = [{ number: 2, program: 40 }, { number: 2, program: 40 }, { number: 0, program: 0 },
+        { number: 0, program: 0 }, { number: 9, program: 0 }, { number: -1, program: 0 }];
+    assert.deepEqual(assignChannels(written), [0, 1, 2, 3, 9, -1]);
+});
+
+test("past fifteen parts a channel is shared with the same instrument", () => {
+    const written = [];
+    for (let index = 0; index < 15; index++) {
+        written.push({ number: 0, program: index });
+    }
+    written.push({ number: 0, program: 3 });
+    const given = assignChannels(written);
+    assert.equal(new Set(given.slice(0, 15)).size, 15);
+    assert.ok(!given.includes(9));
+    assert.equal(given[15], given[3]);
 });

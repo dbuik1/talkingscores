@@ -2187,7 +2187,7 @@ class ReaderPageTests(TestCase):
         self.assertIn('id="setting-repeat"', html)
         self.assertIn('id="play-whole-score"', html)
         self.assertIn('id="download-midi"', html)
-        self.assertIn('id="download-whole-midi" href="/midis/x/y.musicxml?start=1&amp;end=25"', html)
+        self.assertIn('id="download-whole-midi" href="/midis/x/y.musicxml?start=1&amp;end=25&amp;repeats=1"', html)
         self.assertNotIn('id="setting-voice"', html)     # one voice needs no choice
         self.assertNotIn('id="setting-forward"', html)   # one part cannot be brought forward
         self.assertNotIn("midijs.net", html)             # the page sounds the MIDI itself
@@ -2577,7 +2577,7 @@ class MidiFileTests(TestCase):
             with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
                 handler = self._handler_in(temp_dir)
                 path = handler.make_midi_file(2, 3)
-                self.assertTrue(path.endswith("score.musicxmlb2e3.mid"))
+                self.assertTrue(path.endswith("score.musicxmlp2b2e3.mid"))
                 header, tracks = self._tracks_with_notes(path)
                 self.assertEqual(header, b"MThd")
                 self.assertGreaterEqual(tracks, 2)     # one track per part
@@ -2592,13 +2592,13 @@ class MidiFileTests(TestCase):
             with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
                 handler = self._handler_in(temp_dir, {"start": "1", "end": "2"})
                 self.assertEqual(handler.requested_range(), (1, 2))
-                self.assertTrue(handler.get_or_make_midi_file().endswith("b1e2.mid"))
+                self.assertTrue(handler.get_or_make_midi_file().endswith("p2b1e2.mid"))
 
     def test_the_whole_score_is_written_when_no_range_is_asked_for(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
                 handler = self._handler_in(temp_dir)
-                self.assertTrue(handler.make_midi_file().endswith("b1e3.mid"))
+                self.assertTrue(handler.make_midi_file().endswith("p2b1e3.mid"))
 
     def test_a_written_range_is_served_without_reading_the_score_again(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2606,17 +2606,17 @@ class MidiFileTests(TestCase):
                 self._handler_in(temp_dir).make_midi_file(1, 2)
                 second = self._handler_in(temp_dir)
                 with patch("lib.midiHandler.parse_score") as mock_parse:
-                    self.assertTrue(second.make_midi_file(1, 2).endswith("b1e2.mid"))
+                    self.assertTrue(second.make_midi_file(1, 2).endswith("p2b1e2.mid"))
                 mock_parse.assert_not_called()
 
     def test_a_range_past_the_last_bar_writes_the_range_that_fits(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
                 handler = self._handler_in(temp_dir)
-                self.assertTrue(handler.make_midi_file(2, 900).endswith("b2e3.mid"))
-                self.assertTrue(handler.make_midi_file(900, 950).endswith("b3e3.mid"))
+                self.assertTrue(handler.make_midi_file(2, 900).endswith("p2b2e3.mid"))
+                self.assertTrue(handler.make_midi_file(900, 950).endswith("p2b3e3.mid"))
                 written = sorted(os.path.basename(path) for path in glob.glob(os.path.join(temp_dir, VALID_ID, "*.mid")))
-                self.assertEqual(written, ["score.musicxmlb2e3.mid", "score.musicxmlb3e3.mid"])
+                self.assertEqual(written, ["score.musicxmlp2b2e3.mid", "score.musicxmlp2b3e3.mid"])
 
     def test_a_failed_write_leaves_nothing_behind(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2651,7 +2651,9 @@ class StaleMidiCleanupTests(TestCase):
             os.makedirs(folder)
             names = [
                 "score.musicxml",
-                "score.musicxmlb1e2.mid",          # a range the page still asks for
+                "score.musicxmlp2b1e2.mid",        # a range the page still asks for
+                "score.musicxmlp2rb1e9.mid",       # the whole score with its repeats
+                "score.musicxmlb1e2.mid",          # written before grace notes and transposing instruments sounded right
                 "score.musicxmls1e2.mid",          # bars counted the way they were before
                 "score.musicxmls1e2c0t100.mid",    # a speed and a click the browser now applies
                 "score.musicxmlsel-1b1e2.mid",     # a selection of instruments
@@ -2669,8 +2671,9 @@ class StaleMidiCleanupTests(TestCase):
             with patch("talkingscoresapp.management.commands.cleanup_midi.MEDIA_ROOT", temp_dir):
                 call_command("cleanup_midi", stdout=output)
 
-            self.assertEqual(sorted(os.listdir(folder)), ["score.musicxml", "score.musicxmlb1e2.mid"])
-            self.assertIn("Removed 6 file(s); kept 1.", output.getvalue())
+            self.assertEqual(sorted(os.listdir(folder)),
+                             ["score.musicxml", "score.musicxmlp2b1e2.mid", "score.musicxmlp2rb1e9.mid"])
+            self.assertIn("Removed 7 file(s); kept 2.", output.getvalue())
 
     def test_a_write_still_in_progress_is_left_alone(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2782,6 +2785,140 @@ class PlayerScriptTests(TestCase):
             self.assertEqual(music["parts"][0], [72])
             self.assertEqual(music["clicks"], 8)
             self.assertAlmostEqual(music["duration"], 4.0, places=3)
+
+
+
+class PlaybackFollowsTheScoreTests(TestCase):
+    """What a written MIDI file sounds like, read back the way the browser reads it."""
+
+    @staticmethod
+    def _score(parts):
+        part_list = "".join(f'<score-part id="P{i}"><part-name>{name}</part-name>{extra}</score-part>'
+                            for i, (name, extra, _) in enumerate(parts, 1))
+        bodies = "".join(f'<part id="P{i}">{bars}</part>' for i, (_, _, bars) in enumerate(parts, 1))
+        return (f'<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1">'
+                f'<part-list>{part_list}</part-list>{bodies}</score-partwise>')
+
+    @staticmethod
+    def _bars(*bars):
+        return "".join(f'<measure number="{i}">{bar}</measure>' for i, bar in enumerate(bars, 1))
+
+    ATTRIBUTES = ('<attributes><divisions>1</divisions><key><fifths>0</fifths></key>'
+                  '<time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef>')
+    SIXTY = ('<direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>60</per-minute>'
+             '</metronome></direction-type><sound tempo="60"/></direction>')
+
+    @staticmethod
+    def _whole(step, octave=5):
+        return (f'<note><pitch><step>{step}</step><octave>{octave}</octave></pitch>'
+                f'<duration>4</duration><type>whole</type></note>')
+
+    @staticmethod
+    def _words(text):
+        return f'<direction><direction-type><words>{text}</words></direction-type></direction>'
+
+    def _play(self, xml, start=None, end=None, repeats=False):
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("node is not installed")
+        from lib.midiHandler import MidiHandler
+        from lib.talkingscoreslib import Music21TalkingScore
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
+                folder = os.path.join(temp_dir, VALID_ID)
+                os.makedirs(folder)
+                score_path = os.path.join(folder, "score.musicxml")
+                with open(score_path, "w", encoding="utf-8") as score_file:
+                    score_file.write(xml)
+                request = Mock()
+                request.GET = {}
+                path = MidiHandler(request, VALID_ID, "score.musicxml").make_midi_file(start, end, repeats=repeats)
+                score = Music21TalkingScore(score_path)
+                score.get_instruments()
+                part_count = sum(entry[2] for entry in score.part_instruments.values())
+                reader = os.path.join(settings.BASE_DIR, "talkingscoresapp", "static", "js",
+                                      "tests", "read-midi.mjs")
+                result = subprocess.run([node, reader, path, str(part_count)],
+                                        capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        music = json.loads(result.stdout)
+        self.assertTrue(music["matches"])
+        return music
+
+    def _repeated(self):
+        forward = '<barline location="left"><repeat direction="forward"/></barline>'
+        backward = ('<barline location="right"><bar-style>light-heavy</bar-style>'
+                    '<repeat direction="backward"/></barline>')
+        return self._score([("Flute", "", self._bars(
+            self.ATTRIBUTES + '</attributes>' + self.SIXTY + self._whole("C"),
+            forward + self._whole("D"),
+            self._whole("E") + backward,
+            self._whole("F")))])
+
+    def test_a_transposing_instrument_sounds_at_concert_pitch(self):
+        clarinet = ('<score-instrument id="P1-I1"><instrument-name>Clarinet in B flat</instrument-name>'
+                    '</score-instrument><midi-instrument id="P1-I1"><midi-channel>1</midi-channel>'
+                    '<midi-program>72</midi-program></midi-instrument>')
+        transpose = '<transpose><diatonic>-1</diatonic><chromatic>-2</chromatic></transpose></attributes>'
+        music = self._play(self._score([("Clarinet", clarinet, self._bars(
+            self.ATTRIBUTES + transpose + self.SIXTY + self._whole("D")))]))
+        # Written D5 on a clarinet in B flat sounds C5.
+        self.assertEqual(music["parts"][0], [72])
+
+    def test_a_grace_note_is_short_and_the_note_after_it_still_sounds(self):
+        grace = '<note><grace/><pitch><step>D</step><octave>5</octave></pitch><type>eighth</type></note>'
+        music = self._play(self._score([("Flute", "", self._bars(
+            self.ATTRIBUTES + '</attributes>' + self.SIXTY + grace + self._whole("C")))]))
+        (grace_note, grace_start, grace_end), (main_note, main_start, main_end) = music["timings"][0]
+        self.assertEqual((grace_note, main_note), (74, 72))
+        self.assertLessEqual(grace_end - grace_start, 0.125)
+        self.assertAlmostEqual(main_start, grace_end, places=2)
+        self.assertAlmostEqual(main_end, 4.0, places=2)
+
+    def test_the_whole_score_plays_its_repeats_and_names_each_bar_as_it_comes(self):
+        music = self._play(self._repeated(), repeats=True)
+        self.assertEqual(music["parts"][0], [72, 74, 76, 74, 76, 77])
+        self.assertEqual([bar for bar, _ in music["bars"]], [1, 2, 3, 2, 3, 4])
+        self.assertAlmostEqual(music["duration"], 24.0, places=2)
+
+    def test_a_group_plays_as_written_even_when_repeats_are_asked_for(self):
+        music = self._play(self._repeated(), 2, 3, repeats=True)
+        self.assertEqual(music["parts"][0], [74, 76])
+
+    def test_a_first_and_second_time_ending_play_in_turn(self):
+        first = ('<barline location="left"><ending number="1" type="start"/></barline>',
+                 '<barline location="right"><ending number="1" type="stop"/><repeat direction="backward"/></barline>')
+        second = ('<barline location="left"><ending number="2" type="start"/></barline>',
+                  '<barline location="right"><ending number="2" type="discontinue"/></barline>')
+        xml = self._score([("Flute", "", self._bars(
+            self.ATTRIBUTES + '</attributes>' + self.SIXTY + self._whole("C"),
+            first[0] + self._whole("D") + first[1],
+            second[0] + self._whole("E") + second[1],
+            self._whole("F")))])
+        self.assertEqual(self._play(xml, repeats=True)["parts"][0], [72, 74, 72, 76, 77])
+
+    def test_da_capo_al_fine_returns_to_the_first_speed(self):
+        faster = ('<direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>120'
+                  '</per-minute></metronome></direction-type><sound tempo="120"/></direction>')
+        xml = self._score([("Flute", "", self._bars(
+            self.ATTRIBUTES + '</attributes>' + self.SIXTY + self._whole("C"),
+            self._whole("D") + self._words("Fine"),
+            faster + self._whole("E") + self._words("D.C. al Fine")))])
+        music = self._play(xml, repeats=True)
+        self.assertEqual(music["parts"][0], [72, 74, 76, 72, 74])
+        # Four seconds a bar at 60, two at 120, then four again from the top.
+        self.assertEqual([start for _, start, _ in music["timings"][0]], [0, 4, 8, 10, 14])
+
+    def test_a_group_holding_a_da_capo_plays_its_own_bars(self):
+        xml = self._score([("Flute", "", self._bars(
+            self.ATTRIBUTES + '</attributes>' + self.SIXTY + self._whole("C"),
+            self._whole("D") + self._words("Fine"),
+            self._whole("E") + self._words("D.C. al Fine")))])
+        self.assertEqual(self._play(xml, 3, 3)["parts"][0], [76])
+        self.assertEqual(self._play(xml, 2, 3)["parts"][0], [74, 76])
+        # The whole score asked for as written keeps to the written bars as well.
+        self.assertEqual(self._play(xml)["parts"][0], [72, 74, 76])
 
 
 def _raise_or_return(outcome):
