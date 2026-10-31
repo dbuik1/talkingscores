@@ -46,8 +46,10 @@ CHECKBOX_FIELDS = (
     "chk_playAll", "chk_playSelected", "chk_playUnselected", "chk_include_rests",
     "chk_include_ties", "chk_include_arpeggios", "chk_include_dynamics",
     "chk_include_slurs", "chk_include_articulations", "chk_include_directions",
-    "chk_describe_chords", "chk_colourPitch",
+    "chk_describe_chords", "chk_colourPitch", "chk_separate_voices", "chk_chord_symbol_line",
 )
+
+CHORD_SYMBOL_READINGS = ("name", "notes", "written", "none")
 
 # The options page reads this rather than naming the styles itself, so a style
 # added to the engine reaches the page with the words that describe it. The
@@ -98,7 +100,7 @@ SCORE_MISSING_MESSAGE = "This score is no longer stored here. Open the file agai
 PRIVATE_ADDRESS_MESSAGE = "The link points at a private or local network address. Enter a link to a file on a public website."
 HOST_NOT_FOUND_MESSAGE = "That web address could not be found. Check the link and try again."
 DOWNLOAD_FAILED_MESSAGE = "The file could not be downloaded from that link. Check the link and try again."
-UNREADABLE_SCORE_MESSAGE = "The file could not be read as MusicXML. Check that it is a .musicxml, .xml or .mxl file exported from notation software."
+UNREADABLE_SCORE_MESSAGE = "The file could not be read as MusicXML. Check that it is a .musicxml, .xml or .mxl file saved from a music program such as MuseScore."
 
 ACCESSIBLE_PALETTE = [
     '#E6194B',  # Red
@@ -391,7 +393,7 @@ def midi(request, id, filename):
         return HttpResponse("There is nothing to play for that range.", status=404)
     except Exception:
         logger.exception("Unable to generate MIDI: http://%s%s" % (request.get_host(), request.get_full_path()))
-        return HttpResponse("The audio for those bars could not be generated.", status=500)
+        return HttpResponse("The audio for those bars could not be created.", status=500)
     
     if os.path.exists(midi_file_path):
         fr = FileResponse(
@@ -412,7 +414,7 @@ def download_html(request, id, filename):
 
     state = score_obj.state()
     if state == TSScoreState.AWAITING_OPTIONS:
-        messages.error(request, "Generate the talking score before downloading it.")
+        messages.error(request, "Create the talking score before downloading it.")
         return redirect('options', id, filename)
     if state != TSScoreState.PROCESSED:
         messages.error(request, SCORE_MISSING_MESSAGE)
@@ -438,7 +440,7 @@ def _download_export(request, id, filename, braille):
     score_obj = TSScore(id=id, filename=filename)
     state = score_obj.state()
     if state == TSScoreState.AWAITING_OPTIONS:
-        messages.error(request, "Generate the talking score before downloading it.")
+        messages.error(request, "Create the talking score before downloading it.")
         return redirect('options', id, filename)
     if state != TSScoreState.PROCESSED:
         messages.error(request, SCORE_MISSING_MESSAGE)
@@ -536,6 +538,9 @@ def options(request, id, filename):
         else:
             figure_note_colours = color_profiles.get(selected_profile, {})
 
+        chord_symbol_reading = request.POST.get("chord_symbol_reading", "name")
+        if chord_symbol_reading not in CHORD_SYMBOL_READINGS:
+            chord_symbol_reading = "name"
         options_data = {
             "style": clean_style(request.POST.get("style")),
             "bars_at_a_time": int(form.cleaned_data.get("bars_at_a_time", 2)),
@@ -559,6 +564,10 @@ def options(request, id, filename):
             "include_arpeggios": "chk_include_arpeggios" in request.POST,
             "describe_chords": "chk_describe_chords" in request.POST,
             "include_dynamics": "chk_include_dynamics" in request.POST,
+            "separate_voices": "chk_separate_voices" in request.POST,
+            "chord_symbols_on_own_line": "chk_chord_symbol_line" in request.POST,
+            "chord_symbols": chord_symbol_reading != "none",
+            "chord_symbol_reading": chord_symbol_reading if chord_symbol_reading != "none" else "name",
             "accidental_style": request.POST.get("accidental_style", "words"),
             "repetition_mode": request.POST.get("repetition_mode", "learning"),
             "colour_position": "words" if "chk_colourWords" in request.POST else "none",

@@ -49,7 +49,7 @@ NAT64_NETWORKS = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64
 # the host the request actually connects to.
 NO_PROXIES = {"http": None, "https": None}
 
-GENERATION_FAILED_MESSAGE = "The talking score could not be generated from this file."
+GENERATION_FAILED_MESSAGE = "The talking score could not be created from this file."
 
 
 class ScoreGenerationInProgress(Exception):
@@ -99,7 +99,7 @@ def check_url_targets_public_host(url):
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
-        raise RemoteFetchRefused("The link must start with http:// or https://.")
+        raise RemoteFetchRefused("Enter a link that starts with https:// or http://.")
     host = parsed.hostname
     if not host:
         raise RemoteAddressNotAllowed("The URL has no host name.")
@@ -166,28 +166,28 @@ def fetch_remote_score(url):
                 location = response.headers.get("Location")
                 response.close()
                 if not location:
-                    raise RemoteFetchRefused("The link redirected without saying where to.")
+                    raise RemoteFetchRefused("That link sends you on to another page without saying which one. Paste a link straight to the file.")
                 current_url = urljoin(current_url, location)
                 continue
             response.raise_for_status()
             declared = response.headers.get("Content-Length")
             if declared and declared.isdigit() and int(declared) > MAX_REMOTE_SCORE_BYTES:
-                raise RemoteFetchRefused("The file at that link is larger than 10 MB.")
+                raise RemoteFetchRefused("The file at that link is larger than 10 MB. Choose a smaller file.")
             file_chunks = []
             total_bytes = 0
             for chunk in response.iter_content(chunk_size=65536):
                 if time.monotonic() > deadline:
-                    raise RemoteFetchRefused("The file at that link took too long to arrive.")
+                    raise RemoteFetchRefused("The file at that link took too long to download. Try again, or save the file to your device and open it from there.")
                 if not chunk:
                     continue
                 total_bytes += len(chunk)
                 if total_bytes > MAX_REMOTE_SCORE_BYTES:
-                    raise RemoteFetchRefused("The file at that link is larger than 10 MB.")
+                    raise RemoteFetchRefused("The file at that link is larger than 10 MB. Choose a smaller file.")
                 file_chunks.append(chunk)
             return b"".join(file_chunks), current_url
         finally:
             session.close()
-    raise RemoteFetchRefused("The link redirected too many times.")
+    raise RemoteFetchRefused("That link sends you on through too many pages. Paste a link straight to the file.")
 
 
 def configure_score_logger():
@@ -655,7 +655,7 @@ class TSScore(object):
             with open(status_path, "r", encoding="utf-8") as status_file:
                 return json.load(status_file)
         except (OSError, json.JSONDecodeError):
-            return {"status": "unknown", "message": "Could not read processing status."}
+            return {"status": "unknown", "message": "Checking on the talking score"}
 
     def clear_generated_html_state(self):
         for path in (self.get_html_cache_file_path(), self.get_text_cache_file_path(),
@@ -718,7 +718,7 @@ class TSScore(object):
         except Exception:
             if raise_errors:
                 raise
-            return "<h1>The talking score could not be generated</h1><p>This file could not be written out all the way through. Try a different MusicXML file.</p><p><a href=\"/\">Open a different score</a></p>"
+            return "<h1>The talking score could not be created</h1><p>Talking Scores could not finish writing out this file. Try a different MusicXML file.</p><p><a href=\"/\">Open a different score</a></p>"
         finally:
             self.release_generation_lock()
 
