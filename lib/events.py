@@ -81,6 +81,10 @@ class TSPitch:
         self.differs_from_key = differs_from_key
         # Set only where the notes of a chord are tied differently from each other.
         self.tie = None
+        # The finger for this note as text, such as "3", or "3-1" for a change of
+        # finger on a held note; printed says whether the score wrote it.
+        self.finger = None
+        self.finger_printed = False
 
     @property
     def diatonic_number(self):

@@ -16,7 +16,8 @@ from abc import ABCMeta, abstractmethod
 from types import SimpleNamespace
 
 from jinja2 import Environment, FileSystemLoader
-from music21 import converter, duration, environment, harmony, key, meter, stream
+from music21 import articulations, converter, duration, environment, harmony, key, meter, stream
+from music21 import instrument as instrument_module
 from music21 import pitch as pitch_module
 from music21.stream import makeNotation
 from music21.stream.enums import ShowNumber
@@ -28,6 +29,7 @@ from lib.description import (
     DescriptionBuilder, Fact, InstrumentDescription, ScoreFacts, SegmentDescription,
     clean_colour_map, segments_to_text,
 )
+from lib import fingering
 from lib.events import TSChord, TSChordSymbol, TSDynamic, TSNote, TSPitch, TSRest, TSUnpitched
 from lib.musicAnalyser import MusicAnalyser
 from lib.render_settings import RenderSettings, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES
@@ -349,6 +351,41 @@ def mark_tuplet_brackets(measure_stream):
         pass
 
 
+def printed_fingers(element):
+    """The fingers the score prints on a note or chord, as text such as "3" or "3-1".
+
+    A substitution changes finger on the held note, so it joins the finger
+    before it; an alternative fingering is left out.
+    """
+    fingers = []
+    for articulation in getattr(element, 'articulations', ()):
+        if not isinstance(articulation, articulations.Fingering) or articulation.alternate:
+            continue
+        number = articulation.fingerNumber
+        if number is None or str(number).strip() == "":
+            continue
+        if articulation.substitution and fingers:
+            fingers[-1] = f"{fingers[-1]}-{number}"
+        else:
+            fingers.append(str(number))
+    return fingers
+
+
+KEYBOARD_NAMES = re.compile(r"piano|keyboard|organ|harpsichord|clavi|celest|harmonium|cembalo|klavier|pianoforte",
+                            re.IGNORECASE)
+
+
+def is_keyboard(part, staves=1):
+    """Whether the part is played on a keyboard, from its instrument or its name."""
+    instrument = part.getInstrument(recurse=True)
+    if isinstance(instrument, instrument_module.KeyboardInstrument):
+        return True
+    names = " ".join(filter(None, (instrument.partName, instrument.instrumentName, part.partName)))
+    if KEYBOARD_NAMES.search(names):
+        return True
+    return staves == 2 and not names.strip()
+
+
 def alter_name(alter):
     """The accidental name for a written alteration, or None if there is not one."""
     try:
@@ -393,6 +430,7 @@ class Music21TalkingScore(TalkingScoreBase):
         self.slur_edges = {}
         self.unpitched_names = self._read_unpitched_names()
         self.current_part_index = None
+        self.suggested_fingers = {}
         self.bar_labels = self._renumber_bars()
         self.use_settings(settings or RenderSettings())
         super().__init__()
@@ -400,6 +438,7 @@ class Music21TalkingScore(TalkingScoreBase):
     def use_settings(self, settings):
         self.settings = settings
         self.vocabulary = Vocabulary(settings)
+        self.suggested_fingers = {}
 
     # Title and composer
 
@@ -758,6 +797,7 @@ class Music21TalkingScore(TalkingScoreBase):
             measure.number = bar_index
             # Accidentals last until the bar line, so each bar starts from the key signature alone.
             state = self._key_signature_alters(measure)
+            state["measure_offset"] = self._measure_offset(measure, part_index, start_bar == 0)
             self.update_events_for_measure(measure, intermediate_events, state=state)
             measure.number = original_number
 
@@ -858,6 +898,15 @@ class Music21TalkingScore(TalkingScoreBase):
                   .setdefault(voice, []) \
                   .append(event)
 
+    def _measure_offset(self, measure, part_index, is_pickup):
+        """Where the bar starts in its part, in quarter notes; suggested fingers are kept by it."""
+        if is_pickup:
+            return 0.0
+        try:
+            return float(measure.getOffsetBySite(self.score.parts[part_index]))
+        except Exception:
+            return None
+
     @staticmethod
     def _key_signature_alters(measure):
         """{step: alter} for the key signature in force, plus the key itself under "key"."""
@@ -904,6 +953,8 @@ class Music21TalkingScore(TalkingScoreBase):
             event.pitch = self._make_pitch(element.pitch, state)
             if element.tie:
                 event.tie = element.tie.type
+            printed = printed_fingers(element)
+            self._set_finger(event.pitch, printed[0] if printed else None, element, state)
             event.expressions = [exp.name for exp in element.expressions if getattr(exp, 'name', None)]
             return event
         if element_type == 'Rest':
@@ -920,9 +971,15 @@ class Music21TalkingScore(TalkingScoreBase):
         if element_type == 'Chord':
             event = TSChord()
             event.pitches = []
-            for chord_note in element.notes:
+            printed = printed_fingers(element)
+            if len(printed) != len(element.notes):
+                # Fingers belong to the chord's notes in the order the file lists
+                # them; a count that does not match cannot be paired up.
+                printed = [None] * len(element.notes)
+            for chord_note, printed_finger in zip(element.notes, printed):
                 pitch = self._make_pitch(chord_note.pitch, state)
                 pitch.tie = chord_note.tie.type if chord_note.tie else None
+                self._set_finger(pitch, printed_finger, element, state)
                 event.pitches.append(pitch)
             ties = {pitch.tie for pitch in event.pitches}
             if len(ties) == 1:
@@ -953,15 +1010,97 @@ class Music21TalkingScore(TalkingScoreBase):
             if tuplet.type in ("stop", "startStop"):
                 event.tuplet_stop = True
         if self.settings.articulations:
+            # Fingers are read on a line of their own, never as an articulation word.
             event.articulations = [
                 articulation.name for articulation in getattr(element, 'articulations', ())
-                if getattr(articulation, 'name', None)]
+                if getattr(articulation, 'name', None)
+                and not isinstance(articulation, articulations.Fingering)]
         event.slur = self.slur_edges.get(slur_key(element))
         beams = getattr(element, 'beams', None)
         if beams is not None and beams.beamsList:
             beam_type = beams.beamsList[0].type
             if beam_type in ('start', 'stop'):
                 event.beam = beam_type
+
+    # Fingering
+
+    def _set_finger(self, pitch, printed, element, state):
+        mode = self.settings.fingering
+        if mode == "none":
+            return
+        if printed:
+            pitch.finger, pitch.finger_printed = printed, True
+            return
+        if mode != "suggested" or state.get("measure_offset") is None:
+            return
+        plan = self._suggested_fingers_for(self.current_part_index)
+        offset = state["measure_offset"] + float(element.offset)
+        finger = plan.get((round(offset, 4), round(pitch.pitch_number, 2), bool(element.duration.isGrace)))
+        if finger is not None:
+            pitch.finger = str(finger)
+
+    def hand(self, part_index):
+        """right, left, or None for a part that is not played on a keyboard."""
+        part = self.score.parts[part_index]
+        if not is_keyboard(part, self._staves_in_instrument(part_index)):
+            return None
+        name = self.part_names.get(part_index)
+        if name == "Right hand":
+            return "right"
+        if name == "Left hand":
+            return "left"
+        pitches = sorted(n.pitch.ps for n in part.flatten().notes if hasattr(n, 'pitch'))
+        if not pitches:
+            pitches = sorted(p.ps for c in part.flatten().notes for p in getattr(c, 'pitches', ()))
+        if not pitches:
+            return "right"
+        return "right" if pitches[len(pitches) // 2] >= 60 else "left"
+
+    def _staves_in_instrument(self, part_index):
+        for _, first, count, _ in self.part_instruments.values():
+            if first <= part_index < first + count:
+                return count
+        return 1
+
+    def _suggested_fingers_for(self, part_index):
+        """{(offset in the part, pitch number, grace): finger} for every note the plan fingers."""
+        if part_index in self.suggested_fingers:
+            return self.suggested_fingers[part_index]
+        found = {}
+        self.suggested_fingers[part_index] = found
+        hand = self.hand(part_index)
+        if hand is None:
+            return found
+        by_moment = {}
+        graces = 0
+        for element in self.score.parts[part_index].flatten().notes:
+            kind = type(element).__name__
+            notes = list(element.notes) if kind == 'Chord' else ([element] if kind == 'Note' else [])
+            printed = printed_fingers(element)
+            if len(printed) != len(notes):
+                printed = [None] * len(notes)
+            offset = round(float(element.offset), 4)
+            grace = bool(element.duration.isGrace)
+            if grace:
+                # A grace note shares its offset with the note it decorates, so it
+                # sorts just before that note as a moment of its own.
+                graces += 1
+                order = (offset, 0, graces)
+            else:
+                order = (offset, 1, 0)
+            for note_element, printed_finger in zip(notes, printed):
+                if note_element.tie is not None and note_element.tie.type in ('stop', 'continue'):
+                    continue
+                by_moment.setdefault(order, []).append(
+                    (note_element.pitch.ps, fingering.first_finger(printed_finger)))
+        orders = sorted(by_moment)
+        moments = [sorted(by_moment[order]) for order in orders]
+        for order, notes, fingers in zip(orders, moments, fingering.plan(moments, hand)):
+            if fingers is None:
+                continue
+            for (ps, _), finger in zip(notes, fingers):
+                found[(order[0], round(ps, 2), order[1] == 0)] = finger
+        return found
 
     # Ranges
 
@@ -1412,7 +1551,7 @@ class HTMLTalkingScoreFormatter:
                         chord_lengths.setdefault(bar, length)
                 instrument.parts.append(self.builder.build_part(
                     part_index, self.score.part_name(ins, part_index), events, lengths,
-                    beat_lengths, pickup_bar=pickup_bar))
+                    beat_lengths, pickup_bar=pickup_bar, hand=self._hand(part_index)))
             if chord_symbols:
                 name = f"{self.score.part_instruments[ins][0]} - {self.builder.vocabulary.chord_symbol_line_label()}"
                 chord_part = self.builder.build_chord_symbol_part(
@@ -1421,6 +1560,12 @@ class HTMLTalkingScoreFormatter:
                     instrument.parts.insert(0, chord_part)
             segment.instruments.append(instrument)
         return segment
+
+    def _hand(self, part_index):
+        hands = self.__dict__.setdefault("_hands", {})
+        if part_index not in hands:
+            hands[part_index] = self.score.hand(part_index)
+        return hands[part_index]
 
     def _handle_pickup_bar(self, music_segments):
         first_measure = self.score.score.parts[0].getElementsByClass('Measure')[0]

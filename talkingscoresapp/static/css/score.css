@@ -74,6 +74,8 @@ html.js .group:not(.current) > .body { display: none; }
 }
 .part details { border: 0; }
 .part details > summary { font-size: 1.125rem; min-height: 48px; }
+/* Fingering sits under the notes it fingers, a step smaller so the notes stay the line to read. */
+.part .fingering { font-size: calc(var(--note) * 0.85); margin: 8px 0 0; }
 
 .beats li {
     display: grid;

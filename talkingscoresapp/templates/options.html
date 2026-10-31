@@ -192,6 +192,18 @@
                 <label class="check"><input type="checkbox" name="chk_chord_symbol_line" value="checked" data-any-style checked>Chord symbols on their own line</label>
             </div>
         </details>
+        <details class="section" name="option-details">
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="label">Fingering</span><span class="current" data-summary="fingering"></span></summary>
+            <div class="section-body">
+                <span class="setting"><label for="fingering">Say fingering</label>
+                    <select class="input" name="fingering" id="fingering" aria-describedby="fingering-help" data-any-style>
+                        <option value="printed" selected>Only where the music prints it</option>
+                        <option value="suggested">Printed, plus suggestions for piano</option>
+                        <option value="none">Never</option>
+                    </select></span>
+                <p class="hint" id="fingering-help">Suggestions fill in the notes the score leaves unfingered and are read as suggested fingering</p>
+            </div>
+        </details>
 
         <details class="section" name="option-details"{% if instruments_invalid %} open{% endif %}>
             <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="label">Parts and playback</span><span class="current" data-summary="instruments"></span></summary>
