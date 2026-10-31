@@ -220,8 +220,14 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-# Media root
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# Uploaded scores, talking scores, MIDI files and share links. A container's
+# own disk is emptied on every deploy, so production points this at a volume:
+# DJANGO_MEDIA_ROOT when set, otherwise the volume Railway mounts, if any.
+MEDIA_ROOT = (
+    os.environ.get('DJANGO_MEDIA_ROOT')
+    or os.environ.get('RAILWAY_VOLUME_MOUNT_PATH')
+    or os.path.join(BASE_DIR, 'media')
+)
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 STORAGES = {
