@@ -52,7 +52,9 @@ python .\manage.py cleanup_media --older-than-days 30 --dry-run
 python .\manage.py cleanup_media --older-than-days 30
 ```
 
-Use `--dry-run` first to inspect what would be deleted.
+Use `--dry-run` first to inspect what would be deleted. Nothing runs this on a
+schedule, so files are kept until it is run. Scores a reader listed in Find a
+score are kept however old they are, since an upload cannot be fetched again.
 
 The talking score page asks for one MIDI file per range of bars. Files written before
 that, whose names carry a selection of instruments, a speed or a click setting,
@@ -219,14 +221,14 @@ If you deploy this repo on Railway:
    DJANGO_ALLOWED_HOSTS=your-domain.com,talkingscores.davidbuik.com
    DJANGO_CSRF_TRUSTED_ORIGINS=https://your-domain.com,https://talkingscores.davidbuik.com
    ```
-3. Attach persistent storage and point `MEDIA_ROOT` at it if you want uploaded files, generated HTML, and MIDI files to survive restarts.
+3. Attach a volume to the service, mounted at `/data`. The container's own disk is emptied on every deploy and restart, and with it every uploaded file, talking score, MIDI file and short link. With a volume attached, the app stores them on it: it reads the `RAILWAY_VOLUME_MOUNT_PATH` variable Railway sets, or `DJANGO_MEDIA_ROOT` if you set one. A talking score with its file and MIDI takes 100 to 400 KB, so the Hobby plan's 5 GB volume holds tens of thousands of scores.
 4. Let Railway use the `Procfile` in the repo root, which collects static assets, applies migrations, and starts Gunicorn:
    ```text
    python manage.py collectstatic --noinput && python manage.py migrate && gunicorn talkingscores.wsgi:application --bind 0.0.0.0:$PORT
    ```
 5. Static files are served by WhiteNoise, so Railway does not need a separate static-file service.
 
-If you need the app to keep generated files reliably, do not use an ephemeral filesystem only.
+Without a volume, every short link stops working after a deploy, because the names and records under `MEDIA_ROOT/links` go with the disk. Only `/library/<id>` addresses keep working.
 
 ## macOS/Linux notes
 
