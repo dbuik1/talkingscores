@@ -11,7 +11,7 @@
 
 <form class="form" action="{% url 'find-a-score' %}" method="get">
     <div class="field">
-        <label for="id_q">Composer, title or set</label>
+        <label for="id_q">Composer or title</label>
         <input type="search" class="input" id="id_q" name="q" value="{{ query }}" aria-describedby="q-help">
         <p class="small muted" id="q-help">For example, Schubert or Winterreise</p>
     </div>
@@ -22,19 +22,19 @@
 <p id="search-status" tabindex="-1">
     {% if total %}
         {% if total > limit %}
-            {{ total }} scores match &ldquo;{{ query }}&rdquo;. The first {{ limit }} are listed; add a word to narrow the search.
+            {{ total }} scores match &ldquo;{{ query }}&rdquo;. Showing the first {{ limit }}. Add another word to narrow the search.
         {% else %}
             {{ total }} scores match &ldquo;{{ query }}&rdquo;.
         {% endif %}
     {% else %}
-        No scores match &ldquo;{{ query }}&rdquo;. Try a composer's surname or one word from the title.
+        No scores match &ldquo;{{ query }}&rdquo;. Try the composer's last name, or one word from the title.
     {% endif %}
 </p>
 <script>
     document.getElementById("search-status").focus();
 </script>
 {% else %}
-<h2 id="search-status">Scores to start with</h2>
+<h2 id="search-status">Scores to try</h2>
 {% endif %}
 
 {% if results %}
@@ -55,5 +55,5 @@
 </ol>
 {% endif %}
 
-<p class="small muted">Scores from <a href="https://musescore.com/openscore-lieder-corpus" rel="noopener noreferrer">OpenScore</a>, free for any use.</p>
+<p class="small muted">These scores come from <a href="https://musescore.com/openscore-lieder-corpus" rel="noopener noreferrer">OpenScore</a> and are free for anyone to use.</p>
 {% endblock content %}
