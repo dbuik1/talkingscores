@@ -61,6 +61,7 @@ html.js .group:not(.current) > .body { display: none; }
 .bar .parts { grid-column: 2; display: flex; flex-direction: column; gap: 22px; }
 .part .label { font-weight: 700; font-size: 1rem; color: var(--muted); margin-bottom: 6px; }
 .part .change { font-style: italic; margin: 4px 0; }
+.part .voice { font-weight: 700; font-size: 0.875rem; margin: 10px 0 2px; }
 .part .same {
     background: var(--panel);
     border: 1px solid var(--edge);

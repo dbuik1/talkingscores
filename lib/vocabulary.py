@@ -77,6 +77,45 @@ def chord_figure_with_symbols(figure):
     return figure.replace('#', '♯')
 
 
+ALTER_NAMES = {1: 'sharp', -1: 'flat', 2: 'double-sharp', -2: 'double-flat'}
+
+DEGREE_ORDINALS = {
+    1: 'root', 2: 'second', 3: 'third', 4: 'fourth', 5: 'fifth', 6: 'sixth', 7: 'seventh',
+    8: 'octave', 9: 'ninth', 10: 'tenth', 11: 'eleventh', 12: 'twelfth', 13: 'thirteenth',
+}
+
+# What each music21 chord kind is called after its root. A dominant seventh is
+# said the way it is written, C7 as "C seventh"; kinds missing here are named
+# from their music21 name.
+CHORD_KIND_WORDS = {
+    'major': 'major',
+    'dominant-seventh': 'seventh',
+    'major-sixth': 'sixth',
+    'dominant-ninth': 'ninth',
+    'dominant-11th': 'eleventh',
+    'dominant-13th': 'thirteenth',
+    'augmented-dominant-ninth': 'augmented ninth',
+    'augmented-dominant-13th': 'augmented thirteenth',
+    'seventh-flat-five': 'seventh flat fifth',
+    'suspended-fourth-seventh': 'seventh suspended fourth',
+    'power': 'power chord',
+    'pedal': 'pedal',
+    'Neapolitan': 'Neapolitan sixth',
+    'Italian': 'Italian sixth',
+    'French': 'French sixth',
+    'German': 'German sixth',
+    'Tristan': 'Tristan chord',
+}
+
+
+def chord_kind_words(kind):
+    if not kind:
+        return ''
+    if kind in CHORD_KIND_WORDS:
+        return CHORD_KIND_WORDS[kind]
+    return kind.replace('-', ' ').replace('11th', 'eleventh').replace('13th', 'thirteenth')
+
+
 TIE_WORDS = {'start': 'tied to next', 'stop': 'tied from previous', 'continue': 'tied through'}
 
 SLUR_WORDS = {'start': 'slur starts', 'stop': 'slur ends', 'both': 'slur ends, slur starts'}
@@ -302,11 +341,73 @@ class Vocabulary:
             return f'{count} notes together'
         return f'{count}-note chord'
 
-    def chord_symbol(self, figure):
-        figure = chord_figure_with_symbols(figure)
+    def chord_symbol(self, event, on_own_line=False):
+        """A chord symbol as the reader chose: its name, its name and notes, or as written.
+
+        Among the notes it is introduced as a chord symbol so it is not taken
+        for a note; on a line of its own the line's label says that already.
+        """
+        figure = chord_figure_with_symbols(event.figure)
         if self.settings.abbreviations:
             return f'[{figure}]'
-        return f'chord symbol {figure}'
+        reading = self.settings.chord_symbol_reading
+        if event.no_chord:
+            text = 'no chord'
+        elif reading == 'written' or event.root is None:
+            text = figure
+        else:
+            text = self.chord_name(event)
+            if reading == 'notes' and event.notes:
+                names = [self._letter_with_accidental(step, alter) for step, alter in event.notes]
+                if len(names) > 1:
+                    names = [', '.join(names[:-1]), names[-1]]
+                text = f"{text}, notes {' and '.join(names)}"
+        if on_own_line:
+            return text
+        return f'chord symbol {text}'
+
+    def chord_name(self, event):
+        """C7/E as "C seventh over E", Cm7♭5 as "C minor seventh flat fifth"."""
+        words = [self._letter_with_accidental(*event.root)]
+        kind = chord_kind_words(event.chord_kind)
+        if kind:
+            words.append(kind)
+        for mod_type, degree, semitones in event.modifications:
+            ordinal = DEGREE_ORDINALS.get(degree, str(degree))
+            alter = self._alter_word(semitones)
+            if mod_type == 'subtract':
+                words.append(f'no {ordinal}')
+            elif mod_type == 'add':
+                words.append(' '.join(part for part in ('add', alter, ordinal) if part))
+            elif alter:
+                words.append(f'{alter} {ordinal}')
+        if event.bass is not None:
+            words.append(f'over {self._letter_with_accidental(*event.bass)}')
+        return ' '.join(words)
+
+    def _alter_word(self, semitones):
+        name = ALTER_NAMES.get(semitones)
+        if name is None:
+            return ''
+        if self.settings.accidental_style == 'symbols':
+            return ACCIDENTAL_SYMBOLS[name]
+        return ACCIDENTAL_WORDS[name]
+
+    def _letter_with_accidental(self, step, alter):
+        name = ALTER_NAMES.get(alter)
+        if name is None:
+            return step
+        if self.settings.accidental_style == 'symbols':
+            return f'{step}{ACCIDENTAL_SYMBOLS[name]}'
+        return f'{step} {ACCIDENTAL_WORDS[name]}'
+
+    def voice_label(self, number):
+        if self.settings.abbreviations:
+            return f'v{number}'
+        return f'Voice {number}'
+
+    def chord_symbol_line_label(self):
+        return 'Chord symbols'
 
     def dynamic(self, event):
         if self.settings.abbreviations and event.short_name:

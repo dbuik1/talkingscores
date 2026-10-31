@@ -71,6 +71,9 @@ class RenderSettings:
     chords: bool = True                  # say "3-note chord" before the pitches
     chords_low_to_high: bool = True
     chord_symbols: bool = True           # chord symbols written in the file
+    chord_symbol_reading: str = "name"   # name (C seventh), notes (name and notes), written (C7)
+    chord_symbols_on_own_line: bool = True  # a line of their own above the parts, not among the notes
+    separate_voices: bool = True         # each voice in a part read through on its own line
     arpeggios: bool = True
     dynamics: bool = True
     beams: bool = False
@@ -179,7 +182,7 @@ WORDING_FIELDS = frozenset({
     "beat_prefix", "duration_names", "duration_frequency", "dot_position",
     "pitch_names", "word_order", "octave_naming", "octave_position", "octave_frequency",
     "rests", "ties", "slurs", "articulations", "directions",
-    "intervals", "chords", "chords_low_to_high", "chord_symbols",
+    "intervals", "chords", "chords_low_to_high",
     "arpeggios", "dynamics", "beams", "abbreviations", "repetition_mode",
 })
 
