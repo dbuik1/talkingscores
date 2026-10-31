@@ -1,59 +1,69 @@
 {% extends "base_site.html" %}
 
 {% block title %}Find a score - Talking Scores{% endblock %}
-{% block meta-description %}Search free songs and string quartets from OpenScore and open any of them as a talking score.{% endblock %}
+{% block meta-description %}Search over 2,000 free scores, from piano pieces and songs to string quartets and Bach chorales, and open any of them as a talking score.{% endblock %}
 
 {% block content %}
 <div>
     <h1>Find a score</h1>
-    <p class="lead">Free songs and string quartets from OpenScore, ready to open as a talking score.</p>
+    <p class="lead">{{ library_size }} free scores: piano pieces, songs, choral music, string quartets and Bach chorales. Each one opens as a talking score.</p>
 </div>
 
 <form class="form" action="{% url 'find-a-score' %}" method="get">
     <div class="field">
-        <label for="id_q">Composer, title or set</label>
+        <label for="id_q">Composer or title</label>
         <input type="search" class="input" id="id_q" name="q" value="{{ query }}" aria-describedby="q-help">
         <p class="small muted" id="q-help">For example, Schubert or Winterreise</p>
     </div>
     <button class="btn primary" type="submit">Search scores</button>
 </form>
 
-{% if query %}
+<nav aria-label="Collections">
+    <p class="small"><b>Browse</b>
+    {% for name, count in collections %}
+        {% if name == collection and not query %}<span aria-current="page">{{ name }} ({{ count }})</span>{% else %}<a href="{% url 'find-a-score' %}?collection={{ name|urlencode }}">{{ name }} ({{ count }})</a>{% endif %}{% if not forloop.last %} &middot;{% endif %}
+    {% endfor %}
+    </p>
+</nav>
+
+{% if query or collection %}
 <p id="search-status" tabindex="-1">
     {% if total %}
-        {% if total > limit %}
-            {{ total }} scores match &ldquo;{{ query }}&rdquo;. The first {{ limit }} are listed; add a word to narrow the search.
-        {% else %}
-            {{ total }} scores match &ldquo;{{ query }}&rdquo;.
-        {% endif %}
+        {% if query %}{{ total }} score{{ total|pluralize }} match{{ total|pluralize:"es," }} &ldquo;{{ query }}&rdquo;.{% else %}{{ collection }}: {{ total }} score{{ total|pluralize }}.{% endif %}
+        {% if total > results|length %} Showing {{ first }} to {{ last }}.{% endif %}
     {% else %}
-        No scores match &ldquo;{{ query }}&rdquo;. Try a composer's surname or one word from the title.
+        No scores match &ldquo;{{ query }}&rdquo;. Try the composer's last name, or one word from the title.
     {% endif %}
 </p>
 <script>
     document.getElementById("search-status").focus();
 </script>
 {% else %}
-<h2 id="search-status">Scores to start with</h2>
+<h2 id="search-status">Scores to try</h2>
 {% endif %}
 
 {% if results %}
+<p class="small muted">A score opens as a talking score straight away. Change its wording under Options on its page.</p>
 <ol class="contents">
     {% for item in results %}
     <li>
         <div class="result">
-            <strong>{{ item.title }}</strong>
-            <span class="small muted">{{ item.composer }}{% if item.set %} &middot; {{ item.set }}{% endif %}{% if item.collection == "String quartets" %} &middot; String quartets{% endif %}</span>
+            <a href="{{ item.href }}"><strong>{{ item.title }}</strong>{% if item.composer %}<span class="visually-hidden"> by {{ item.composer }}</span>{% endif %}</a>
+            <span class="small muted">{% if item.composer %}{{ item.composer }} &middot; {% endif %}{% if item.set and item.set != item.title %}{{ item.set }} &middot; {% endif %}{{ item.collection }}{% if item.download %} &middot; <a href="{{ item.download }}">Download MusicXML<span class="visually-hidden"> of {{ item.title }}</span></a>{% endif %}</span>
         </div>
-        <form method="post" action="{% url 'index' %}">
-            {% csrf_token %}
-            <input type="hidden" name="url" value="{{ item.url }}">
-            <button class="btn" type="submit">Open talking score<span class="visually-hidden"> of {{ item.title }} by {{ item.composer }}</span></button>
-        </form>
     </li>
     {% endfor %}
 </ol>
+{% if next_page or previous_page %}
+<nav aria-label="More results" class="row">
+    {% if previous_page %}<a class="btn" href="?{% if query %}q={{ query|urlencode }}{% else %}collection={{ collection|urlencode }}{% endif %}&amp;page={{ previous_page }}">Previous scores</a>{% endif %}
+    {% if next_page %}<a class="btn" href="?{% if query %}q={{ query|urlencode }}{% else %}collection={{ collection|urlencode }}{% endif %}&amp;page={{ next_page }}">Next scores</a>{% endif %}
+</nav>
+{% endif %}
 {% endif %}
 
-<p class="small muted">Scores from <a href="https://musescore.com/openscore-lieder-corpus" rel="noopener noreferrer">OpenScore</a>, free for any use.</p>
+{% if collection == shared_collection and not query %}
+<p class="small muted">Readers listed these talking scores themselves. To have one taken down, email <a href="mailto:contact@davidbuik.com">contact@davidbuik.com</a> with its link.</p>
+{% endif %}
+<p class="small muted">Library scores come from <a href="https://musescore.com/openscore-lieder-corpus" rel="noopener noreferrer">OpenScore</a> and from the <a href="https://www.music21.org/music21docs/about/referenceCorpus.html" rel="noopener noreferrer">music21 corpus</a>, and are free to read and download.</p>
 {% endblock content %}

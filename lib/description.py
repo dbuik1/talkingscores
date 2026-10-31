@@ -25,6 +25,7 @@ TOGETHER = " together with "
 
 ALTER_NAMES = {1: "sharp", -1: "flat", 2: "double-sharp", -2: "double-flat"}
 IN_BEAT_SEPARATOR = ", "
+VOICE_SEPARATOR = ". "
 
 
 @dataclass
@@ -61,6 +62,22 @@ class BeatDescription:
 
 
 @dataclass
+class VoiceDescription:
+    """One voice of a part read through the bar on its own."""
+    number: int
+    label: str
+    beats: list = field(default_factory=list)
+
+    @property
+    def text(self):
+        return IN_BEAT_SEPARATOR.join(beat.text_with_label for beat in self.beats)
+
+    @property
+    def text_with_label(self):
+        return f"{self.label}: {self.text}"
+
+
+@dataclass
 class BarDescription:
     number: int
     label: str
@@ -73,6 +90,7 @@ class BarDescription:
     whole_bar_rest: bool = False
     rest_text: str = ""
     beats: list = field(default_factory=list)
+    voices: list = field(default_factory=list)   # set instead of beats when voices are read apart
     # Fingering: the label says whether every finger is printed in the score;
     # positions is the hand-position summary, empty for a part not played on
     # a keyboard; every_finger names each struck note with its finger.
@@ -93,6 +111,8 @@ class BarDescription:
     def text(self):
         if self.whole_bar_rest:
             return self.rest_text
+        if self.voices:
+            return VOICE_SEPARATOR.join(voice.text_with_label for voice in self.voices)
         return IN_BEAT_SEPARATOR.join(beat.text_with_label for beat in self.beats)
 
     def text_lines(self, one_beat_per_line=False):
@@ -104,6 +124,13 @@ class BarDescription:
             return lines + self.after_notes
         if self.whole_bar_rest:
             lines.append(self.rest_text)
+        elif self.voices:
+            for voice in self.voices:
+                if one_beat_per_line:
+                    lines.append(voice.label)
+                    lines.extend(beat.text_with_label for beat in voice.beats)
+                else:
+                    lines.append(voice.text_with_label)
         elif one_beat_per_line:
             lines.extend(beat.text_with_label for beat in self.beats)
         else:
@@ -316,6 +343,9 @@ class DescriptionBuilder:
         self.immediate_repetitions = immediate_repetitions or {}
         self.detailed_repetitions = detailed_repetitions or {}
         self.bar_labels = bar_labels or {}
+        # True while the chord symbol line is built, so its chords need no
+        # "chord symbol" in front of each one.
+        self.chord_symbol_line = False
 
     # Bars
 
@@ -342,6 +372,25 @@ class DescriptionBuilder:
             ))
         return part
 
+    def build_chord_symbol_part(self, name, events_by_bar, bar_lengths, beat_quarter_length, pickup_bar=None):
+        """A part holding only the chord symbols, read above the parts that play.
+
+        Bars with no chord symbol are left out, so the line never reads a bar
+        of nothing.
+        """
+        self.chord_symbol_line = True
+        try:
+            part = self.build_part(None, name, events_by_bar, bar_lengths, beat_quarter_length, pickup_bar)
+        finally:
+            self.chord_symbol_line = False
+        part.bars = [bar for bar in part.bars if not bar.whole_bar_rest]
+        for bar in part.bars:
+            bar.signatures = []
+            bar.after_notes = []
+            bar.repeat_note = bar.repeat_type = bar.repeat_detail = ""
+            bar.collapsed = False
+        return part
+
     def build_bar(self, bar_number, time_points, part_index, beat_quarter_length,
                   written_length=None, actual_length=None, is_pickup=False, hand=None):
         bar = BarDescription(number=bar_number, label=self.bar_label(bar_number, is_pickup))
@@ -349,13 +398,15 @@ class DescriptionBuilder:
         bar.after_notes = list(self.bar_endings.get(bar_number, []))
         self._add_repeat_notes(bar, part_index, bar_number)
 
-        has_sounding_event = any(
-            event.kind in SOUNDING_KINDS
+        # A chord symbol over rests is still read beat by beat: in a lead sheet
+        # the chords carry on through bars the melody leaves empty.
+        has_event_to_read = any(
+            event.kind in SOUNDING_KINDS or event.kind == "chord_symbol"
             for time_point in time_points
             for events in time_point["voices"].values()
             for event in events
         )
-        if not has_sounding_event:
+        if not has_event_to_read:
             bar.whole_bar_rest = True
             bar.rest_text = self.vocabulary.whole_bar_rest()
             return bar
@@ -364,9 +415,47 @@ class DescriptionBuilder:
         beat_shift = 0.0
         if is_pickup and written_length and actual_length and actual_length < written_length:
             beat_shift = written_length - actual_length
-
         beat_ql = beat_quarter_length or 1.0
+
+        voice_numbers = self._sounding_voices(time_points) if self.settings.separate_voices else []
+        if len(voice_numbers) < 2:
+            bar.beats = self._build_beats(time_points, beat_ql, beat_shift)
+            self._add_fingering(bar, time_points, hand)
+            return bar
+        # Marks written for the whole stave, such as a dynamic, are filed under
+        # voice 1 even where the notes are in voices 5 and 6, so they go with the
+        # first voice that plays.
+        home = {number: number for number in voice_numbers}
+        for time_point in time_points:
+            for number in time_point["voices"]:
+                home.setdefault(number, voice_numbers[0])
+        for position, number in enumerate(voice_numbers, start=1):
+            voice_points = []
+            for time_point in time_points:
+                events = [event for voice, voice_events in sorted(time_point["voices"].items())
+                          if home[voice] == number for event in voice_events
+                          if not (event.kind == "rest" and getattr(event, "hidden", False))]
+                if events:
+                    voice_points.append({**time_point, "voices": {number: events}})
+            bar.voices.append(VoiceDescription(
+                number=position, label=self.vocabulary.voice_label(position),
+                beats=self._build_beats(voice_points, beat_ql, beat_shift)))
+        self._add_fingering(bar, time_points, hand)
+        return bar
+
+    @staticmethod
+    def _sounding_voices(time_points):
+        """The voices that play a note somewhere in the bar, in order."""
+        return sorted({
+            number
+            for time_point in time_points
+            for number, events in time_point["voices"].items()
+            if any(event.kind in SOUNDING_KINDS for event in events)
+        })
+
+    def _build_beats(self, time_points, beat_ql, beat_shift):
         state = PartState()
+        beats = []
         current_beat = None
         beat_description = None
         for time_point in time_points:
@@ -383,12 +472,11 @@ class DescriptionBuilder:
                 current_beat = beat_number
                 label = "" if self.settings.beat_division == "bar" else self.vocabulary.beat_label(beat_number)
                 beat_description = BeatDescription(number=beat_number, label=label)
-                bar.beats.append(beat_description)
+                beats.append(beat_description)
             elif beat_description.fragments:
                 beat_description.fragments.append(Fragment(IN_BEAT_SEPARATOR, "sep"))
             beat_description.fragments.extend(fragments)
-        self._add_fingering(bar, time_points, hand)
-        return bar
+        return beats
 
     def _add_fingering(self, bar, time_points, hand):
         """The bar's fingering, read from the fingers set on its struck notes."""
@@ -513,7 +601,7 @@ class DescriptionBuilder:
         if kind == "chord_symbol":
             if not self.settings.chord_symbols:
                 return []
-            return [Fragment(self.vocabulary.chord_symbol(event.figure))]
+            return [Fragment(self.vocabulary.chord_symbol(event, on_own_line=self.chord_symbol_line))]
         if kind == "rest":
             if not self._rest_is_read(event, beat_ql, only_event_on_beat):
                 return []

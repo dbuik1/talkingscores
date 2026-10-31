@@ -1,0 +1,77 @@
+{% extends "base_site.html" %}
+
+{% block title %}Reading the printed music - Talking Scores{% endblock %}
+{% block noindex %}<meta name="robots" content="noindex">{% endblock %}
+
+{% block content %}
+<div>
+    <p class="meta"><b>{{ name }}</b></p>
+    <h1 style="margin-top: 8px;">Reading the printed music</h1>
+</div>
+
+<p id="reading-status" role="status">Reading the notes on the page</p>
+
+<div id="reading-next" tabindex="-1" hidden>
+    <p id="reading-next-message"></p>
+    <p><a id="reading-next-link" class="btn" href="{% url 'index' %}">Open a different score</a></p>
+</div>
+
+<p id="reading-wait">A page can take a few minutes. The options for the talking score open here when the music has been read.</p>
+
+<noscript>
+    <p class="noscript">JavaScript is turned off, so this page cannot check on its own. Reload it every minute or so to see whether the music has been read.</p>
+</noscript>
+{% endblock content %}
+
+{% block javascript %}
+<script>
+    const readingStatus = document.getElementById('reading-status');
+    const readingNext = document.getElementById('reading-next');
+    const readingNextLink = document.getElementById('reading-next-link');
+    const readingNextMessage = document.getElementById('reading-next-message');
+    const pollDeadline = Date.now() + 30 * 60 * 1000;
+
+    function setReadingStatus(message) {
+        // Writing the same text again re-announces it, so an unchanged poll is silent.
+        if (readingStatus && message && readingStatus.textContent !== message) {
+            readingStatus.textContent = message;
+        }
+    }
+
+    function stopWithNextStep(message, href) {
+        // Focus lands on the block holding both the message and the link, so
+        // the message is read out in full before the link.
+        readingStatus.hidden = true;
+        document.getElementById('reading-wait').hidden = true;
+        readingNextMessage.textContent = message;
+        if (href) {
+            readingNextLink.href = href;
+        }
+        readingNext.hidden = false;
+        readingNext.focus();
+    }
+
+    (function pollStatus() {
+        if (Date.now() > pollDeadline) {
+            stopWithNextStep('Reading the music is taking longer than expected. Reload this page to keep waiting.');
+            return;
+        }
+        fetch("{% url 'reading-status' id %}", {headers: {'Accept': 'application/json'}})
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'complete' && data.score_url) {
+                    window.location = data.score_url;
+                } else if (data.status === 'failed') {
+                    stopWithNextStep(data.message, data.next_url);
+                } else {
+                    setReadingStatus(data.message);
+                    setTimeout(pollStatus, 3000);
+                }
+            })
+            .catch(() => {
+                setReadingStatus('Waiting for the server to answer');
+                setTimeout(pollStatus, 5000);
+            });
+    })();
+</script>
+{% endblock %}

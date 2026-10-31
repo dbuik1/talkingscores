@@ -11,3 +11,8 @@ tmp/
 db.sqlite3
 server.out.log
 server.err.log
+
+# Score-reader test bench: generated pages, downloaded sets, reader output, local reader config
+omr_bench/sets/
+omr_bench/runs/
+omr_bench/engines.toml

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>To a Wild Rose, talking score</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&amp;family=Atkinson+Hyperlegible+Next:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f7f4ee}
+a{color:#155e66;text-underline-offset:3px}a:hover{color:#1c1a17}
+button,select{font:inherit}
+.btn{display:inline-flex;align-items:center;gap:10px;min-height:48px;padding:0 18px;border:2px solid #1e6a73;border-radius:6px;background:#f7f4ee;color:#1c1a17;font-weight:700;font-size:18px;cursor:pointer}
+.btn:hover{background:#efeae0}
+.btn.primary{background:#1e6a73;color:#fff}
+.btn.primary:hover{background:#155e66}
+.btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.btn:focus-visible,.tab:focus-visible,summary:focus-visible,a:focus-visible,select:focus-visible{outline:3px solid #9a5f00;outline-offset:3px}
+.sum{display:flex;align-items:center;gap:10px;min-height:48px;cursor:pointer;font-size:18px;color:#1c1a17;background:none;border:0;padding:0 4px}
+.sum svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round}
+.tab{min-height:48px;padding:0 16px;border:0;border-bottom:3px solid transparent;background:none;font-size:18px;color:#5b5650;cursor:pointer}
+.tab[aria-selected="true"]{color:#1c1a17;font-weight:700;border-bottom-color:#1e6a73}
+.input{min-height:48px;padding:0 12px;border:2px solid #5b5650;border-radius:6px;background:#fff;color:#1c1a17;font-size:18px}
+.check{display:flex;align-items:center;gap:12px;min-height:44px;font-size:18px}
+.check input{width:24px;height:24px;accent-color:#1e6a73}
+</style>
+</helmet>
+<div style="max-width: 880px; margin: 0 auto; padding: 32px 40px 64px; display: flex; flex-direction: column; gap: 28px; font-family: 'Atkinson Hyperlegible Next', Verdana, sans-serif; color: #1c1a17; font-size: 20px; line-height: 1.5">
+  <header style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #d9d3c7; padding-bottom: 16px">
+    <a href="#" style="display: flex; align-items: center; gap: 12px; color: #1c1a17; text-decoration: none; font-family: Newsreader, Georgia, serif; font-size: 22px; font-weight: 500"><svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h20M4 13h20M4 18h20M4 23h20"></path><circle cx="17" cy="20.5" r="3" fill="currentColor" stroke="none"></circle><path d="M20 20.5V7l4 2"></path></svg>Talking Scores</a>
+    <a href="#" style="font-size: 17px">Change the wording</a>
+  </header>
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-family: Newsreader, Georgia, serif; font-weight: 500; font-size: 36px; line-height: 1.15">To a Wild Rose</h1>
+    <p style="margin: 0; font-size: 17px; color: #5b5650"><b style="color: #1c1a17">Edward MacDowell</b> · A major · 2 4 time · Piano · 51 bars</p>
+  </div>
+
+  <div role="group" aria-label="Talking score controls" style="position: sticky; top: 0; z-index: 2; background: #f7f4ee; border-top: 2px solid #1c1a17; border-bottom: 1px solid #d9d3c7; padding: 14px 0; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px">
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+        <button class="btn" type="button" aria-keyshortcuts="Alt+P"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Previous group</button>
+        <a href="#group-1" style="min-width: 150px; text-align: center; font-weight: 700; font-size: 18px; color: #1c1a17">Bars 1 to 2 of 51</a>
+        <button class="btn" type="button" aria-keyshortcuts="Alt+N">Next group<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+      </div>
+      <span aria-hidden="true" style="width: 1px; align-self: stretch; background: #d9d3c7"></span>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+        <button class="btn primary" type="button" aria-keyshortcuts="Alt+R" onClick="{{toggleRead}}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16 9a4 4 0 0 1 0 6"></path></svg>{{readLabel}}</button>
+        <button class="btn" type="button" aria-keyshortcuts="Alt+L" onClick="{{togglePlay}}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{playIcon}}"></path></svg>{{playLabel}}</button>
+        <button class="btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l10 8-10 8z"></path><path d="M18 4v16"></path></svg>Play the whole score</button>
+      </div>
+    </div>
+    <p aria-live="polite" style="margin: 0; font-size: 17px; color: #5b5650">{{status}}</p>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 4px 28px; margin-top: -8px">
+    <button class="sum" type="button" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Go to a bar</button>
+    <button class="sum" type="button" aria-expanded="{{settingsOpen}}" onClick="{{toggleSettings}}"><svg viewBox="0 0 24 24" aria-hidden="true" style="{{chevStyle}}"><path d="M9 6l6 6-6 6"></path></svg>Settings</button>
+    <button class="sum" type="button" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>About this score</button>
+    <button class="sum" type="button" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Download, print or share</button>
+  </div>
+
+  <sc-if value="{{settingsOpen}}" hint-placeholder-val="{{ true }}">
+  <section aria-label="Settings" style="margin-top: -12px; background: #efeae0; border-radius: 8px; padding: 8px 24px 24px; display: flex; flex-direction: column; gap: 20px">
+    <div role="tablist" aria-label="Settings" style="display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid #d9d3c7">
+      <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+        <button class="tab" role="tab" type="button" aria-selected="{{t.selected}}" onClick="{{t.pick}}">{{t.label}}</button>
+      </sc-for>
+    </div>
+
+    <sc-if value="{{onText}}" hint-placeholder-val="{{ false }}">
+    <div role="tabpanel" style="display: flex; flex-direction: column; gap: 18px">
+      <fieldset style="border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px">
+        <legend style="font-weight: 700; font-size: 18px; margin-bottom: 8px">Text size</legend>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px">
+          <label style="border: 2px solid #1e6a73; background: #f7f4ee; border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 4px"><span class="check" style="min-height: 0"><input type="radio" name="size" checked>Standard</span><span style="font-size: 20px">crotchet, high C</span></label>
+          <label style="border: 1px solid #8a8378; border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 4px"><span class="check" style="min-height: 0"><input type="radio" name="size">Large</span><span style="font-size: 26px">crotchet, high C</span></label>
+          <label style="border: 1px solid #8a8378; border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 4px"><span class="check" style="min-height: 0"><input type="radio" name="size">Extra large</span><span style="font-size: 32px; line-height: 1.1">crotchet, high C</span></label>
+          <label style="border: 1px solid #8a8378; border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 4px"><span class="check" style="min-height: 0"><input type="radio" name="size">My browser’s size</span><span style="font-size: 16px; color: #5b5650">Follows your zoom or magnifier</span></label>
+        </div>
+      </fieldset>
+      <label class="check"><input type="checkbox" checked>Make buttons and menus larger too</label>
+      <label class="check"><input type="checkbox">One note per line</label>
+      <label style="display: flex; align-items: center; gap: 12px; font-size: 18px">Colours <select class="input"><option>Match my system</option><option>Light</option><option>Dark</option><option>High contrast</option></select></label>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{onVoice}}" hint-placeholder-val="{{ true }}">
+    <div role="tabpanel" style="display: flex; flex-direction: column; gap: 18px">
+      <label style="display: flex; flex-direction: column; gap: 6px; font-size: 18px; font-weight: 700">Speaking voice
+        <select class="input" style="max-width: 460px; font-weight: 400">
+          <optgroup label="Natural voices, after one download">
+            <option>Emma, British English</option>
+            <option>George, British English</option>
+          </optgroup>
+          <optgroup label="On this device">
+            <option selected>Daniel, English (UK)</option>
+            <option>Serena, English (UK)</option>
+            <option>Samantha, English (US)</option>
+          </optgroup>
+        </select>
+      </label>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 16px; border: 1px solid #8a8378; border-radius: 6px; background: #f7f4ee">
+        <p style="margin: 0; flex: 1 1 320px; font-size: 17px">Natural voices sound closer to a person reading. They download once (about 90 MB) and then run in this browser, offline.</p>
+        <button class="btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"></path><path d="M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg>Download natural voices</button>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: center">
+        <label style="display: flex; align-items: center; gap: 12px; font-size: 18px">Reading speed <select class="input"><option>75 %</option><option selected>100 %</option><option>125 %</option><option>150 %</option></select></label>
+        <button class="btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"></path></svg>Hear this voice</button>
+      </div>
+      <label class="check"><input type="checkbox">Play each bar after reading it</label>
+      <label class="check"><input type="checkbox">Say each bar number during playback</label>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{onPlayback}}" hint-placeholder-val="{{ false }}">
+    <div role="tabpanel" style="display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; flex-wrap: wrap; gap: 12px 32px">
+        <label style="display: flex; align-items: center; gap: 12px; font-size: 18px">Speed <select class="input"><option>50 %</option><option selected>100 %</option></select></label>
+        <label style="display: flex; align-items: center; gap: 12px; font-size: 18px">Parts to play <select class="input"><option>Both hands</option><option>Right hand</option><option>Left hand</option></select></label>
+        <label style="display: flex; align-items: center; gap: 12px; font-size: 18px">Balance <select class="input"><option>All parts equal</option><option>Right hand louder</option></select></label>
+      </div>
+      <label class="check"><input type="checkbox">Metronome click</label>
+      <label class="check"><input type="checkbox">Repeat playback</label>
+      <label class="check"><input type="checkbox" checked>Instrument sounds (8 MB download the first time)</label>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{onKeys}}" hint-placeholder-val="{{ false }}">
+    <div role="tabpanel" style="display: flex; flex-direction: column; gap: 14px">
+      <label style="display: flex; align-items: center; gap: 12px; font-size: 18px">Bars per group <select class="input"><option>1</option><option selected>2</option><option>4</option><option>8</option></select></label>
+      <label class="check"><input type="checkbox" checked>Keep the controls on screen while scrolling</label>
+      <dl style="margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 20px; font-size: 18px">
+        <dt style="font-weight: 700">Alt + N</dt><dd style="margin: 0">Next group</dd>
+        <dt style="font-weight: 700">Alt + P</dt><dd style="margin: 0">Previous group</dd>
+        <dt style="font-weight: 700">Alt + R</dt><dd style="margin: 0">Read aloud, or stop reading</dd>
+        <dt style="font-weight: 700">Alt + L</dt><dd style="margin: 0">Play this group, or stop playback</dd>
+        <dt style="font-weight: 700">Alt + G</dt><dd style="margin: 0">Go to a bar</dd>
+      </dl>
+    </div>
+    </sc-if>
+  </section>
+  </sc-if>
+
+  <section id="group-1" style="display: flex; flex-direction: column">
+    <h2 style="margin: 0; display: flex; align-items: center; gap: 12px; min-height: 64px; font-family: Newsreader, Georgia, serif; font-weight: 500; font-size: 30px"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="transform: rotate(90deg)"><path d="M9 6l6 6-6 6"></path></svg>Bars 1 to 2</h2>
+    <div style="display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 0 24px; padding: 20px 0 28px">
+      <h3 style="margin: 0; font-family: Newsreader, Georgia, serif; font-weight: 400; font-size: 64px; line-height: 1"><small style="display: block; font-size: 16px; font-family: 'Atkinson Hyperlegible Next', sans-serif; color: #5b5650; margin-bottom: 6px">Bar</small>1</h3>
+      <div style="display: flex; flex-direction: column; gap: 18px">
+        <div>
+          <p style="margin: 0 0 6px; font-weight: 700; font-size: 16px; color: #5b5650">Right hand</p>
+          <p style="margin: 0 0 6px; font-style: italic">With simple tenderness</p>
+          <p style="margin: 0; display: grid; grid-template-columns: 3.6em minmax(0, 1fr); gap: 0 16px; font-size: {{noteSize}}px; line-height: 1.4"><b style="font-size: 0.6em; color: #5b5650; padding-top: 0.55em">Beat 1</b><span><i>piano</i>, quaver high C sharp slur starts together with minim mid A, quaver high E</span></p>
+        </div>
+        <div>
+          <p style="margin: 0 0 6px; font-weight: 700; font-size: 16px; color: #5b5650">Left hand</p>
+          <p style="margin: 0; display: grid; grid-template-columns: 3.6em minmax(0, 1fr); gap: 0 16px; font-size: {{noteSize}}px; line-height: 1.4"><b style="font-size: 0.6em; color: #5b5650; padding-top: 0.55em">Beat 1</b><span>2-note chord, minim low A, mid E</span></p>
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 0 24px; border-top: 1px solid #d9d3c7">
+      <p style="margin: 0">Bars 1 to 2 of 51. Next: bars 3 to 4.</p>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <button class="btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path></svg>Read next group</button>
+        <button class="btn" type="button">Next group<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+      </div>
+    </div>
+  </section>
+  <sc-for list="{{later}}" as="g" hint-placeholder-count="3">
+    <h2 style="margin: 0; display: flex; align-items: center; gap: 12px; min-height: 64px; border-top: 2px solid #1c1a17; font-family: Newsreader, Georgia, serif; font-weight: 400; font-size: 24px"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 6l6 6-6 6"></path></svg>{{g.label}}<span style="margin-left: auto; font-family: 'Atkinson Hyperlegible Next', sans-serif; font-size: 16px; color: #5b5650">{{g.preview}}</span></h2>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"noteSize":{"editor":"enum","options":["28","40","56"],"default":"28"},"$preview":{"width":1280,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { tab: 'voice', open: true, reading: false, playing: false }; }
+  renderVals() {
+    const s = this.state;
+    const tabs = [['text','Text and colours'],['voice','Reading aloud'],['playback','Playback'],['keys','Groups and keys']].map(([id,label]) => ({ label, selected: String(s.tab === id), pick: () => this.setState({ tab: id }) }));
+    let status = 'Bars 1 to 2 ready to play.';
+    if (s.reading) status = 'Reading bar 1 aloud.';
+    if (s.playing) status = 'Playing bars 1 to 2.';
+    return {
+      noteSize: this.props.noteSize ?? '28',
+      tabs, onText: s.tab === 'text', onVoice: s.tab === 'voice', onPlayback: s.tab === 'playback', onKeys: s.tab === 'keys',
+      settingsOpen: s.open, chevStyle: s.open ? 'transform: rotate(90deg)' : '',
+      toggleSettings: () => this.setState({ open: !s.open }),
+      readLabel: s.reading ? 'Stop reading' : 'Read aloud',
+      playLabel: s.playing ? 'Stop playback' : 'Play this group',
+      playIcon: s.playing ? 'M6 6h12v12H6z' : 'M7 4l12 8-12 8z',
+      toggleRead: () => this.setState({ reading: !s.reading, playing: false }),
+      togglePlay: () => this.setState({ playing: !s.playing, reading: false }),
+      status,
+      later: [
+        { label: 'Bars 3 to 4', preview: 'Right hand: Beat 1 quaver high C sharp…' },
+        { label: 'Bars 5 to 6', preview: 'Right hand: Beat 1 minim high E…' },
+        { label: 'Bars 7 to 8', preview: 'Right hand: Beat 1 quaver mid B…' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
