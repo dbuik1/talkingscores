@@ -81,6 +81,66 @@ python3 scripts/build_openscore_index.py --lieder Lieder --string-quartets Strin
 
 Commit the resulting `openscore.json`.
 
+## Built-in library
+
+`talkingscoresapp/data/library.json` lists the scores that open without a
+download: the MusicXML files music21 installs alongside itself, each named by
+hand or from music21's chorale tables. The "Find a score" page searches it
+together with the OpenScore catalogue, and each score has a lasting address,
+`/library/<id>`, that opens it as a talking score with the default options,
+and `/library/<id>/musicxml`, that downloads its MusicXML. A built-in score is
+served from music21's corpus; an OpenScore score redirects to OpenScore.
+Rebuild the list after upgrading music21:
+
+```bash
+python3 scripts/build_library_index.py --check
+```
+
+`--check` opens every score the way the site does and leaves out any that fail.
+The home page links to three examples from this list. Create their talking
+scores ahead of the first visitor with:
+
+```bash
+python manage.py generate_examples
+```
+
+## Short links
+
+Every talking score has a short link that reads as words. A score from the
+library or a web address is named after its title, such as `/s/ode-to-joy`,
+with `-2` and so on when titles clash. An uploaded score gets one word from each
+of three lists in `talkingscoresapp/share_words.py` (tempo or mood, instrument,
+form), such as `/s/presto-cello-fugue`, so the link does not give away what was
+uploaded. Names ignore case. The older links, `/s/` and the first ten
+characters of the score id, still work.
+
+Names live under `MEDIA_ROOT/links/names`. Saving options also writes a record
+of the score, its source and its options under `MEDIA_ROOT/links`, which
+`cleanup_media` leaves alone. A short link to a score from a web address or the
+library therefore still opens after its folder has been removed: the file is
+fetched again and the options put back. A short link to an uploaded file works
+while the file is stored; after that its three words can name a new upload.
+
+## Listing a talking score
+
+Every opened score starts private: only people with its short link can open
+it. `/s/<name>/listing` lets the browser that opened the file list it in Find a
+score, under "Shared by readers", or make it private again. That browser is
+known by a signed cookie, `talkingscores_owned`, holding the codes of the last
+100 scores it opened. Listing an uploaded file needs a box ticked to confirm
+the reader can share it, and a listed upload shares its talking score, never
+the file. The choice is kept in the score's record under `MEDIA_ROOT/links`, so
+saving options again keeps it, and a listed upload drops out of Find a score
+once its file has been removed. Library scores are always findable and cannot
+be listed. The talking score page reads `/s/<name>/listing.json` to show the
+current listing, since the page itself is cached for every reader.
+
+## MIDI player
+
+`/midi-player` plays a MIDI file the reader chooses, in the browser, with the
+same synthesizer and sound bank as the talking score page. The file is not
+uploaded.
+
 ## Environment settings
 
 `DJANGO_DEBUG` is off unless set, and with debug off the server refuses to start without `DJANGO_SECRET_KEY`. For local development and the test suite, turn debug on:

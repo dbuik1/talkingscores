@@ -1060,13 +1060,14 @@ class HTMLTalkingScoreFormatter:
         self.built = True
 
     def generateHTML(self, output_path="", web_path="", download_html_url="", export_theme=None,
-                     export_mode=False, download_text_url="", download_braille_url="", options_url=""):
+                     export_mode=False, download_text_url="", download_braille_url="", options_url="",
+                     share_path="", share_kept=False):
         template = self._setup_template_environment(export_mode=export_mode)
         self.build(output_path, web_path)
         palette = self.builder.palette
         # A downloaded page has no server behind it, so it carries no links back and no player.
         if export_mode:
-            download_html_url = download_text_url = download_braille_url = options_url = ""
+            download_html_url = download_text_url = download_braille_url = options_url = share_path = ""
         return template.render({
             'settings': self.settings,
             'style_name': self.settings.style_name,
@@ -1079,6 +1080,8 @@ class HTMLTalkingScoreFormatter:
             'download_text_url': download_text_url,
             'download_braille_url': download_braille_url,
             'options_url': options_url,
+            'share_path': share_path,
+            'share_kept': share_kept,
             'export_theme': export_theme,
             'export_mode': export_mode,
             'inline_css': (self._read_static("css", "site.css") + self._read_static("css", "score.css")

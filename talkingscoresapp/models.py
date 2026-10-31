@@ -8,6 +8,7 @@ import logging
 import logging.handlers
 import socket
 from talkingscores.settings import MEDIA_ROOT
+from talkingscoresapp import sharing
 from urllib.parse import urlparse, urljoin, quote
 import tempfile
 from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
@@ -337,6 +338,44 @@ def write_text_file_atomic(path, content):
     except OSError:
         remove_file_quietly(temp_path)
         raise
+
+
+# The elements that may come before <identification> in a score, in the order MusicXML requires.
+SCORE_HEADER_TAGS = ("work", "movement-number", "movement-title")
+
+
+def write_score_names(path, title, composer):
+    """Set a MusicXML file's work title and composer, and drop its movement title.
+
+    Only for files from the library: the file is parsed without the safeguards
+    an upload gets.
+    """
+    tree = ElementTree.parse(path)
+    root = tree.getroot()
+    if title:
+        for element in root.findall("movement-title"):
+            root.remove(element)
+        work = root.find("work")
+        if work is None:
+            work = ElementTree.Element("work")
+            root.insert(0, work)
+        work_title = work.find("work-title")
+        if work_title is None:
+            work_title = ElementTree.SubElement(work, "work-title")
+        work_title.text = title
+    if composer:
+        identification = root.find("identification")
+        if identification is None:
+            identification = ElementTree.Element("identification")
+            position = sum(1 for child in root if child.tag in SCORE_HEADER_TAGS)
+            root.insert(position, identification)
+        creators = [element for element in identification.findall("creator") if element.get("type") == "composer"]
+        if not creators:
+            creator = ElementTree.Element("creator", {"type": "composer"})
+            identification.insert(0, creator)
+            creators = [creator]
+        creators[0].text = composer
+    tree.write(path, encoding="utf-8", xml_declaration=True)
 
 
 class TSScoreState(object):
@@ -723,6 +762,8 @@ class TSScore(object):
                 download_text_url=download_text_url,
                 download_braille_url=download_braille_url,
                 options_url=options_url,
+                share_path="" if export_mode else sharing.share_path(self, mxmlScore.get_title()),
+                share_kept=self.source() is not None,
             )
             # Options that changed during the run belong to a newer run, which writes its own cache.
             if not export_mode and html_cache_path and self.options_epoch() == epoch:
@@ -795,25 +836,42 @@ class TSScore(object):
 
     @classmethod
     def from_url(cls, url):
-        score = cls(url=url)
-
         file_content, final_url = fetch_remote_score(url)
-        parsed_url = urlparse(final_url)
+        original_filename = os.path.basename(urlparse(final_url).path)
+        score = cls.from_bytes(file_content, original_filename, source={"kind": "url", "value": final_url})
+        score.url = url
+        return score
 
+    @classmethod
+    def from_bytes(cls, file_content, original_filename, source=None, names=None):
+        """Store a score held in memory: a fetched link or a file from the library.
+
+        source, when given, records where the bytes came from, so a share link can
+        fetch them again after the stored copy has been cleaned up. names, a dict
+        with "title" and "composer", replaces what the file itself says, for a
+        trusted file whose own names are a file name or a scanning error.
+        """
+        score = cls()
         score.id = hashlib.sha256(file_content).hexdigest()
-        
-        original_filename = os.path.basename(parsed_url.path)
+
         sanitized_name = sanitize_filename(original_filename.replace("'", "").replace("\"", ""))
         base_name = os.path.splitext(sanitized_name)[0]
         original_extension = os.path.splitext(sanitized_name)[1].lower()
-        
+
         score.filename = f"{base_name}.musicxml"
 
         destination_path = score.get_data_file_path()
         os.makedirs(os.path.dirname(destination_path), exist_ok=True)
 
+        # The id is the digest of these bytes, so a stored file under it already
+        # holds them. Writing it again would make the cached talking score look stale.
+        if os.path.isfile(destination_path) and os.path.getsize(destination_path) > 0:
+            if source:
+                write_text_file_atomic(destination_path + ".source", json.dumps(source))
+            return score
+
         if original_extension == '.mxl':
-            score.logger.info(f"Processing .mxl file from URL: {url}")
+            score.logger.info(f"Processing .mxl file: {original_filename}")
 
             with tempfile.NamedTemporaryFile(suffix='.mxl', delete=False) as temp_mxl:
                 temp_mxl.write(file_content)
@@ -821,17 +879,35 @@ class TSScore(object):
 
             try:
                 extract_musicxml_from_mxl(temp_mxl_path, destination_path)
-                score.logger.info(f"Successfully extracted MusicXML from URL .mxl to {destination_path}")
+                score.logger.info(f"Successfully extracted MusicXML from .mxl to {destination_path}")
             finally:
                 remove_file_quietly(temp_mxl_path)
         else:
             with open(destination_path, 'wb') as f:
                 f.write(file_content)
 
+        if names:
+            write_score_names(destination_path, names.get("title"), names.get("composer"))
+
         try:
             Music21TalkingScore(destination_path)
         except Exception as e:
-            logger.exception(f"URL-fetched file failed validation at final destination: {destination_path}")
+            logger.exception(f"Fetched file failed validation at final destination: {destination_path}")
             raise e
-            
+
+        if source:
+            write_text_file_atomic(destination_path + ".source", json.dumps(source))
+
         return score
+
+    def source(self):
+        """Where the stored file came from, as from_bytes recorded it, or None for an upload."""
+        data_path = self.get_data_file_path()
+        try:
+            with open(data_path + ".source", "r", encoding="utf-8") as source_file:
+                source = json.load(source_file)
+        except (OSError, TypeError, json.JSONDecodeError):
+            return None
+        if isinstance(source, dict) and source.get("kind") in ("url", "library") and isinstance(source.get("value"), str):
+            return source
+        return None

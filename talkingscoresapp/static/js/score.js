@@ -83,6 +83,8 @@
         var player = null;
 
         wireSettings();
+        wireShareLink();
+        showListing();
         var printButton = document.getElementById("print-score");
         if (printButton) {
             printButton.addEventListener("click", function () { window.print(); });
@@ -460,6 +462,73 @@
             window.setTimeout(function () { live.textContent = text; }, 50);
             window.clearTimeout(clearLive);
             clearLive = window.setTimeout(function () { live.textContent = ""; }, 10000);
+        }
+
+        function wireShareLink() {
+            var field = document.getElementById("share-link");
+            var button = document.getElementById("copy-share-link");
+            var status = document.getElementById("share-link-status");
+            if (!field || !button) {
+                return;
+            }
+            // The page only knows its own path; the address bar knows the host it was reached on.
+            field.value = window.location.origin + field.getAttribute("data-path");
+            field.addEventListener("focus", function () { field.select(); });
+
+            function copied(done) {
+                status.textContent = "";
+                window.setTimeout(function () {
+                    status.textContent = done
+                        ? "Link copied. Paste it into a message or an email."
+                        : "The link could not be copied. Select the link and copy it with your keyboard.";
+                }, 50);
+            }
+
+            button.addEventListener("click", function () {
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(field.value).then(function () { copied(true); }, function () {
+                        field.focus();
+                        copied(false);
+                    });
+                    return;
+                }
+                field.focus();
+                var done = false;
+                try {
+                    done = document.execCommand("copy");
+                } catch (error) {
+                    done = false;
+                }
+                copied(done);
+            });
+        }
+
+        // The talking score page is cached for every reader, so whether this
+        // browser may change the listing is asked for once the page loads.
+        function showListing() {
+            var field = document.getElementById("share-link");
+            var line = document.getElementById("listing-status");
+            if (!field || !line || !window.fetch) {
+                return;
+            }
+            fetch(field.getAttribute("data-path") + "/listing.json", { credentials: "same-origin" })
+                .then(function (response) { return response.ok ? response.json() : null; })
+                .then(function (listing) {
+                    if (!listing || !listing.known || listing.from_library) {
+                        return;
+                    }
+                    line.textContent = listing.listed
+                        ? "Listed in Find a score. "
+                        : "Private: only people with this link can open it. ";
+                    if (listing.can_change) {
+                        var change = document.createElement("a");
+                        change.href = listing.change_url;
+                        change.textContent = listing.listed ? "Change who can find it" : "Add it to the library";
+                        line.appendChild(change);
+                    }
+                    line.hidden = false;
+                })
+                .catch(function () {});
         }
 
         function wireSettings() {
