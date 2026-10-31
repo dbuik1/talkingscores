@@ -1,0 +1,40 @@
+# Score readers for the bench. Copy to engines.toml and adjust paths.
+#
+# Placeholders in a command: {image} is the page (copied into an empty work
+# folder, named after the page), {workdir} is that folder, {stem} the page name.
+# output is a file pattern inside the work folder, or "stdout" for readers
+# that print the music. setup_spark.sh installs everything listed here.
+
+[engines.audiveris]
+# Java; reads PDFs best, so it is given the PDF of clean pages when there is one.
+command = ["~/omr/audiveris/bin/Audiveris", "-batch", "-export", "-output", "{workdir}", "--", "{image}"]
+input = "pdf"
+output = "**/*.mxl"
+timeout = 600
+
+[engines.homr]
+# Writes <page>.musicxml next to the page.
+command = ["~/omr/homr-venv/bin/homr", "{image}"]
+output = "*.musicxml"
+
+[engines.transcoda]
+# Prints **kern after any progress lines.
+command = ["uv", "run", "--directory", "~/omr/transcoda", "scripts/inference.py",
+           "--weights", "~/omr/transcoda/weights/model.ckpt", "--image", "{image}"]
+output = "stdout"
+suffix = ".krn"
+extract = "kern"
+
+[engines.legato]
+# Prints ABC after any progress lines; music21 reads ABC directly.
+command = ["~/omr/legato-venv/bin/python", "~/omr/legato/scripts/inference.py",
+           "--model_path", "guangyangmusic/legato", "--image_path", "{image}"]
+env = { PYTHONPATH = "~/omr/legato" }
+output = "stdout"
+suffix = ".abc"
+extract = "abc"
+
+[engines.flat]
+# Paid, 1 credit a page. Needs FLAT_TOKEN with the omr scope.
+kind = "flat"
+timeout = 300
