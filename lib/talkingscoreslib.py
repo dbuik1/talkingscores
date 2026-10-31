@@ -29,7 +29,7 @@ from lib.description import (
     DescriptionBuilder, Fact, InstrumentDescription, ScoreFacts, SegmentDescription,
     clean_colour_map, segments_to_text,
 )
-from lib import fingering
+from lib import fingering, instrument_fingering
 from lib.events import TSChord, TSChordSymbol, TSDynamic, TSNote, TSPitch, TSRest, TSUnpitched
 from lib.musicAnalyser import MusicAnalyser
 from lib.render_settings import RenderSettings, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES
@@ -1028,22 +1028,40 @@ class Music21TalkingScore(TalkingScoreBase):
         mode = self.settings.fingering
         if mode == "none":
             return
-        if printed:
+        # Fingers printed for the score's own instrument mean nothing on another one.
+        other_instrument = self.settings.fingering_instrument != "score"
+        if printed and not other_instrument:
             pitch.finger, pitch.finger_printed = printed, True
             return
-        if mode != "suggested" or state.get("measure_offset") is None:
+        if (mode != "suggested" and not other_instrument) or state.get("measure_offset") is None:
             return
         plan = self._suggested_fingers_for(self.current_part_index)
         offset = state["measure_offset"] + float(element.offset)
-        finger = plan.get((round(offset, 4), round(pitch.pitch_number, 2), bool(element.duration.isGrace)))
-        if finger is not None:
-            pitch.finger = str(finger)
+        found = plan.get((round(offset, 4), round(pitch.pitch_number, 2), bool(element.duration.isGrace)))
+        if found is None:
+            return
+        if isinstance(found, dict):
+            pitch.finger, pitch.finger_info = found["text"], found
+        else:
+            pitch.finger = str(found)
+
+    def fingering_instrument(self, part_index):
+        """The instrument fingering is suggested for in this part, or None for none."""
+        chosen = self.settings.fingering_instrument
+        if chosen in instrument_fingering.INSTRUMENTS:
+            return chosen
+        part = self.score.parts[part_index]
+        if is_keyboard(part, self._staves_in_instrument(part_index)):
+            return "piano"
+        instrument = part.getInstrument(recurse=True)
+        names = " ".join(filter(None, (instrument.partName, instrument.instrumentName, part.partName)))
+        return instrument_fingering.detect(instrument, names)
 
     def hand(self, part_index):
-        """right, left, or None for a part that is not played on a keyboard."""
-        part = self.score.parts[part_index]
-        if not is_keyboard(part, self._staves_in_instrument(part_index)):
+        """right, left, or None for a part not fingered for the piano."""
+        if self.fingering_instrument(part_index) != "piano":
             return None
+        part = self.score.parts[part_index]
         name = self.part_names.get(part_index)
         if name == "Right hand":
             return "right"
@@ -1062,21 +1080,34 @@ class Music21TalkingScore(TalkingScoreBase):
                 return count
         return 1
 
+    def _sounding_shift(self, part_index):
+        """Semitones from the part's written pitch to its sounding pitch."""
+        part = self.score.parts[part_index]
+        transposition = getattr(part.getInstrument(recurse=True), 'transposition', None)
+        if transposition is None or part.atSoundingPitch is True:
+            return 0
+        return transposition.semitones
+
     def _suggested_fingers_for(self, part_index):
-        """{(offset in the part, pitch number, grace): finger} for every note the plan fingers."""
+        """{(offset in the part, written pitch number, grace): fingering} for every note the plan fingers.
+
+        A piano fingering is a finger number; every other instrument's is a dict
+        holding its words and the facts its read-out needs.
+        """
         if part_index in self.suggested_fingers:
             return self.suggested_fingers[part_index]
         found = {}
         self.suggested_fingers[part_index] = found
-        hand = self.hand(part_index)
-        if hand is None:
+        instrument = self.fingering_instrument(part_index)
+        if instrument is None:
             return found
+        keep_printed = self.settings.fingering_instrument == "score"
         by_moment = {}
         graces = 0
         for element in self.score.parts[part_index].flatten().notes:
             kind = type(element).__name__
             notes = list(element.notes) if kind == 'Chord' else ([element] if kind == 'Note' else [])
-            printed = printed_fingers(element)
+            printed = printed_fingers(element) if keep_printed and instrument == "piano" else []
             if len(printed) != len(notes):
                 printed = [None] * len(notes)
             offset = round(float(element.offset), 4)
@@ -1095,11 +1126,38 @@ class Music21TalkingScore(TalkingScoreBase):
                     (note_element.pitch.ps, fingering.first_finger(printed_finger)))
         orders = sorted(by_moment)
         moments = [sorted(by_moment[order]) for order in orders]
-        for order, notes, fingers in zip(orders, moments, fingering.plan(moments, hand)):
+        shift = self._sounding_shift(part_index)
+        sounding = [[ps + shift for ps, _ in notes] for notes in moments]
+
+        if instrument == "piano":
+            if shift:
+                moments = [[(ps + shift, fixed) for ps, fixed in notes] for notes in moments]
+            plans = fingering.plan(moments, self.hand(part_index))
+        elif instrument == "guitar":
+            plans = [None if shape is None else tuple(
+                {"instrument": "guitar", "string": string, "fret": fret,
+                 "text": instrument_fingering.guitar_text(string, fret)} for string, fret in shape)
+                for shape in instrument_fingering.plan_guitar(sounding)]
+        elif instrument == "violin":
+            plans = []
+            for pitches in sounding:
+                places = [instrument_fingering.violin_place(p) for p in pitches]
+                plans.append(tuple(None if place is None else {
+                    "instrument": "violin", "string": place[0], "finger": place[1],
+                    "text": instrument_fingering.violin_text(*place)} for place in places))
+        else:
+            plans = []
+            for pitches in sounding:
+                valves = [instrument_fingering.trumpet_valves(p) for p in pitches]
+                plans.append(tuple(None if v is None else {
+                    "instrument": "trumpet", "text": instrument_fingering.trumpet_text(v)} for v in valves))
+
+        for order, notes, fingers in zip(orders, moments, plans):
             if fingers is None:
                 continue
             for (ps, _), finger in zip(notes, fingers):
-                found[(order[0], round(ps, 2), order[1] == 0)] = finger
+                if finger is not None:
+                    found[(order[0], round(ps - (shift if instrument == "piano" else 0), 2), order[1] == 0)] = finger
         return found
 
     # Ranges

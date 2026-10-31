@@ -193,15 +193,24 @@
             </div>
         </details>
         <details class="section" name="option-details">
-            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="label">Fingering</span><span class="current" data-summary="fingering"></span></summary>
+            <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="label">Fingering</span><span class="current" data-summary="fingering fingering_instrument"></span></summary>
             <div class="section-body">
                 <span class="setting"><label for="fingering">Say fingering</label>
                     <select class="input" name="fingering" id="fingering" aria-describedby="fingering-help" data-any-style>
                         <option value="printed" selected>Only where the music prints it</option>
-                        <option value="suggested">Printed, plus suggestions for piano</option>
+                        <option value="suggested">Printed, plus suggestions</option>
                         <option value="none">Never</option>
                     </select></span>
-                <p class="hint" id="fingering-help">Suggestions fill in the notes the score leaves unfingered and are read as suggested fingering</p>
+                <p class="hint" id="fingering-help">Suggestions fill in the notes the score leaves unfingered on piano, guitar, violin and trumpet, and are read as suggested fingering</p>
+                <span class="setting"><label for="fingering_instrument">Fingering for</label>
+                    <select class="input" name="fingering_instrument" id="fingering_instrument" aria-describedby="fingering-instrument-help" data-any-style>
+                        <option value="score" selected>The instrument each part is written for</option>
+                        <option value="piano">Piano</option>
+                        <option value="guitar">Guitar</option>
+                        <option value="violin">Violin, first position</option>
+                        <option value="trumpet">Trumpet in B flat</option>
+                    </select></span>
+                <p class="hint" id="fingering-instrument-help">Another instrument gives every part suggested fingering for that instrument in place of the printed fingers</p>
             </div>
         </details>
 

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from html import escape
 
-from lib import fingering
+from lib import fingering, instrument_fingering
 from lib.vocabulary import Vocabulary
 
 # Event kinds that are read out when a note or chord sounds at the same moment.
@@ -93,7 +93,8 @@ class BarDescription:
     voices: list = field(default_factory=list)   # set instead of beats when voices are read apart
     # Fingering: the label says whether every finger is printed in the score;
     # positions is the hand-position summary, empty for a part not played on
-    # a keyboard; every_finger names each struck note with its finger.
+    # a keyboard or an instrument with nothing to say beyond the notes;
+    # every_finger names each struck note with its fingering.
     fingering_label: str = ""
     fingering_positions: str = ""
     every_finger: str = ""
@@ -501,13 +502,31 @@ class DescriptionBuilder:
             if not fingered:
                 continue
             printed_only = printed_only and all(pitch.finger_printed for pitch in fingered)
-            moments.append([(self._finger_note_name(pitch), pitch.finger, pitch.step, pitch.octave,
-                             pitch.pitch_number) for pitch in fingered])
+            moments.append(fingered)
         if not moments:
             return
-        positions, every_finger = fingering.describe(moments, hand or "right")
-        bar.fingering_label = "Fingering" if printed_only else "Suggested fingering"
-        bar.fingering_positions = positions if hand else ""
+        chosen = self.settings.fingering_instrument
+        other = next((pitch.finger_info["instrument"] for moment in moments for pitch in moment
+                      if pitch.finger_info), None)
+        if other:
+            # A printed finger has no string or valves behind it, so it is read as printed.
+            positions, every_finger = instrument_fingering.describe(
+                other, [[(self._finger_note_name(pitch), pitch.finger_info or {"text": pitch.finger})
+                         for pitch in moment] for moment in moments])
+        else:
+            positions, every_finger = fingering.describe(
+                [[(self._finger_note_name(pitch), pitch.finger, pitch.step, pitch.octave, pitch.pitch_number)
+                  for pitch in moment] for moment in moments], hand or "right")
+            positions = positions if hand else ""
+        if printed_only:
+            bar.fingering_label = "Fingering"
+        elif chosen in instrument_fingering.INSTRUMENTS:
+            # Naming the instrument keeps a part read for another instrument from
+            # sounding like its own fingering.
+            bar.fingering_label = f"Suggested {chosen} fingering"
+        else:
+            bar.fingering_label = "Suggested fingering"
+        bar.fingering_positions = positions
         bar.every_finger = every_finger
 
     def _finger_note_name(self, pitch):
