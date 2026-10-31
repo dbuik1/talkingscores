@@ -83,6 +83,9 @@ class RenderSettings:
     # none, printed, or suggested: printed fingers plus suggestions for the rest
     # on keyboard parts. Not a wording field, so every style reads fingering.
     fingering: str = "printed"
+    # score suggests for each part's own instrument; piano, guitar, violin or
+    # trumpet suggests for that instrument in every part, setting printed fingers aside.
+    fingering_instrument: str = "score"
 
     # Parts and playback
     instruments: list = field(default_factory=list)

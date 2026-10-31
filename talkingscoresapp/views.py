@@ -51,6 +51,14 @@ def clean_fingering(value):
     return value if value in FINGERING_CHOICES else "printed"
 
 
+FINGERING_INSTRUMENTS = ("score", "piano", "guitar", "violin", "trumpet")
+
+
+def clean_fingering_instrument(value):
+    """One of the instruments fingering can be suggested for; anything else follows each part's own."""
+    return value if value in FINGERING_INSTRUMENTS else "score"
+
+
 CHECKBOX_FIELDS = (
     "chk_playAll", "chk_playSelected", "chk_playUnselected",
     "chk_include_ties", "chk_include_arpeggios", "chk_include_dynamics",
@@ -140,7 +148,7 @@ STORED_CHOICES = (
     "style", "beat_division", "pitch_description", "rhythm_description", "dot_position",
     "rhythm_announcement", "octave_description", "octave_position", "octave_announcement",
     "accidental_style", "repetition_mode", "key_signature_accidentals", "rests", "word_order",
-    "beat_prefix", "rhythm_colour_mode", "octave_colour_mode", "fingering",
+    "beat_prefix", "rhythm_colour_mode", "octave_colour_mode", "fingering", "fingering_instrument",
 )
 
 
@@ -742,6 +750,7 @@ def options(request, id, filename):
             "accidental_style": request.POST.get("accidental_style", "words"),
             "repetition_mode": request.POST.get("repetition_mode", "learning"),
             "fingering": clean_fingering(request.POST.get("fingering")),
+            "fingering_instrument": clean_fingering_instrument(request.POST.get("fingering_instrument")),
             "colour_position": "words" if "chk_colourWords" in request.POST else "none",
             "colour_pitch": "chk_colourPitch" in request.POST,
             "rhythm_colour_mode": request.POST.get("rhythm_colour_mode", "none"),
