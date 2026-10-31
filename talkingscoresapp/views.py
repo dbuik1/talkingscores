@@ -41,6 +41,14 @@ def submitted_settings(post):
     return settings
 
 
+FINGERING_CHOICES = ("printed", "suggested", "none")
+
+
+def clean_fingering(value):
+    """One of the fingering choices; anything else reads printed fingers only."""
+    return value if value in FINGERING_CHOICES else "printed"
+
+
 CHECKBOX_FIELDS = (
     "chk_playAll", "chk_playSelected", "chk_playUnselected", "chk_include_rests",
     "chk_include_ties", "chk_include_arpeggios", "chk_include_dynamics",
@@ -560,6 +568,7 @@ def options(request, id, filename):
             "include_dynamics": "chk_include_dynamics" in request.POST,
             "accidental_style": request.POST.get("accidental_style", "words"),
             "repetition_mode": request.POST.get("repetition_mode", "learning"),
+            "fingering": clean_fingering(request.POST.get("fingering")),
             "colour_position": "words" if "chk_colourWords" in request.POST else "none",
             "colour_pitch": "chk_colourPitch" in request.POST,
             "rhythm_colour_mode": request.POST.get("rhythm_colour_mode", "none"),

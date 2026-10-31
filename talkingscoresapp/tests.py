@@ -2766,6 +2766,153 @@ class FindAScorePageTests(TestCase):
         self.assertIn('name="url"', content)
 
 
+class FingeringTests(TestCase):
+    """Fingers printed in a score are read on their own line; suggestions fill the rest on keyboard parts."""
+
+    @staticmethod
+    def _piano(right_bars, left_bars):
+        """A two-stave piano score; each bar is a list of pitch names, a space joining a chord."""
+        from music21 import chord, instrument, layout, meter, note, stream
+        staves = []
+        for bars in (right_bars, left_bars):
+            staff = stream.PartStaff()
+            staff.insert(0, instrument.Piano())
+            for number, items in enumerate(bars, start=1):
+                measure = stream.Measure(number=number)
+                if number == 1:
+                    measure.append(meter.TimeSignature("4/4"))
+                length = 4 / len(items)
+                for item in items:
+                    names = item.split()
+                    measure.append(note.Note(names[0], quarterLength=length) if len(names) == 1
+                                   else chord.Chord(names, quarterLength=length))
+                staff.append(measure)
+            staves.append(staff)
+        score = stream.Score()
+        for staff in staves:
+            score.insert(0, staff)
+        score.insert(0, layout.StaffGroup(staves, symbol="brace"))
+        return score
+
+    def _text(self, score_stream, options):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        temp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        path = os.path.join(temp_dir, "score.musicxml")
+        if isinstance(score_stream, str):
+            # Raw MusicXML keeps markings music21 would drop when writing a file.
+            with open(path, "w") as score_file:
+                score_file.write(score_stream)
+        else:
+            score_stream.write("musicxml", fp=path)
+        formatter = HTMLTalkingScoreFormatter(Music21TalkingScore(path), options={"bars_at_a_time": 4, **options})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            return formatter.render_text(), formatter.generateHTML()
+
+    def test_scales_get_the_fingering_pianists_use(self):
+        from lib.fingering import plan
+        scale = [60, 62, 64, 65, 67, 69, 71, 72]
+        fingers = lambda pitches, hand: [f[0] for f in plan([[(p, None)] for p in pitches], hand)]
+        self.assertEqual(fingers(scale, "right"), [1, 2, 3, 1, 2, 3, 4, 5])
+        self.assertEqual(fingers(scale[::-1], "right"), [5, 4, 3, 2, 1, 3, 2, 1])
+        self.assertEqual(fingers([p - 12 for p in scale], "left"), [5, 4, 3, 2, 1, 3, 2, 1])
+        self.assertEqual(plan([[(60, None), (64, None), (67, None)]], "right"), [(1, 3, 5)])
+        self.assertEqual(plan([[(48, None), (52, None), (55, None)]], "left"), [(5, 3, 1)])
+
+    def test_a_printed_finger_is_kept_and_the_plan_works_around_it(self):
+        from lib.fingering import plan
+        fingers = [f[0] for f in plan([[(60, 2)], [(62, None)], [(64, None)], [(65, None)]], "right")]
+        self.assertEqual(fingers, [2, 3, 4, 5])
+
+    def test_printed_fingers_are_read_on_their_own_line_not_as_articulations(self):
+        from music21 import articulations
+        score = self._piano([["C4", "D4", "E4", "F4"]], [["C3 E3 G3"]])
+        right = score.parts[0].flatten().notes
+        for element, finger in zip(right, (1, 2, 3, 1)):
+            element.articulations.append(articulations.Fingering(finger))
+        text, html = self._text(score, {"fingering": "printed"})
+        self.assertIn("Fingering: 1 on C, thumb under on F.", text)
+        self.assertIn("Every finger: C 1, D 2, E 3, F 1.", text)
+        self.assertNotIn("fingering", text.split("Right hand")[1].split("Fingering:")[0].lower())
+        # The left hand prints no fingers, so nothing is said for it.
+        self.assertNotIn("Suggested", text)
+        self.assertIn('<details class="every-finger">', html)
+
+    def test_suggestions_fill_unfingered_keyboard_parts_and_say_so(self):
+        score = self._piano([["C4", "D4", "E4", "F4"], ["G4", "A4", "B4", "C5"]], [["C3 E3 G3"], ["G2 B2 D3"]])
+        text, _ = self._text(score, {"fingering": "suggested"})
+        self.assertIn("Suggested fingering: 1 on C, thumb under on F.", text)
+        self.assertIn("Every finger: C 1, D 2, E 3, F 1.", text)
+        self.assertIn("Every finger: G 2, A 3, B 4, C 5.", text)
+        self.assertIn("Suggested fingering: 5 3 1 on C E G.", text)
+        self.assertIn("Every finger: C 5 with E 3 with G 1.", text)
+
+    def test_fingering_can_be_left_out(self):
+        from music21 import articulations
+        score = self._piano([["C4", "D4", "E4", "F4"]], [["C3 E3 G3"]])
+        score.parts[0].flatten().notes[0].articulations.append(articulations.Fingering(1))
+        text, html = self._text(score, {"fingering": "none"})
+        self.assertNotIn("inger", text)
+        self.assertNotIn("every-finger", html)
+
+    def test_a_change_of_finger_on_a_held_note_is_read_as_both_fingers(self):
+        notes = "".join(
+            f'<note><pitch><step>{step}</step><octave>4</octave></pitch><duration>1</duration>'
+            f'<type>quarter</type>{fingers}</note>'
+            for step, fingers in (
+                ("C", ""),
+                ("D", '<notations><technical><fingering>3</fingering>'
+                      '<fingering substitution="yes">1</fingering></technical></notations>'),
+                ("E", '<notations><technical><fingering>2</fingering>'
+                      '<fingering alternate="yes">4</fingering></technical></notations>'),
+                ("F", "")))
+        xml = ('<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1"><part-list>'
+               '<score-part id="P1"><part-name>Piano</part-name></score-part></part-list><part id="P1">'
+               '<measure number="1"><attributes><divisions>1</divisions><time><beats>4</beats>'
+               '<beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>'
+               f'{notes}</measure></part></score-partwise>')
+        text, _ = self._text(xml, {"fingering": "printed"})
+        # The alternative fingering printed for E is left out.
+        self.assertIn("Every finger: D 3-1, E 2.", text)
+
+    def test_a_part_not_played_on_a_keyboard_gets_printed_fingers_only(self):
+        from music21 import articulations, instrument, meter, note, stream
+        part = stream.Part()
+        part.insert(0, instrument.Violin())
+        measure = stream.Measure(number=1)
+        measure.append(meter.TimeSignature("4/4"))
+        for name, finger in (("A4", 0), ("B4", 1), ("C5", 2), ("D5", None)):
+            played = note.Note(name, quarterLength=1)
+            if finger is not None:
+                played.articulations.append(articulations.Fingering(finger))
+            measure.append(played)
+        part.append(measure)
+        score = stream.Score()
+        score.append(part)
+        text, html = self._text(score, {"fingering": "suggested"})
+        self.assertIn("Fingering: A 0, B 1, C 2.", text)
+        self.assertNotIn("Suggested", text)
+        self.assertNotIn("every-finger", html)
+
+    def test_a_key_signature_sharp_is_named_in_the_fingering_line(self):
+        from music21 import key
+        score = self._piano([["G4", "A4", "B4", "C5"], ["D5", "E5", "F#5", "G5"]], [["G2"], ["G2"]])
+        for staff in score.parts:
+            staff.getElementsByClass("Measure")[0].insert(0, key.KeySignature(1))
+        text, _ = self._text(score, {"fingering": "suggested", "key_signature_accidentals": "printed"})
+        self.assertIn("F sharp", text.split("Every finger: D")[1].split("\n")[0])
+
+    def test_options_store_the_fingering_choice(self):
+        self.assertEqual(views_module.clean_fingering("suggested"), "suggested")
+        self.assertEqual(views_module.clean_fingering("none"), "none")
+        self.assertEqual(views_module.clean_fingering("<script>"), "printed")
+        self.assertEqual(views_module.clean_fingering(None), "printed")
+        from lib.render_settings import RenderSettings
+        # Fingering is read in every style, not only the one the wording options edit.
+        self.assertEqual(RenderSettings.from_options({"style": "plain", "fingering": "suggested"}).fingering,
+                         "suggested")
+
+
 class UserFacingCopyTests(TestCase):
     """The words a reader sees, and the comments beside them, stay free of the
     tells the copy scanner knows: rationale leaked into the interface, marketing

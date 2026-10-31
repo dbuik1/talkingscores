@@ -732,6 +732,11 @@
                 if (element.closest("summary") || element.closest("[aria-hidden='true']")) {
                     return;
                 }
+                // Every finger is read only once the reader opens it for that bar.
+                var everyFinger = element.closest("details.every-finger");
+                if (everyFinger && !everyFinger.open) {
+                    return;
+                }
                 var text;
                 var beat = element.tagName === "LI" ? element.querySelector("b") : null;
                 if (beat) {

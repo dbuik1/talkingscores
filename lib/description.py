@@ -7,11 +7,13 @@ beat carries the same words as plain text and as HTML; the HTML only adds
 colour classes.
 """
 
+import copy
 import math
 from dataclasses import dataclass, field
 from fractions import Fraction
 from html import escape
 
+from lib import fingering
 from lib.vocabulary import Vocabulary
 
 # Event kinds that are read out when a note or chord sounds at the same moment.
@@ -20,6 +22,8 @@ SOUNDING_KINDS = ("note", "chord", "unpitched")
 LEADING_KINDS = ("dynamic", "chord_symbol")
 
 TOGETHER = " together with "
+
+ALTER_NAMES = {1: "sharp", -1: "flat", 2: "double-sharp", -2: "double-flat"}
 IN_BEAT_SEPARATOR = ", "
 
 
@@ -69,6 +73,21 @@ class BarDescription:
     whole_bar_rest: bool = False
     rest_text: str = ""
     beats: list = field(default_factory=list)
+    # Fingering: the label says whether every finger is printed in the score;
+    # positions is the hand-position summary, empty for a part not played on
+    # a keyboard; every_finger names each struck note with its finger.
+    fingering_label: str = ""
+    fingering_positions: str = ""
+    every_finger: str = ""
+
+    @property
+    def fingering_lines(self):
+        if not self.every_finger:
+            return []
+        if self.fingering_positions:
+            return [f"{self.fingering_label}: {self.fingering_positions}.",
+                    f"Every finger: {self.every_finger}."]
+        return [f"{self.fingering_label}: {self.every_finger}."]
 
     @property
     def text(self):
@@ -89,6 +108,7 @@ class BarDescription:
             lines.extend(beat.text_with_label for beat in self.beats)
         else:
             lines.append(self.text)
+        lines.extend(self.fingering_lines)
         lines.extend(self.after_notes)
         return lines
 
@@ -299,12 +319,14 @@ class DescriptionBuilder:
 
     # Bars
 
-    def build_part(self, part_index, name, events_by_bar, bar_lengths, beat_quarter_length, pickup_bar=None):
+    def build_part(self, part_index, name, events_by_bar, bar_lengths, beat_quarter_length, pickup_bar=None,
+                   hand=None):
         """
         events_by_bar: {bar_number: [time_point, ...]} as produced by the score.
         bar_lengths: {bar_number: (written bar length, actual length)} in quarter notes.
         beat_quarter_length: one length for every bar, or {bar_number: length} when
         the time signature changes inside the range.
+        hand: right or left for a keyboard part, None for any other.
         """
         part = PartDescription(part_index=part_index, name=name)
         for bar_number in sorted(events_by_bar):
@@ -316,12 +338,12 @@ class DescriptionBuilder:
             part.bars.append(self.build_bar(
                 bar_number, events_by_bar[bar_number], part_index,
                 beat_ql, written_length, actual_length,
-                is_pickup=(bar_number == pickup_bar),
+                is_pickup=(bar_number == pickup_bar), hand=hand,
             ))
         return part
 
     def build_bar(self, bar_number, time_points, part_index, beat_quarter_length,
-                  written_length=None, actual_length=None, is_pickup=False):
+                  written_length=None, actual_length=None, is_pickup=False, hand=None):
         bar = BarDescription(number=bar_number, label=self.bar_label(bar_number, is_pickup))
         bar.signatures = list(self.time_and_keys.get(bar_number, []))
         bar.after_notes = list(self.bar_endings.get(bar_number, []))
@@ -365,7 +387,50 @@ class DescriptionBuilder:
             elif beat_description.fragments:
                 beat_description.fragments.append(Fragment(IN_BEAT_SEPARATOR, "sep"))
             beat_description.fragments.extend(fragments)
+        self._add_fingering(bar, time_points, hand)
         return bar
+
+    def _add_fingering(self, bar, time_points, hand):
+        """The bar's fingering, read from the fingers set on its struck notes."""
+        if self.settings.fingering == "none":
+            return
+        moments = []
+        printed_only = True
+        for time_point in time_points:
+            pitches = []
+            for events in time_point["voices"].values():
+                for event in events:
+                    if event.kind == "note":
+                        held = event.tie in ("stop", "continue")
+                        if not held:
+                            pitches.append(event.pitch)
+                    elif event.kind == "chord":
+                        for pitch in event.pitches:
+                            tie = pitch.tie or event.tie
+                            if tie not in ("stop", "continue"):
+                                pitches.append(pitch)
+            fingered = [pitch for pitch in sorted(pitches, key=lambda p: p.pitch_number) if pitch.finger]
+            if not fingered:
+                continue
+            printed_only = printed_only and all(pitch.finger_printed for pitch in fingered)
+            moments.append([(self._finger_note_name(pitch), pitch.finger, pitch.step, pitch.octave,
+                             pitch.pitch_number) for pitch in fingered])
+        if not moments:
+            return
+        positions, every_finger = fingering.describe(moments, hand or "right")
+        bar.fingering_label = "Fingering" if printed_only else "Suggested fingering"
+        bar.fingering_positions = positions if hand else ""
+        bar.every_finger = every_finger
+
+    def _finger_note_name(self, pitch):
+        """The note's letter and accidental, without its octave: the notes line already gives that."""
+        if pitch.alter and not pitch.accidental_name:
+            # A note sharpened by the key signature carries no accidental of its
+            # own, but the fingering line has no key signature to lean on.
+            pitch = copy.copy(pitch)
+            pitch.accidental_name = ALTER_NAMES.get(pitch.alter)
+        name = self.vocabulary.pitch(pitch, True)
+        return name or pitch.step
 
     def bar_label(self, bar_number, is_pickup):
         if is_pickup:

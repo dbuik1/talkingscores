@@ -76,6 +76,9 @@ class RenderSettings:
     beams: bool = False
     abbreviations: bool = False          # fixed abbreviation table (Braille display style)
     repetition_mode: str = "learning"    # learning, detailed, none
+    # none, printed, or suggested: printed fingers plus suggestions for the rest
+    # on keyboard parts. Not a wording field, so every style reads fingering.
+    fingering: str = "printed"
 
     # Parts and playback
     instruments: list = field(default_factory=list)

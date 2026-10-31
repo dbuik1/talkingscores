@@ -3,3 +3,14 @@
     <li{% if not beat.label %} class="unlabelled"{% endif %}>{% if beat.label %}<b>{{ beat.label }}</b> {% endif %}<span class="notes">{{ beat.html|safe }}</span></li>
 {% endfor %}
 </ul>
+{% if part.bar.every_finger %}
+{% if part.bar.fingering_positions %}
+<p class="fingering">{{ part.bar.fingering_label }}: {{ part.bar.fingering_positions }}</p>
+<details class="every-finger">
+    <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Show every finger</summary>
+    <p class="fingering">{{ part.bar.every_finger }}</p>
+</details>
+{% else %}
+<p class="fingering">{{ part.bar.fingering_label }}: {{ part.bar.every_finger }}</p>
+{% endif %}
+{% endif %}

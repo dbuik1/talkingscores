@@ -129,6 +129,19 @@
             </fieldset>
 
             <fieldset class="box-set">
+                <legend>Fingering</legend>
+                <div class="row">
+                    <span class="setting"><label for="fingering">Say fingering</label>
+                        <select class="input" name="fingering" id="fingering" aria-describedby="fingering-help">
+                            <option value="printed" selected>Only where the music prints it</option>
+                            <option value="suggested">Printed, plus suggestions for piano</option>
+                            <option value="none">Never</option>
+                        </select></span>
+                </div>
+                <p class="small muted" id="fingering-help">Suggestions fill in the notes the score leaves unfingered and are read as suggested fingering</p>
+            </fieldset>
+
+            <fieldset class="box-set">
                 <legend>Parts</legend>
                 <p class="small muted" id="parts-help">Choose at least one part.</p>
                 <div class="row">
