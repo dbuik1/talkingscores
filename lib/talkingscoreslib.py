@@ -16,7 +16,7 @@ from abc import ABCMeta, abstractmethod
 from types import SimpleNamespace
 
 from jinja2 import Environment, FileSystemLoader
-from music21 import converter, duration, environment, key, meter, stream
+from music21 import converter, duration, environment, harmony, key, meter, stream
 from music21 import pitch as pitch_module
 from music21.stream import makeNotation
 from music21.stream.enums import ShowNumber
@@ -214,6 +214,56 @@ def ending_label(number):
     return f"{' and '.join(words)} time"
 
 
+def chord_kind_degrees(kind):
+    """The degrees music21 builds a MusicXML chord kind from, such as {1, 3, 5, 7} for dominant.
+
+    None when music21 does not know the kind.
+    """
+    name = harmony.CHORD_ALIASES.get(kind, kind)
+    entry = harmony.CHORD_TYPES.get(name)
+    if entry is None:
+        return None
+    return {int(re.sub(r"\D", "", degree)) for degree in entry[0].split(",")}
+
+
+def add_degrees_missing_from_chord(root):
+    """Turn each altered degree the chord does not contain into an added one.
+
+    Notation programs write C7♯9 either as a C7 that adds a sharpened 9th or as
+    one that alters its 9th. A dominant seventh has no 9th, and music21 refuses
+    the second form, which would reject the whole score for one chord symbol.
+    Read as an added degree, the chord sounds and is named the same.
+    """
+    for mx_harmony in root.iter("harmony"):
+        degrees = chord_kind_degrees((mx_harmony.findtext("kind") or "").strip())
+        if degrees is None:
+            continue
+        for mx_degree in mx_harmony.findall("degree"):
+            degree_type = mx_degree.find("degree-type")
+            if degree_type is None or (degree_type.text or "").strip() != "alter":
+                continue
+            try:
+                value = int((mx_degree.findtext("degree-value") or "").strip())
+            except ValueError:
+                continue
+            if value not in degrees:
+                degree_type.text = "add"
+
+
+def parse_score(musicxml_filepath):
+    """Read a MusicXML file into a music21 score.
+
+    A file whose chord symbols alter a degree the chord lacks is read again with
+    those degrees added; files music21 reads as written are never rewritten.
+    """
+    try:
+        return converter.parse(musicxml_filepath)
+    except harmony.ChordStepModificationException:
+        root = ElementTree.parse(musicxml_filepath).getroot()
+    add_degrees_missing_from_chord(root)
+    return converter.parseData(ElementTree.tostring(root, encoding="unicode"), format="musicxml")
+
+
 def repeat_expression_text(expression):
     """The words a repeat mark is written with, such as Segno or Da Capo al fine."""
     try:
@@ -280,7 +330,7 @@ class Music21TalkingScore(TalkingScoreBase):
 
     def __init__(self, musicxml_filepath, settings=None):
         self.filepath = os.path.realpath(musicxml_filepath)
-        self.score = converter.parse(musicxml_filepath)
+        self.score = parse_score(musicxml_filepath)
         self.timeSigs = {}
         self.part_instruments = {}
         self.part_names = {}
