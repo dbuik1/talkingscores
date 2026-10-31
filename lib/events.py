@@ -51,9 +51,17 @@ class TSChordSymbol(TSEvent):
 
     kind = "chord_symbol"
 
-    def __init__(self, figure):
+    def __init__(self, figure, root=None, bass=None, chord_kind="", modifications=None,
+                 notes=None, no_chord=False):
         super().__init__()
         self.figure = figure
+        self.root = root                    # (step, alter), such as ("B", -1)
+        self.bass = bass                    # (step, alter) of a slash chord's bass, else None
+        self.chord_kind = chord_kind        # music21 kind name, such as dominant-seventh
+        # (add, alter or subtract; degree; semitones): C7 add sharp 9 holds ("add", 9, 1).
+        self.modifications = list(modifications or [])
+        self.notes = list(notes or [])      # (step, alter) from the bass up
+        self.no_chord = no_chord            # N.C.: the chords stop until the next symbol
 
 
 class TSPitch:
@@ -94,6 +102,11 @@ class TSUnpitched(TSEvent):
 
 class TSRest(TSEvent):
     kind = "rest"
+
+    def __init__(self, hidden=False):
+        super().__init__()
+        # Not printed: it only fills out a voice that is silent here.
+        self.hidden = hidden
 
 
 class TSNote(TSEvent):

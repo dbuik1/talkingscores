@@ -52,6 +52,12 @@
             root.removeAttribute("data-size");
         }
         root.classList.toggle("stack", stacked(settings));
+        if ((size === "large" || size === "xlarge") && settings.interface !== false) {
+            root.setAttribute("data-interface", size);
+        } else {
+            root.removeAttribute("data-interface");
+        }
+        root.classList.toggle("pin-controls", settings.pin !== false);
         var theme = effectiveTheme(settings);
         if (theme === "system") {
             root.removeAttribute("data-theme");
@@ -82,7 +88,13 @@
         var barsPerGroup = data.barsPerGroup;
         var player = null;
 
+        function speechReady() {
+            return Boolean(window.TalkingScoresSpeech && window.TalkingScoresSpeech.available());
+        }
+
         wireSettings();
+        wireShareLink();
+        showListing();
         var printButton = document.getElementById("print-score");
         if (printButton) {
             printButton.addEventListener("click", function () { window.print(); });
@@ -175,6 +187,14 @@
                 section.className = "group";
                 section.id = "group-" + start;
                 var heading = document.createElement("h2");
+                heading.tabIndex = -1;
+                // The open group's heading is plain text: only one group is open at
+                // a time, so its own button would have nothing to do.
+                var here = document.createElement("span");
+                here.className = "here";
+                here.innerHTML = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>';
+                here.appendChild(document.createTextNode(rangeLabel(start, end, true)));
+                heading.appendChild(here);
                 var toggle = document.createElement("button");
                 toggle.type = "button";
                 toggle.className = "group-toggle";
@@ -200,7 +220,7 @@
                 body.id = section.id + "-body";
                 members.forEach(function (bar) { body.appendChild(bar); });
                 section.appendChild(body);
-                return {section: section, body: body, toggle: toggle, preview: preview, start: start, end: end, members: members};
+                return {section: section, heading: heading, body: body, toggle: toggle, preview: preview, start: start, end: end, members: members};
             });
             groups.forEach(function (group, index) {
                 var endline = document.createElement("div");
@@ -209,6 +229,17 @@
                 var next = groups[index + 1];
                 text.textContent = positionText(group) + (next ? " Next: " + rangeLabel(next.start, next.end, false) + "." : " This is the last group.");
                 endline.appendChild(text);
+                if (next && speechReady()) {
+                    var readNext = document.createElement("button");
+                    readNext.type = "button";
+                    readNext.className = "btn";
+                    readNext.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16 9a4 4 0 0 1 0 6"></path></svg>Read next group';
+                    readNext.addEventListener("click", function () {
+                        show(index + 1, true);
+                        readAloud();
+                    });
+                    endline.appendChild(readNext);
+                }
                 if (next) {
                     var button = document.createElement("button");
                     button.type = "button";
@@ -255,6 +286,7 @@
                 link.textContent = rangeLabel(group.start, group.end, true);
                 link.addEventListener("click", function (event) {
                     event.preventDefault();
+                    closeGoTo();
                     show(index, true);
                 });
                 item.appendChild(link);
@@ -275,21 +307,8 @@
                 // A long score has one toggle per group, and tabbing back through
                 // all of them to reach the toolbar costs more than it saves: the
                 // contents list, Previous, Next and the bar box all reach a group.
-                group.toggle.tabIndex = open ? 0 : -1;
-                // Only one group is open at a time, so the open one's own toggle has
-                // nothing to do: it says where the reader is rather than offering a
-                // state they can change.
-                if (open) {
-                    group.toggle.removeAttribute("aria-expanded");
-                    group.toggle.removeAttribute("aria-controls");
-                    group.toggle.setAttribute("aria-current", "true");
-                    group.toggle.setAttribute("aria-disabled", "true");
-                } else {
-                    group.toggle.setAttribute("aria-expanded", "false");
-                    group.toggle.setAttribute("aria-controls", group.section.id + "-body");
-                    group.toggle.removeAttribute("aria-current");
-                    group.toggle.removeAttribute("aria-disabled");
-                }
+                group.toggle.tabIndex = -1;
+                group.toggle.hidden = open;
             });
             var group = groups[current];
             if (reading && reading.group !== group) {
@@ -297,13 +316,14 @@
             }
             if (position) {
                 position.textContent = positionText(group).replace(/\.$/, "");
+                position.href = "#" + group.section.id;
             }
             if (gotoInput && !keepTyped) {
                 gotoInput.value = String(group.start);
             }
             if (focus) {
                 group.section.scrollIntoView({block: "start", behavior: reducedMotion() ? "auto" : "smooth"});
-                group.toggle.focus({preventScroll: true});
+                group.heading.focus({preventScroll: true});
             }
             if (focus && window.history && window.history.replaceState && window.location.hash !== "#" + group.section.id) {
                 window.history.replaceState(null, "", "#" + group.section.id);
@@ -366,7 +386,17 @@
             }
             gotoError.textContent = "";
             gotoInput.removeAttribute("aria-invalid");
+            closeGoTo();
             show(index, true, true);
+        }
+
+        // The bar is open on screen once the reader has gone to it, so the panel
+        // that took them there closes rather than standing between them and it.
+        function closeGoTo() {
+            var panel = document.getElementById("go-to");
+            if (panel) {
+                panel.open = false;
+            }
         }
 
         function regroup(size) {
@@ -437,17 +467,68 @@
                     regroup(parseInt(perGroup.value, 10));
                 });
             }
-            wire("read-again", "click", function () {
-                var group = groups[current];
-                // A group runs to hundreds of characters, and a live region reads
-                // them out in one piece that cannot be paused or skipped. The
-                // button puts the reader at the top of the group's text instead,
-                // so the reading stays under their own commands.
-                group.body.setAttribute("tabindex", "-1");
-                group.body.focus();
-                group.section.scrollIntoView({block: "start", behavior: reducedMotion() ? "auto" : "smooth"});
-                announce(rangeLabel(group.start, group.end, true) + ".");
+            if (position) {
+                position.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    var group = groups[current];
+                    // A group runs to hundreds of characters, and a live region reads
+                    // them out in one piece that cannot be paused or skipped. The
+                    // link puts the reader at the top of the group's text instead,
+                    // so the reading stays under their own commands.
+                    group.body.setAttribute("tabindex", "-1");
+                    group.body.focus({preventScroll: true});
+                    group.section.scrollIntoView({block: "start", behavior: reducedMotion() ? "auto" : "smooth"});
+                });
+            }
+            wireShortcuts();
+            pinOffset();
+        }
+
+        // The pinned toolbar covers the top of the window, so a group scrolled into
+        // view stops below it rather than under it.
+        function pinOffset() {
+            if (!toolbar || !window.ResizeObserver) {
+                return;
+            }
+            new window.ResizeObserver(function () {
+                root.style.setProperty("--toolbar-height", toolbar.offsetHeight + "px");
+            }).observe(toolbar);
+        }
+
+        function openGoTo() {
+            var panel = document.getElementById("go-to");
+            if (!panel || !gotoInput) {
+                return;
+            }
+            panel.open = true;
+            gotoInput.focus();
+            gotoInput.select();
+        }
+
+        // Alt with a letter reaches the page through screen readers in browse mode,
+        // and none of these letters opens a browser menu.
+        function wireShortcuts() {
+            var keys = {
+                KeyN: function () { clickIfShown("next-group"); },
+                KeyP: function () { clickIfShown("previous-group"); },
+                KeyR: function () { clickIfShown("read-aloud"); },
+                KeyL: function () { clickIfShown("play-group"); },
+                KeyG: openGoTo
+            };
+            document.addEventListener("keydown", function (event) {
+                if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !keys[event.code]) {
+                    return;
+                }
+                event.preventDefault();
+                keys[event.code]();
             });
+        }
+
+        function clickIfShown(id) {
+            var button = document.getElementById(id);
+            if (button && !button.hidden && !button.disabled) {
+                button.click();
+            }
         }
 
         function announce(text) {
@@ -462,14 +543,85 @@
             clearLive = window.setTimeout(function () { live.textContent = ""; }, 10000);
         }
 
+        function wireShareLink() {
+            var field = document.getElementById("share-link");
+            var button = document.getElementById("copy-share-link");
+            var status = document.getElementById("share-link-status");
+            if (!field || !button) {
+                return;
+            }
+            // The page only knows its own path; the address bar knows the host it was reached on.
+            field.value = window.location.origin + field.getAttribute("data-path");
+            field.addEventListener("focus", function () { field.select(); });
+
+            function copied(done) {
+                status.textContent = "";
+                window.setTimeout(function () {
+                    status.textContent = done
+                        ? "Link copied. Paste it into a message or an email."
+                        : "The link could not be copied. Select the link and copy it with your keyboard.";
+                }, 50);
+            }
+
+            button.addEventListener("click", function () {
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(field.value).then(function () { copied(true); }, function () {
+                        field.focus();
+                        copied(false);
+                    });
+                    return;
+                }
+                field.focus();
+                var done = false;
+                try {
+                    done = document.execCommand("copy");
+                } catch (error) {
+                    done = false;
+                }
+                copied(done);
+            });
+        }
+
+        // The talking score page is cached for every reader, so whether this
+        // browser may change the listing is asked for once the page loads.
+        function showListing() {
+            var field = document.getElementById("share-link");
+            var line = document.getElementById("listing-status");
+            if (!field || !line || !window.fetch) {
+                return;
+            }
+            fetch(field.getAttribute("data-path") + "/listing.json", { credentials: "same-origin" })
+                .then(function (response) { return response.ok ? response.json() : null; })
+                .then(function (listing) {
+                    if (!listing || !listing.known || listing.from_library) {
+                        return;
+                    }
+                    line.textContent = listing.listed
+                        ? "Listed in Find a score. "
+                        : "Private: only people with this link can open it. ";
+                    if (listing.can_change) {
+                        var change = document.createElement("a");
+                        change.href = listing.change_url;
+                        change.textContent = listing.listed ? "Change who can find it" : "Add it to the library";
+                        line.appendChild(change);
+                    }
+                    line.hidden = false;
+                })
+                .catch(function () {});
+        }
+
         function wireSettings() {
-            var settingsForm = document.getElementById("reading-settings-form");
+            var settingsForm = document.getElementById("panel-text");
             if (!settingsForm) {
                 return;
             }
             var sizeInputs = settingsForm.querySelectorAll('input[name="size"]');
             var stack = document.getElementById("setting-stack");
             var theme = document.getElementById("setting-theme");
+            var interfaceBox = document.getElementById("setting-interface");
+            var interfaceRow = document.getElementById("interface-row");
+            var pin = document.getElementById("setting-pin");
+            wireTabs();
 
             function reflect() {
                 Array.prototype.forEach.call(sizeInputs, function (input) {
@@ -489,6 +641,9 @@
                         locked.hidden = !stack.disabled;
                     }
                 }
+                if (interfaceRow) {
+                    interfaceRow.hidden = !(prefs.size === "large" || prefs.size === "xlarge");
+                }
             }
 
             Array.prototype.forEach.call(sizeInputs, function (input) {
@@ -501,13 +656,29 @@
                     // Extra large turns one note per line on and locks the box, so
                     // the side effect is said rather than left to be discovered.
                     if (stack && stack.disabled) {
-                        announce("Extra large text. One note per line is on and cannot be turned off at this size.");
+                        announce("Extra large text. One note per line is always on at this size.");
                     }
                 });
             });
             if (stack) {
                 stack.addEventListener("change", function () {
                     prefs.stack = stack.checked || undefined;
+                    applyAppearance(prefs);
+                    savePrefs();
+                });
+            }
+            if (interfaceBox) {
+                interfaceBox.checked = prefs.interface !== false;
+                interfaceBox.addEventListener("change", function () {
+                    prefs.interface = interfaceBox.checked ? undefined : false;
+                    applyAppearance(prefs);
+                    savePrefs();
+                });
+            }
+            if (pin) {
+                pin.checked = prefs.pin !== false;
+                pin.addEventListener("change", function () {
+                    prefs.pin = pin.checked ? undefined : false;
                     applyAppearance(prefs);
                     savePrefs();
                 });
@@ -521,6 +692,84 @@
                 });
             }
             reflect();
+        }
+
+        // The settings tabs follow the usual tab keys: the arrows move between tabs
+        // and Tab moves into the open panel. Without script every panel shows.
+        function wireTabs() {
+            var list = document.querySelector("#settings .tabs");
+            if (!list) {
+                return;
+            }
+            list.hidden = false;
+            var tabs = Array.prototype.slice.call(list.querySelectorAll('[role="tab"]'));
+            function shown() {
+                return tabs.filter(function (tab) { return !tab.hidden; });
+            }
+            function select(chosen, focus) {
+                tabs.forEach(function (tab) {
+                    var selected = tab === chosen;
+                    tab.setAttribute("aria-selected", selected ? "true" : "false");
+                    tab.tabIndex = selected ? 0 : -1;
+                    var panel = document.getElementById(tab.getAttribute("aria-controls"));
+                    if (panel) {
+                        panel.hidden = !selected;
+                    }
+                });
+                if (focus) {
+                    chosen.focus();
+                }
+            }
+            tabs.forEach(function (tab) {
+                tab.addEventListener("click", function () { select(tab, false); });
+                tab.addEventListener("keydown", function (event) {
+                    var visible = shown();
+                    var at = visible.indexOf(tab);
+                    var next = null;
+                    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+                        next = visible[(at + 1) % visible.length];
+                    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+                        next = visible[(at - 1 + visible.length) % visible.length];
+                    } else if (event.key === "Home") {
+                        next = visible[0];
+                    } else if (event.key === "End") {
+                        next = visible[visible.length - 1];
+                    }
+                    if (next) {
+                        event.preventDefault();
+                        select(next, true);
+                    }
+                });
+            });
+            select(tabs[0], false);
+        }
+
+        // The page is written once and served to everyone, so its Wording form
+        // asks for a form token just before it is sent.
+        var wording = document.getElementById("panel-wording");
+        if (wording) {
+            wording.addEventListener("submit", function (event) {
+                event.preventDefault();
+                var error = document.getElementById("rewrite-error");
+                if (!wording.querySelector('input[name="style"]:checked')) {
+                    error.textContent = "Choose a style to rewrite the talking score in.";
+                    return;
+                }
+                var button = document.getElementById("rewrite-score");
+                button.disabled = true;
+                fetch("/form-token", { credentials: "same-origin" }).then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("no token");
+                    }
+                    return response.json();
+                }).then(function (answer) {
+                    wording.elements.csrfmiddlewaretoken.value = answer.token;
+                    wording.submit();
+                }, function () {
+                    button.disabled = false;
+                    error.textContent = "The talking score could not be rewritten. Check your connection and press Rewrite the talking score again.";
+                });
+            });
         }
 
         // Playback choices are kept alongside the reading settings, so a reader who
@@ -586,14 +835,13 @@
         // Playback of the open group. The player is a separate script when audio is available.
         var playButton = document.getElementById("play-group");
         var playAllButton = document.getElementById("play-whole-score");
-        var stopButton = document.getElementById("stop-playback");
+        var statusLine = document.getElementById("status-text");
         if (data.midi && window.TalkingScoresPlayer) {
             var playbackControls = {
-                status: document.getElementById("playback-status-text"),
+                status: statusLine,
                 announce: announce,
                 play: playButton,
                 playAll: playAllButton,
-                stop: stopButton,
                 speed: document.getElementById("speed"),
                 voice: document.getElementById("setting-voice"),
                 click: document.getElementById("setting-click"),
@@ -607,14 +855,11 @@
             player = window.TalkingScoresPlayer(data, playbackControls);
         } else if (playButton) {
             playButton.disabled = true;
-            [playAllButton, stopButton].forEach(function (button) {
-                if (button) {
-                    button.disabled = true;
-                }
-            });
-            var statusText = document.getElementById("playback-status-text");
-            if (statusText) {
-                statusText.textContent = "A downloaded page cannot play the music. Open it on the Talking Scores website to hear these bars.";
+            if (playAllButton) {
+                playAllButton.disabled = true;
+            }
+            if (statusLine) {
+                statusLine.textContent = "A downloaded page cannot play the music. Open it on the Talking Scores website to hear these bars.";
             }
         }
 
@@ -622,9 +867,9 @@
         // Reading aloud: the open group's words in the device's own voice, bar by
         // bar, with each bar played after its words when the reader asks for it.
         var readAloudButton = document.getElementById("read-aloud");
-        var readAloudStatus = document.getElementById("read-aloud-status");
-        var readAloudText = document.getElementById("read-aloud-status-text");
-        var readAloudSettings = document.getElementById("read-aloud-settings");
+        var readAloudText = statusLine;
+        var readingTab = document.getElementById("tab-reading");
+        var speakingVoice = document.getElementById("setting-speaking-voice");
         var readingSpeed = document.getElementById("setting-reading-speed");
         var readAndPlay = document.getElementById("setting-read-and-play");
         var sayBars = document.getElementById("setting-say-bars");
@@ -636,9 +881,16 @@
                 rate: function () {
                     var chosen = readingSpeed ? parseInt(readingSpeed.value, 10) : 100;
                     return (chosen > 0 ? chosen : 100) / 100;
+                },
+                voice: function () {
+                    return speakingVoice ? speakingVoice.value : "";
+                },
+                failed: function (message) {
+                    readingState(message);
+                    announce(message);
                 }
             });
-            [readAloudButton, readAloudStatus, readAloudSettings].forEach(function (element) {
+            [readAloudButton, readingTab].forEach(function (element) {
                 if (element) {
                     element.hidden = false;
                 }
@@ -664,15 +916,7 @@
                     });
                 }
             });
-            // The player's own answer to Stop was held back while the voice was
-            // speaking, so the reading gives it instead.
-            if (stopButton) {
-                stopButton.addEventListener("click", function () {
-                    if (reading) {
-                        stopReading(true, true);
-                    }
-                });
-            }
+            wireVoices();
             if (player && playbackControls) {
                 playbackControls.sayBars = sayBars;
                 playbackControls.sayBar = function (number) {
@@ -681,6 +925,103 @@
                         speech.say(number === data.pickupBar ? "Pickup" : printedNumber(number));
                     }
                 };
+            }
+        }
+
+        // The voices a device offers arrive after the page loads, and the natural
+        // voices only once they have been downloaded, so the list is rebuilt as
+        // either changes and keeps the reader's choice when it is still offered.
+        function wireVoices() {
+            var naturalBox = document.getElementById("natural-voices");
+            var naturalText = document.getElementById("natural-voices-text");
+            var download = document.getElementById("download-voices");
+            var tryVoice = document.getElementById("try-voice");
+            var natural = window.TalkingScoresSpeech.natural;
+
+            function fill() {
+                if (!speakingVoice) {
+                    return;
+                }
+                var wanted = speakingVoice.value || (prefs.readAloud && prefs.readAloud.voice) || "";
+                speakingVoice.textContent = "";
+                var usual = document.createElement("option");
+                usual.value = "";
+                usual.textContent = "The device’s usual voice";
+                speakingVoice.appendChild(usual);
+                [["Natural voices", natural && natural.ready() ? natural.voices() : []],
+                 ["On this device", window.TalkingScoresSpeech.deviceVoices()]].forEach(function (pair) {
+                    if (!pair[1].length) {
+                        return;
+                    }
+                    var group = document.createElement("optgroup");
+                    group.label = pair[0];
+                    pair[1].forEach(function (voice) {
+                        var option = document.createElement("option");
+                        option.value = voice.id;
+                        option.textContent = voice.label;
+                        group.appendChild(option);
+                    });
+                    speakingVoice.appendChild(group);
+                });
+                speakingVoice.value = wanted;
+                if (speakingVoice.selectedIndex === -1) {
+                    speakingVoice.value = "";
+                }
+            }
+
+            function reflectNatural() {
+                if (!naturalBox || !natural || !natural.supported()) {
+                    return;
+                }
+                naturalBox.hidden = natural.ready();
+            }
+
+            fill();
+            reflectNatural();
+            window.TalkingScoresSpeech.onVoicesChanged(fill);
+            if (natural && natural.stored()) {
+                // Kept from an earlier visit, so it loads from this browser's own storage.
+                natural.load().then(function () { fill(); reflectNatural(); }, function () {});
+            }
+            if (download && natural) {
+                download.addEventListener("click", function () {
+                    download.disabled = true;
+                    naturalText.textContent = "Downloading the natural voices.";
+                    announce("Downloading the natural voices. This can take a few minutes.");
+                    natural.load(function (percent) {
+                        naturalText.textContent = "Downloading the natural voices: " + percent + " %.";
+                    }).then(function () {
+                        fill();
+                        reflectNatural();
+                        var first = natural.voices()[0];
+                        if (first && speakingVoice) {
+                            speakingVoice.value = first.id;
+                            rememberVoice();
+                            speakingVoice.focus();
+                        }
+                        announce("Natural voices are ready. " + (first ? first.label + " is chosen as the speaking voice." : ""));
+                    }, function () {
+                        download.disabled = false;
+                        naturalText.textContent = "The natural voices did not download. Check your connection and press Download natural voices again.";
+                        announce(naturalText.textContent);
+                    });
+                });
+            }
+            function rememberVoice() {
+                prefs.readAloud = prefs.readAloud && typeof prefs.readAloud === "object" ? prefs.readAloud : {};
+                prefs.readAloud.voice = speakingVoice.value;
+                savePrefs();
+            }
+            if (speakingVoice) {
+                speakingVoice.addEventListener("change", rememberVoice);
+            }
+            if (tryVoice) {
+                tryVoice.addEventListener("click", function () {
+                    if (reading) {
+                        stopReading(false);
+                    }
+                    speech.say("Bar 1. Beat 1, crotchet high C sharp. Beat 2, quaver mid A.");
+                });
             }
         }
 

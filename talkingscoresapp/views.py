@@ -1,10 +1,12 @@
 from django import forms
+from django.conf import settings as django_settings
 from django.http import HttpResponse, FileResponse, JsonResponse
 from django.template import loader
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.contrib import messages
 from django.utils.text import slugify
+from django.middleware.csrf import get_token
 from pathvalidate import sanitize_filename
 import os
 import json
@@ -19,8 +21,8 @@ import requests
 from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProgress
 from talkingscoresapp.models import RemoteAddressNotAllowed, RemoteHostNotFound, RemoteFetchRefused
 from talkingscoresapp.models import remove_file_quietly
-from talkingscoresapp import openscore
-from lib.render_settings import DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES
+from talkingscoresapp import library, sharing
+from lib.render_settings import DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES, RenderSettings
 from lib.style_samples import style_samples
 
 
@@ -42,11 +44,13 @@ def submitted_settings(post):
 
 
 CHECKBOX_FIELDS = (
-    "chk_playAll", "chk_playSelected", "chk_playUnselected", "chk_include_rests",
+    "chk_playAll", "chk_playSelected", "chk_playUnselected",
     "chk_include_ties", "chk_include_arpeggios", "chk_include_dynamics",
     "chk_include_slurs", "chk_include_articulations", "chk_include_directions",
-    "chk_describe_chords", "chk_colourPitch",
+    "chk_describe_chords", "chk_colourPitch", "chk_separate_voices", "chk_chord_symbol_line",
 )
+
+CHORD_SYMBOL_READINGS = ("name", "notes", "written", "none")
 
 # The options page reads this rather than naming the styles itself, so a style
 # added to the engine reaches the page with the words that describe it. The
@@ -65,6 +69,138 @@ def style_choices():
         }
         for style_id in STYLE_IDS
     ]
+
+
+# The options form names some engine values differently; these turn a style's
+# own settings into the form's values, so picking a style on the page fills in
+# every detail that style sets.
+FORM_DURATION_FREQUENCY = {"on_change": "onChange", "every_note": "everyNote"}
+FORM_PITCH_NAMES = {"letters": "noteName", "phonetic": "phonetic", "colours": "colourNotes", "none": "none"}
+FORM_OCTAVE_NAMING = {"descriptive": "name", "plain": "plain", "numeric": "number",
+                      "figurenotes": "figureNotes", "none": "none"}
+FORM_OCTAVE_FREQUENCY = {"on_change": "onChange", "every_note": "everyNote",
+                         "first_note": "firstNote", "braille_rules": "brailleRules"}
+REST_CHOICES = ("all", "structural", "none")
+WORD_ORDER_CHOICES = ("rhythm_first", "pitch_first")
+BEAT_PREFIX_CHOICES = ("words", "short", "none")
+
+
+def form_values_for_style(style_id):
+    settings = RenderSettings.for_style(style_id)
+    return {
+        "rhythm_description": settings.duration_names,
+        "rhythm_announcement": FORM_DURATION_FREQUENCY.get(settings.duration_frequency, "onChange"),
+        "dot_position": settings.dot_position,
+        "pitch_description": FORM_PITCH_NAMES.get(settings.pitch_names, "noteName"),
+        "octave_description": FORM_OCTAVE_NAMING.get(settings.octave_naming, "name"),
+        "octave_announcement": FORM_OCTAVE_FREQUENCY.get(settings.octave_frequency, "onChange"),
+        "octave_position": "before" if settings.octave_before_pitch else "after",
+        "repetition_mode": settings.repetition_mode,
+        "rests": settings.rests,
+        "word_order": settings.word_order,
+        "beat_prefix": settings.beat_prefix,
+        "chk_include_ties": settings.ties,
+        "chk_include_slurs": settings.slurs,
+        "chk_include_articulations": settings.articulations,
+        "chk_include_directions": settings.directions,
+        "chk_include_arpeggios": settings.arpeggios,
+        "chk_describe_chords": settings.chords,
+        "chk_include_dynamics": settings.dynamics,
+    }
+
+
+def style_form_values():
+    return {style_id: form_values_for_style(style_id) for style_id in STYLE_IDS}
+
+
+COLOUR_PROFILES = {
+    "default": {"C": "#FF0000", "D": "#A52A2A", "E": "#808080", "F": "#0000FF", "G": "#000000", "A": "#FFFF00", "B": "#008000"},
+    "classic": {"C": "#FF0000", "D": "#FFA500", "E": "#FFFF00", "F": "#008000", "G": "#0000FF", "A": "#4B0082", "B": "#EE82EE"},
+}
+
+# Stored option -> the options form's checkbox that sets it.
+STORED_CHECKBOXES = {
+    "include_ties": "chk_include_ties", "slurs": "chk_include_slurs",
+    "articulations": "chk_include_articulations", "directions": "chk_include_directions",
+    "include_arpeggios": "chk_include_arpeggios", "describe_chords": "chk_describe_chords",
+    "include_dynamics": "chk_include_dynamics", "play_all": "chk_playAll",
+    "play_selected": "chk_playSelected", "play_unselected": "chk_playUnselected",
+    "colour_pitch": "chk_colourPitch", "separate_voices": "chk_separate_voices",
+    "chord_symbols_on_own_line": "chk_chord_symbol_line",
+}
+STORED_CHOICES = (
+    "style", "beat_division", "pitch_description", "rhythm_description", "dot_position",
+    "rhythm_announcement", "octave_description", "octave_position", "octave_announcement",
+    "accidental_style", "repetition_mode", "key_signature_accidentals", "rests", "word_order",
+    "beat_prefix", "rhythm_colour_mode", "octave_colour_mode",
+)
+
+
+def form_state_from_options(stored):
+    """The options form as it stood when these stored options were saved, in the
+    shape the page's script restores, so a score's own choices can be edited."""
+    state = {key: str(stored[key]) for key in STORED_CHOICES if stored.get(key) is not None}
+    if "bars_at_a_time" in stored:
+        state["bars_at_a_time"] = str(stored["bars_at_a_time"])
+    if "rests" not in stored and "include_rests" in stored:
+        state["rests"] = "all" if stored["include_rests"] else "none"
+    for key, checkbox in STORED_CHECKBOXES.items():
+        if key in stored:
+            state[checkbox] = bool(stored[key])
+    if "colour_position" in stored:
+        state["chk_colourWords"] = stored["colour_position"] != "none"
+    if stored.get("chord_symbols") is False:
+        state["chord_symbol_reading"] = "none"
+    elif stored.get("chord_symbol_reading"):
+        state["chord_symbol_reading"] = stored["chord_symbol_reading"]
+    state["customised"] = "true" if stored.get("customised") is True else "false"
+    if isinstance(stored.get("instruments"), list):
+        state["instruments"] = [str(number) for number in stored["instruments"]]
+
+    pitch = stored.get("figureNoteColours") or {}
+    profile = next((name for name, colours in COLOUR_PROFILES.items()
+                    if {k: v.upper() for k, v in pitch.items()} == colours), None)
+    state["colorProfile"] = profile or ("custom" if pitch else "default")
+    for note, colour in pitch.items():
+        state["color_" + note] = colour
+    for key, colour in (stored.get("advanced_rhythm_colours") or {}).items():
+        state["color_rhythm_" + key] = colour
+    for key, colour in (stored.get("advanced_octave_colours") or {}).items():
+        state["color_octave_" + key] = colour
+    return state
+
+
+def stored_options(options_path):
+    try:
+        with open(options_path) as options_file:
+            stored = json.load(options_file)
+        return stored if isinstance(stored, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def restyle(request, score_obj, options_path, id, filename):
+    """The score page's Wording tab: a new style over the options the score was
+    already made with, every other choice kept."""
+    stored = stored_options(options_path)
+    if stored is None:
+        return redirect('options', id, filename)
+    stored["style"] = clean_style(request.POST.get("style"))
+    stored["customised"] = False
+    write_json_file_atomic(options_path, stored)
+    score_obj.clear_generated_html_state()
+    return redirect('process', id, filename)
+
+
+def form_token(request):
+    """A token for the forms on talking score pages, which are written once and
+    served to everyone, so they cannot carry one of their own."""
+    return JsonResponse({"token": get_token(request)})
+
+
+def chosen(post, name, allowed, default):
+    value = post.get(name, default)
+    return value if value in allowed else default
 
 
 HEX_COLOUR_PATTERN = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
@@ -97,7 +233,7 @@ SCORE_MISSING_MESSAGE = "This score is no longer stored here. Open the file agai
 PRIVATE_ADDRESS_MESSAGE = "The link points at a private or local network address. Enter a link to a file on a public website."
 HOST_NOT_FOUND_MESSAGE = "That web address could not be found. Check the link and try again."
 DOWNLOAD_FAILED_MESSAGE = "The file could not be downloaded from that link. Check the link and try again."
-UNREADABLE_SCORE_MESSAGE = "The file could not be read as MusicXML. Check that it is a .musicxml, .xml or .mxl file exported from notation software."
+UNREADABLE_SCORE_MESSAGE = "The file could not be read as MusicXML. Check that it is a .musicxml, .xml or .mxl file saved from a music program such as MuseScore."
 
 ACCESSIBLE_PALETTE = [
     '#E6194B',  # Red
@@ -261,7 +397,6 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     chk_playAll = forms.BooleanField(required=False)
     chk_playSelected = forms.BooleanField(required=False)
     chk_playUnselected = forms.BooleanField(required=False)
-    chk_include_rests = forms.BooleanField(required=False)
     chk_include_ties = forms.BooleanField(required=False)
     chk_include_slurs = forms.BooleanField(required=False)
     chk_include_articulations = forms.BooleanField(required=False)
@@ -344,7 +479,14 @@ def score(request, id, filename):
     else:
         try:
             html = score_obj.html(raise_errors=True)
-            return HttpResponse(html)
+            if not django_settings.NATURAL_VOICES:
+                return HttpResponse(html)
+            # The page is written once and served many times, so whether it offers
+            # the natural voices is marked as it is served.
+            response = HttpResponse(html.replace("<html ", "<html data-natural-voices ", 1))
+            if not django_settings.DEBUG:
+                response["Content-Security-Policy"] = django_settings.READER_POLICY_WITH_NATURAL_VOICES
+            return response
         except ScoreGenerationInProgress:
             return redirect('process', id, filename)
         except Exception:
@@ -390,7 +532,7 @@ def midi(request, id, filename):
         return HttpResponse("There is nothing to play for that range.", status=404)
     except Exception:
         logger.exception("Unable to generate MIDI: http://%s%s" % (request.get_host(), request.get_full_path()))
-        return HttpResponse("The audio for those bars could not be generated.", status=500)
+        return HttpResponse("The audio for those bars could not be created.", status=500)
     
     if os.path.exists(midi_file_path):
         fr = FileResponse(
@@ -411,7 +553,7 @@ def download_html(request, id, filename):
 
     state = score_obj.state()
     if state == TSScoreState.AWAITING_OPTIONS:
-        messages.error(request, "Generate the talking score before downloading it.")
+        messages.error(request, "Create the talking score before downloading it.")
         return redirect('options', id, filename)
     if state != TSScoreState.PROCESSED:
         messages.error(request, SCORE_MISSING_MESSAGE)
@@ -437,7 +579,7 @@ def _download_export(request, id, filename, braille):
     score_obj = TSScore(id=id, filename=filename)
     state = score_obj.state()
     if state == TSScoreState.AWAITING_OPTIONS:
-        messages.error(request, "Generate the talking score before downloading it.")
+        messages.error(request, "Create the talking score before downloading it.")
         return redirect('options', id, filename)
     if state != TSScoreState.PROCESSED:
         messages.error(request, SCORE_MISSING_MESSAGE)
@@ -488,7 +630,7 @@ def contact_us(request):
 
 def privacy_policy(request):
     template = loader.get_template('privacy-policy.html')
-    context = {}
+    context = {'natural_voices': django_settings.NATURAL_VOICES}
     return HttpResponse(template.render(context, request))
 
 
@@ -503,11 +645,15 @@ def options(request, id, filename):
         logger.exception("Unable to process score before the options screen: http://%s%s " % (request.get_host(), reverse('score', args=[id, filename])))
         return redirect('error', id, filename)
 
+    if request.method == 'POST' and request.POST.get('restyle'):
+        return restyle(request, score_obj, options_path, id, filename)
+
     if request.method == 'POST':
         form = TalkingScoreGenerationOptionsForm(request.POST)
         if not form.is_valid():
             add_rhythm_colour_defaults(score_info)
             context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
+                       'style_values': style_form_values(),
                        'chosen_style': clean_style(request.POST.get('style', '')),
                        'submitted': submitted_settings(request.POST)}
             return render(request, 'options.html', context)
@@ -519,22 +665,22 @@ def options(request, id, filename):
             add_rhythm_colour_defaults(score_info)
             # The part boxes are what the reader has to change, so they are marked as such.
             context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
+                       'style_values': style_form_values(),
                        'chosen_style': clean_style(request.POST.get('style', '')),
                        'submitted': submitted_settings(request.POST),
                        'instruments_invalid': True}
             return render(request, 'options.html', context)
 
-        color_profiles = {
-            "default": {"C": "#FF0000", "D": "#A52A2A", "E": "#808080", "F": "#0000FF", "G": "#000000", "A": "#FFFF00", "B": "#008000"},
-            "classic": {"C": "#FF0000", "D": "#FFA500", "E": "#FFFF00", "F": "#008000", "G": "#0000FF", "A": "#4B0082", "B": "#EE82EE"}
-        }
         selected_profile = request.POST.get("colorProfile", "default")
         figure_note_colours = {}
         if selected_profile == "custom":
             figure_note_colours = {key.split('_')[1]: val for key, val in request.POST.items() if key.startswith('color_') and not key.startswith('color_rhythm_') and not key.startswith('color_octave_')}
         else:
-            figure_note_colours = color_profiles.get(selected_profile, {})
+            figure_note_colours = COLOUR_PROFILES.get(selected_profile, {})
 
+        chord_symbol_reading = request.POST.get("chord_symbol_reading", "name")
+        if chord_symbol_reading not in CHORD_SYMBOL_READINGS:
+            chord_symbol_reading = "name"
         options_data = {
             "style": clean_style(request.POST.get("style")),
             "bars_at_a_time": int(form.cleaned_data.get("bars_at_a_time", 2)),
@@ -550,7 +696,10 @@ def options(request, id, filename):
             "octave_description": request.POST.get("octave_description", "name"),
             "octave_position": request.POST.get("octave_position", "before"),
             "octave_announcement": request.POST.get("octave_announcement", "onChange"),
-            "include_rests": "chk_include_rests" in request.POST,
+            "customised": request.POST.get("customised") == "true",
+            "rests": chosen(request.POST, "rests", REST_CHOICES, "all"),
+            "word_order": chosen(request.POST, "word_order", WORD_ORDER_CHOICES, "rhythm_first"),
+            "beat_prefix": chosen(request.POST, "beat_prefix", BEAT_PREFIX_CHOICES, "words"),
             "include_ties": "chk_include_ties" in request.POST,
             "slurs": "chk_include_slurs" in request.POST,
             "articulations": "chk_include_articulations" in request.POST,
@@ -558,6 +707,10 @@ def options(request, id, filename):
             "include_arpeggios": "chk_include_arpeggios" in request.POST,
             "describe_chords": "chk_describe_chords" in request.POST,
             "include_dynamics": "chk_include_dynamics" in request.POST,
+            "separate_voices": "chk_separate_voices" in request.POST,
+            "chord_symbols_on_own_line": "chk_chord_symbol_line" in request.POST,
+            "chord_symbols": chord_symbol_reading != "none",
+            "chord_symbol_reading": chord_symbol_reading if chord_symbol_reading != "none" else "name",
             "accidental_style": request.POST.get("accidental_style", "words"),
             "repetition_mode": request.POST.get("repetition_mode", "learning"),
             "colour_position": "words" if "chk_colourWords" in request.POST else "none",
@@ -571,6 +724,7 @@ def options(request, id, filename):
         }
 
         write_json_file_atomic(options_path, options_data)
+        remember_share_link(score_obj, options_data)
 
         score_obj.clear_generated_html_state()
         return redirect('process', id, filename)
@@ -579,8 +733,13 @@ def options(request, id, filename):
         add_rhythm_colour_defaults(score_info)
 
         form = TalkingScoreGenerationOptionsForm()
+        # A score that already has a talking score opens on the choices it was
+        # made with, so the reader changes only what they came back to change.
+        stored = stored_options(options_path)
+        current = form_state_from_options(stored) if stored else None
         context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
-                   'chosen_style': DEFAULT_STYLE}
+                   'style_values': style_form_values(), 'current': current,
+                   'chosen_style': clean_style(stored.get('style')) if stored else DEFAULT_STYLE}
         return render(request, 'options.html', context)
 
 
@@ -601,27 +760,12 @@ def index(request):
                     score = TSScore.from_url(url)
                 
                 if score:
-                    return redirect('score', id=score.id, filename=score.filename)
+                    response = redirect('score', id=score.id, filename=score.filename)
+                    remember_owner(request, response, score.id)
+                    return response
 
-            except RemoteAddressNotAllowed as ex:
-                logger.warning(f"Rejected a link to a non-public address: {ex}")
-                messages.error(request, PRIVATE_ADDRESS_MESSAGE)
-                return redirect('index')
-            except RemoteHostNotFound as ex:
-                logger.warning(f"Link host not found: {ex}")
-                messages.error(request, HOST_NOT_FOUND_MESSAGE)
-                return redirect('index')
-            except RemoteFetchRefused as ex:
-                logger.warning(f"Link refused: {ex}")
-                messages.error(request, str(ex))
-                return redirect('index')
-            except requests.RequestException as ex:
-                logger.warning(f"Link download failed: {ex}")
-                messages.error(request, DOWNLOAD_FAILED_MESSAGE)
-                return redirect('index')
             except Exception as ex:
-                logger.error(f"File Processing Error: {ex}", exc_info=True)
-                messages.error(request, UNREADABLE_SCORE_MESSAGE)
+                messages.error(request, open_failure_message(ex))
                 return redirect('index')
         else:
             for field, error_list in form.errors.items():
@@ -632,20 +776,284 @@ def index(request):
     else:
         form = MusicXMLSubmissionForm()
 
-    context = {'form': form}
+    context = {'form': form, 'examples': library.examples()}
     return render(request, 'index.html', context)
 
 
-OPENSCORE_SEARCH_LIMIT = 50
-OPENSCORE_QUERY_MAX_LENGTH = 100
+def open_failure_message(ex):
+    """What the reader is told when a link or a library score could not be opened."""
+    if isinstance(ex, RemoteAddressNotAllowed):
+        logger.warning(f"Rejected a link to a non-public address: {ex}")
+        return PRIVATE_ADDRESS_MESSAGE
+    if isinstance(ex, RemoteHostNotFound):
+        logger.warning(f"Link host not found: {ex}")
+        return HOST_NOT_FOUND_MESSAGE
+    if isinstance(ex, RemoteFetchRefused):
+        logger.warning(f"Link refused: {ex}")
+        return str(ex)
+    if isinstance(ex, requests.RequestException):
+        logger.warning(f"Link download failed: {ex}")
+        return DOWNLOAD_FAILED_MESSAGE
+    logger.error(f"File Processing Error: {ex}", exc_info=True)
+    return UNREADABLE_SCORE_MESSAGE
+
+
+SEARCH_PAGE_SIZE = 50
+SEARCH_QUERY_MAX_LENGTH = 100
 
 
 def find_a_score(request):
-    query = request.GET.get('q', '').strip()[:OPENSCORE_QUERY_MAX_LENGTH]
+    query = request.GET.get('q', '').strip()[:SEARCH_QUERY_MAX_LENGTH]
+    collection = request.GET.get('collection', '')
+    collections = library.collections()
+    if collection not in dict(collections):
+        collection = ''
     if query:
-        results, total = openscore.search(query, OPENSCORE_SEARCH_LIMIT)
+        matches = library.search(query)
+    elif collection:
+        matches = library.in_collection(collection)
     else:
-        results, total = openscore.suggestions(), None
+        matches = None
 
-    context = {'query': query, 'results': results, 'total': total, 'limit': OPENSCORE_SEARCH_LIMIT}
+    try:
+        page = max(1, int(request.GET.get('page', '1')))
+    except ValueError:
+        page = 1
+    context = {'shared_collection': library.SHARED_COLLECTION, 'query': query, 'collection': collection, 'collections': collections,
+               'library_size': library.size()}
+    if matches is None:
+        context.update(results=library.suggestions(), total=None)
+    else:
+        last_page = max(1, -(-len(matches) // SEARCH_PAGE_SIZE))
+        page = min(page, last_page)
+        first = (page - 1) * SEARCH_PAGE_SIZE
+        context.update(
+            results=matches[first:first + SEARCH_PAGE_SIZE], total=len(matches),
+            first=first + 1, last=min(first + SEARCH_PAGE_SIZE, len(matches)),
+            next_page=page + 1 if page < last_page else None,
+            previous_page=page - 1 if page > 1 else None,
+        )
     return render(request, 'find-a-score.html', context)
+
+
+def default_options(score_info):
+    """The options a reader gets by pressing the button on the options page without changing anything."""
+    beat_options = score_info.get('beat_division_options') or []
+    beat_division = beat_options[1] if len(beat_options) > 1 else (beat_options[0] if beat_options else None)
+    return {
+        "style": DEFAULT_STYLE,
+        "bars_at_a_time": 2,
+        "beat_division": beat_division.get("value") if isinstance(beat_division, dict) else beat_division,
+        "play_all": True,
+        "play_selected": True,
+        "play_unselected": True,
+        "instruments": list(range(1, len(score_info.get('instruments', [])) + 1)),
+        "pitch_description": "noteName",
+        "rhythm_description": "british",
+        "dot_position": "before",
+        "rhythm_announcement": "onChange",
+        "octave_description": "name",
+        "octave_position": "before",
+        "octave_announcement": "onChange",
+        "include_rests": True,
+        "customised": False,
+        "rests": "all",
+        "word_order": "rhythm_first",
+        "beat_prefix": "words",
+        "include_ties": True,
+        "slurs": True,
+        "articulations": True,
+        "directions": True,
+        "include_arpeggios": True,
+        "describe_chords": True,
+        "include_dynamics": True,
+        "accidental_style": "words",
+        "repetition_mode": "learning",
+        "colour_position": "none",
+        "colour_pitch": True,
+        "rhythm_colour_mode": "none",
+        "octave_colour_mode": "none",
+        "key_signature_accidentals": "sounding",
+        "advanced_rhythm_colours": {},
+        "advanced_octave_colours": {},
+        "figureNoteColours": {"C": "#FF0000", "D": "#A52A2A", "E": "#808080", "F": "#0000FF", "G": "#000000", "A": "#FFFF00", "B": "#008000"},
+    }
+
+
+def remember_share_link(score_obj, options_data):
+    # A short link that cannot be recorded still opens the score while it is stored.
+    try:
+        sharing.write_record(score_obj, options_data)
+    except OSError:
+        logger.exception(f"Could not record the short link for {score_obj.id}")
+
+
+def write_options(score_obj, options_data):
+    write_json_file_atomic(score_obj.get_data_file_path() + '.opts', options_data)
+    remember_share_link(score_obj, options_data)
+    score_obj.clear_generated_html_state()
+
+
+def store_library_entry(entry):
+    if entry["source"] == "built-in":
+        return TSScore.from_bytes(
+            library.built_in_bytes(entry), os.path.basename(entry["path"]),
+            source={"kind": "library", "value": entry["id"]},
+            names={"title": entry["title"], "composer": entry["composer"]},
+        )
+    return TSScore.from_url(entry["url"])
+
+
+def open_with_defaults(score_obj):
+    """Straight to the talking score: a score nobody has chosen options for gets the defaults."""
+    if score_obj.state() == TSScoreState.AWAITING_OPTIONS:
+        write_options(score_obj, default_options(score_obj.info()))
+        return redirect('process', score_obj.id, score_obj.filename)
+    return redirect('score', score_obj.id, score_obj.filename)
+
+
+def library_score(request, entry_id):
+    entry = library.get(entry_id)
+    if not entry:
+        messages.error(request, "That score is not in the library. Search for it by composer or title.")
+        return redirect('find-a-score')
+    try:
+        score_obj = store_library_entry(entry)
+    except Exception as ex:
+        messages.error(request, open_failure_message(ex))
+        return redirect('find-a-score')
+    return open_with_defaults(score_obj)
+
+
+SHARED_SCORE_MISSING_MESSAGE = "The score at that link is no longer stored here. Ask for the file and open it again."
+SHARED_SCORE_CHANGED_MESSAGE = "The file behind that link has changed since it was shared. Open it again from the library or its web address."
+
+
+def shared_score(request, name):
+    code = sharing.resolve(name)
+    if not code:
+        messages.error(request, SHARED_SCORE_MISSING_MESSAGE)
+        return redirect('index')
+    record = sharing.read_record(code)
+    if record:
+        score_obj = TSScore(id=record["id"], filename=record["filename"])
+        if score_obj.state() != TSScoreState.FETCHING:
+            return redirect('score', score_obj.id, score_obj.filename)
+        source = record.get("source") or {}
+        try:
+            if source.get("kind") == "library" and library.get(source.get("value")):
+                restored = store_library_entry(library.get(source["value"]))
+            elif source.get("kind") == "url" and isinstance(source.get("value"), str):
+                restored = TSScore.from_url(source["value"])
+            else:
+                messages.error(request, SHARED_SCORE_MISSING_MESSAGE)
+                return redirect('index')
+        except Exception as ex:
+            messages.error(request, open_failure_message(ex))
+            return redirect('index')
+        if restored.id != record["id"]:
+            messages.error(request, SHARED_SCORE_CHANGED_MESSAGE)
+            return redirect('index')
+        if isinstance(record.get("options"), dict):
+            write_options(restored, record["options"])
+        return redirect('process', restored.id, restored.filename)
+
+    stored = sharing.stored_score(code)
+    if stored:
+        return redirect('score', *stored)
+    messages.error(request, SHARED_SCORE_MISSING_MESSAGE)
+    return redirect('index')
+
+
+def library_musicxml(request, entry_id):
+    """The score's own file: read from music21's corpus, or fetched by the browser from OpenScore."""
+    entry = library.get(entry_id)
+    if not entry:
+        messages.error(request, "That score is not in the library. Search for it by composer or title.")
+        return redirect('find-a-score')
+    if entry["source"] != "built-in":
+        return redirect(entry["url"])
+    extension = os.path.splitext(entry["path"])[1].lower()
+    content_type = "application/vnd.recordare.musicxml" if extension == ".mxl" else "application/vnd.recordare.musicxml+xml"
+    response = HttpResponse(library.built_in_bytes(entry), content_type=content_type)
+    response['Content-Disposition'] = f'attachment; filename="{safe_export_basename(entry["title"])}{extension}"'
+    return response
+
+
+# The browser that opened a file is the one allowed to list it in the library.
+# A signed cookie holds the codes of the scores it opened, newest last, so the
+# choice survives a restart without a database.
+OWNER_COOKIE = "talkingscores_owned"
+OWNER_COOKIE_SALT = "talkingscores.owned"
+MAX_OWNED_SCORES = 100
+OWNER_COOKIE_AGE = 365 * 24 * 60 * 60
+
+
+def owned_codes(request):
+    value = request.get_signed_cookie(OWNER_COOKIE, default="", salt=OWNER_COOKIE_SALT)
+    return [code for code in value.split(",") if sharing.SHORT_CODE_PATTERN.match(code)]
+
+
+def remember_owner(request, response, score_id):
+    code = sharing.short_code(score_id)
+    codes = [owned for owned in owned_codes(request) if owned != code] + [code]
+    response.set_signed_cookie(
+        OWNER_COOKIE, ",".join(codes[-MAX_OWNED_SCORES:]), salt=OWNER_COOKIE_SALT,
+        max_age=OWNER_COOKIE_AGE, httponly=True, samesite="Lax", secure=not django_settings.DEBUG,
+    )
+
+
+def listing_context(request, name):
+    """(code, record, can change, from the library) for a short link name, or None when it opens nothing."""
+    code = sharing.resolve(name)
+    record = sharing.read_record(code) if code else None
+    if not record:
+        return None
+    from_library = (record.get("source") or {}).get("kind") == "library"
+    return code, record, code in owned_codes(request) and not from_library, from_library
+
+
+def score_listing_status(request, name):
+    found = listing_context(request, name)
+    if not found:
+        return JsonResponse({"known": False})
+    code, record, can_change, from_library = found
+    return JsonResponse({
+        "known": True, "listed": bool(record.get("listed")), "can_change": can_change,
+        "from_library": from_library, "change_url": reverse('score-listing', args=[sharing.link_name(code)]),
+    })
+
+
+LISTING_RIGHTS_ERROR = "Tick the box to confirm you can share this score."
+
+
+def score_listing(request, name):
+    found = listing_context(request, name)
+    if not found:
+        messages.error(request, SHARED_SCORE_MISSING_MESSAGE)
+        return redirect('index')
+    code, record, can_change, from_library = found
+    link = f"/s/{sharing.link_name(code)}"
+    context = {"record": record, "link": link, "can_change": can_change, "from_library": from_library,
+               "uploaded": not record.get("source")}
+    if request.method == "POST" and can_change:
+        listed = request.POST.get("listing") == "listed"
+        if listed and context["uploaded"] and request.POST.get("rights") != "yes":
+            context.update(error=LISTING_RIGHTS_ERROR, choice="listed")
+            return render(request, "listing.html", context, status=400)
+        title, composer = record.get("title", ""), record.get("composer", "")
+        if listed:
+            # A score fetched from a web address may no longer be stored; it keeps the names it had.
+            try:
+                info = TSScore(id=record["id"], filename=record["filename"]).info()
+                title, composer = info.get("title", "") or title, info.get("composer", "") or composer
+            except Exception:
+                logger.exception(f"Could not read the title of {record['id']} to list it")
+        sharing.set_listed(code, listed, title, composer)
+        return redirect(link)
+    context["choice"] = "listed" if record.get("listed") else "private"
+    return render(request, "listing.html", context)
+
+
+def midi_player(request):
+    return render(request, 'midi-player.html', {})

@@ -1,10 +1,11 @@
 """
 Settings that control how a talking score is worded.
 
-A reading style is a named preset. The "Musical terms" style is the one the
-options form edits field by field, so stored wording options apply to it. Every
-other style fixes its own wording and ignores stored wording options; layout,
-playback and colour options apply to every style. Legacy option keys written by
+A reading style is a named preset. The "Musical terms" style always takes the
+stored wording options. Any other style takes them only when the options were
+saved as customised, which the options form does once the reader changes a
+wording detail; otherwise the style fixes its own wording. Layout, playback and
+colour options apply to every style. Legacy option keys written by
 older versions of the options form are still honoured; each one maps onto a
 field here.
 """
@@ -18,7 +19,7 @@ STYLE_NAMES = {
     "standard": "Musical terms",
     "compact": "Short",
     "braille40": "Braille display",
-    "reference": "Everything",
+    "reference": "Every detail",
 }
 
 # One line naming what a style does differently, shown beside a bar the engine
@@ -71,6 +72,9 @@ class RenderSettings:
     chords: bool = True                  # say "3-note chord" before the pitches
     chords_low_to_high: bool = True
     chord_symbols: bool = True           # chord symbols written in the file
+    chord_symbol_reading: str = "name"   # name (C seventh), notes (name and notes), written (C7)
+    chord_symbols_on_own_line: bool = True  # a line of their own above the parts, not among the notes
+    separate_voices: bool = True         # each voice in a part read through on its own line
     arpeggios: bool = True
     dynamics: bool = True
     beams: bool = False
@@ -131,7 +135,7 @@ class RenderSettings:
         options = options or {}
         style = options.get("style", DEFAULT_STYLE)
         settings = cls.for_style(style)
-        wording_is_editable = settings.style == DEFAULT_STYLE
+        wording_is_editable = settings.style == DEFAULT_STYLE or options.get("customised") is True
         overrides = {}
 
         for legacy_key, translate in LEGACY_OPTION_MAP.items():
@@ -173,13 +177,13 @@ class RenderSettings:
         return replace(settings, **overrides)
 
 
-# Fields a named style decides for itself. Only the "Musical terms" style takes
-# these from the stored options.
+# Fields a named style decides for itself. The "Musical terms" style, and any
+# style saved as customised, takes these from the stored options.
 WORDING_FIELDS = frozenset({
     "beat_prefix", "duration_names", "duration_frequency", "dot_position",
     "pitch_names", "word_order", "octave_naming", "octave_position", "octave_frequency",
     "rests", "ties", "slurs", "articulations", "directions",
-    "intervals", "chords", "chords_low_to_high", "chord_symbols",
+    "intervals", "chords", "chords_low_to_high",
     "arpeggios", "dynamics", "beams", "abbreviations", "repetition_mode",
 })
 
@@ -246,13 +250,14 @@ def _legacy_bool(field_name):
 
 LEGACY_OPTION_MAP = {
     "rhythm_description": _legacy_choice("duration_names", {
-        "british": "british", "american": "american", "none": "none"}),
+        "british": "british", "american": "american", "plain": "plain", "none": "none"}),
     "rhythm_announcement": _legacy_choice("duration_frequency", {
         "onChange": "on_change", "everyNote": "every_note"}),
     "pitch_description": _legacy_choice("pitch_names", {
         "noteName": "letters", "phonetic": "phonetic", "colourNotes": "colours", "none": "none"}),
     "octave_description": _legacy_choice("octave_naming", {
-        "name": "descriptive", "number": "numeric", "figureNotes": "figurenotes", "none": "none"}),
+        "name": "descriptive", "plain": "plain", "number": "numeric", "figureNotes": "figurenotes",
+        "none": "none"}),
     "octave_announcement": _legacy_choice("octave_frequency", {
         "onChange": "on_change", "everyNote": "every_note",
         "firstNote": "first_note", "brailleRules": "braille_rules"}),
