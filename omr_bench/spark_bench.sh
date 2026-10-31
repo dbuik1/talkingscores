@@ -187,8 +187,10 @@ setup_legato() {
     return
   fi
   # Its requirements pin an x86 CUDA build of torch; the Spark keeps the aarch64 one.
+  # They also fetch musicdiff over SSH, which needs a GitHub key; the repo is public, so HTTPS works without one.
   if torch_venv "$OMR/legato-venv" && \
-     grep -v -E '^(torch|torchvision|torchaudio)([=<>~ ]|$)' "$dir/requirements.txt" > "$OMR/legato-requirements.txt" && \
+     grep -v -E '^(torch|torchvision|torchaudio)([=<>~ ]|$)' "$dir/requirements.txt" | \
+       sed -E 's#git\+ssh://git@github\.com/#git+https://github.com/#' > "$OMR/legato-requirements.txt" && \
      "$OMR/legato-venv/bin/pip" install -q -r "$OMR/legato-requirements.txt"; then
     done_ "installed LEGATO's packages"
   else
