@@ -1,7 +1,7 @@
 """Tests for Talking Scores."""
 
 from django.conf import settings
-from django.test import TestCase, Client, override_settings
+from django.test import TestCase, Client, RequestFactory, override_settings
 from django.urls import reverse
 from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -169,7 +169,9 @@ class BasicFunctionalityTests(TestCase):
         # The file rules sit above the control they govern, not under it.
         self.assertLess(content.index("up to 10 MB"), content.index('type="file"'))
         # The rules are attached to the control, so they are read out with it.
-        self.assertIn('aria-describedby="file-rules file-drop-hint"', content)
+        self.assertIn('aria-describedby="file-rules"', content)
+        # Dragging a file needs a mouse, so its hint is kept from screen readers.
+        self.assertIn('id="file-drop-hint" aria-hidden="true"', content)
         self.assertIn('id="file-rules"', content)
         self.assertIn('accept=".xml,.musicxml,.mxl"', content)
         self.assertIn("Open score", content)
@@ -242,7 +244,7 @@ class BasicFunctionalityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         # role="status" is a polite live region in its own right.
         self.assertContains(response, 'role="status"')
-        self.assertContains(response, "Starting to read the file")
+        self.assertContains(response, "Opening the file")
         mock_start.assert_called_once()
 
     @patch("talkingscoresapp.views.TSScore.state", return_value="fetching")
@@ -685,6 +687,115 @@ class DownloadTests(TestCase):
                     "figureNoteColours"):
             self.assertIn(key, stored)
         self.assertEqual(len(stored["figureNoteColours"]), 7)
+        # Voices and chord symbols are read on lines of their own unless the reader turns that off.
+        self.assertIs(stored["separate_voices"], True)
+        self.assertIs(stored["chord_symbols_on_own_line"], True)
+        self.assertEqual(stored["chord_symbol_reading"], "name")
+
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_a_style_posted_as_its_own_details_reads_the_same_as_the_style(
+            self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        """Picking a style fills the details with that style's values. Saving them
+        as customised, with nothing changed, has to read exactly as the style does,
+        or a reader who opens the details once gets different words."""
+        from lib.render_settings import RenderSettings, STYLE_IDS, WORDING_FIELDS
+        from talkingscoresapp.views import form_values_for_style
+        info = {"title": "Score", "composer": "Composer", "instruments": ["Flute"],
+                "rhythm_range": [], "beat_division_options": [], "octave_range": {}}
+        url = reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_path = os.path.join(temp_dir, "score.musicxml")
+            mock_data_path.return_value = data_path
+            mock_info.return_value = info
+            defaults = self._submitted_defaults(self.client.get(url).content.decode("utf-8"))
+            for style in STYLE_IDS:
+                posted = {key: value for key, value in defaults.items() if not key.startswith("chk_include")
+                          and key != "chk_describe_chords"}
+                for name, value in form_values_for_style(style).items():
+                    if name.startswith("chk_"):
+                        if value:
+                            posted[name] = "checked"
+                    else:
+                        posted[name] = value
+                posted.update({"style": style, "customised": "true"})
+                self.client.post(url, posted)
+                with open(data_path + ".opts") as options_file:
+                    stored = json.load(options_file)
+                own = RenderSettings.from_options(stored)
+                preset = RenderSettings.for_style(style)
+                # "auto" and the side it resolves to place the octave the same way.
+                self.assertEqual(own.octave_before_pitch, preset.octave_before_pitch, style)
+                for name in sorted(WORDING_FIELDS - {"chord_symbols", "octave_position"}):
+                    self.assertEqual(getattr(own, name), getattr(preset, name), f"{style}: {name}")
+
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_options_reopen_on_the_choices_the_score_was_made_with(
+            self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        from talkingscoresapp.views import form_state_from_options
+        info = {"title": "Score", "composer": "Composer", "instruments": ["Flute", "Cello"],
+                "rhythm_range": [], "beat_division_options": [], "octave_range": {}}
+        url = reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_path = os.path.join(temp_dir, "score.musicxml")
+            mock_data_path.return_value = data_path
+            mock_info.return_value = info
+            fresh = self.client.get(url).content.decode("utf-8")
+            self.assertNotIn('id="current-settings"', fresh)
+            posted = self._submitted_defaults(fresh)
+            posted.update({"style": "compact", "customised": "true", "rests": "none",
+                           "octave_description": "number", "instruments": ["2"]})
+            posted.pop("chk_include_slurs", None)
+            self.client.post(url, posted)
+            with open(data_path + ".opts") as options_file:
+                stored = json.load(options_file)
+            reopened = self.client.get(url).content.decode("utf-8")
+
+        state = json.loads(re.search(r'id="current-settings" type="application/json">(.*?)</script>',
+                                     reopened, re.S).group(1))
+        self.assertEqual(state, form_state_from_options(stored))
+        for name in ("style", "customised", "rests", "octave_description", "rhythm_description",
+                     "bars_at_a_time", "accidental_style"):
+            self.assertEqual(state[name], posted[name], name)
+        self.assertEqual(state["instruments"], ["2"])
+        self.assertFalse(state["chk_include_slurs"])
+        self.assertTrue(state["chk_include_ties"])
+        self.assertIn('value="compact" id="style-compact"\n                       aria-describedby="sample-compact" checked', reopened)
+
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_the_score_page_rewrites_in_a_new_style_keeping_every_other_choice(
+            self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        mock_info.return_value = {"title": "Score", "instruments": ["Flute"]}
+        url = reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_path = os.path.join(temp_dir, "score.musicxml")
+            mock_data_path.return_value = data_path
+            # Nothing stored yet: the reader is sent to the full options page.
+            response = self.client.post(url, {"restyle": "1", "style": "plain"})
+            self.assertRedirects(response, url, fetch_redirect_response=False)
+            with open(data_path + ".opts", "w") as options_file:
+                json.dump({"style": "standard", "customised": True, "rests": "none", "bars_at_a_time": 4}, options_file)
+            response = self.client.post(url, {"restyle": "1", "style": "plain"})
+            with open(data_path + ".opts") as options_file:
+                stored = json.load(options_file)
+        self.assertRedirects(response, reverse("process", kwargs={"id": VALID_ID, "filename": "score.musicxml"}),
+                             fetch_redirect_response=False)
+        self.assertEqual(stored, {"style": "plain", "customised": False, "rests": "none", "bars_at_a_time": 4})
+        mock_clear.assert_called_once()
+
+    def test_a_form_token_is_handed_to_pages_that_cannot_carry_one(self):
+        client = Client(enforce_csrf_checks=True)
+        token = client.get(reverse("form-token")).json()["token"]
+        self.assertTrue(token)
+        self.assertIn("csrftoken", client.cookies)
 
     @staticmethod
     def _submitted_defaults(html):
@@ -914,7 +1025,7 @@ class CacheAndMaintenanceTests(TestCase):
                         with self.assertRaises(ValueError):
                             score.html(force_refresh=True, raise_errors=True)
 
-                        self.assertIn("The talking score could not be generated", score.html(force_refresh=True))
+                        self.assertIn("The talking score could not be created", score.html(force_refresh=True))
 
     @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
     @patch("talkingscoresapp.models.Music21TalkingScore")
@@ -1512,6 +1623,18 @@ class ReviewedEngineTests(TestCase):
         self.assertEqual(standard.duration_names, "american")
         self.assertEqual(standard.repetition_mode, "none")
 
+    def test_a_customised_style_takes_the_stored_wording(self):
+        from lib.render_settings import RenderSettings
+        stored = {"style": "plain", "customised": True, "rests": "none",
+                  "rhythm_description": "plain", "octave_description": "plain"}
+        own = RenderSettings.from_options(stored)
+        self.assertEqual(own.rests, "none")
+        self.assertEqual(own.duration_names, "plain")
+        self.assertEqual(own.word_order, "pitch_first")    # not on the form, so the style's own
+        # Saved before customising existed, or not customised: the style wins.
+        self.assertEqual(RenderSettings.from_options({**stored, "customised": False}).rests, "structural")
+        self.assertEqual(RenderSettings.from_options({**stored, "customised": "true"}).rests, "structural")
+
     @patch("talkingscoresapp.views.TSScore.info")
     @patch("talkingscoresapp.views.TSScore.get_data_file_path")
     @patch("talkingscoresapp.views.logger.info")
@@ -1521,27 +1644,33 @@ class ReviewedEngineTests(TestCase):
                                   "rhythm_range": [], "beat_division_options": []}
         response = self.client.get(reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
         self.assertContains(response, 'name="style"')
-        for name in ("Everyday words", "Musical terms", "Short", "Braille display", "Everything"):
+        for name in ("Everyday words", "Musical terms", "Short", "Braille display", "Every detail"):
             self.assertContains(response, f">{name}<")
 
     @patch("talkingscoresapp.views.TSScore.info")
     @patch("talkingscoresapp.views.TSScore.get_data_file_path")
     @patch("talkingscoresapp.views.logger.info")
-    def test_options_page_keeps_the_detail_behind_one_disclosure(self, mock_logger_info, mock_data_path, mock_info):
+    def test_options_page_puts_the_style_first_and_folds_the_details(self, mock_logger_info, mock_data_path, mock_info):
         mock_data_path.return_value = "/tmp/score.musicxml"
         mock_info.return_value = {"title": "Score", "composer": "Composer", "instruments": ["Piano"],
                                   "rhythm_range": [], "beat_division_options": []}
         response = self.client.get(reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
         content = response.content.decode("utf-8")
 
-        # The style choice is the page; every other setting is folded away behind it.
+        # The style choice is the page; the wording details are folded away after it.
         first_disclosure = content.index("<details")
         self.assertLess(content.index('name="style"'), first_disclosure)
-        self.assertIn("Generate talking score", content)
+        self.assertIn("Create talking score", content)
 
-        form = content[content.index('<form class="form"'):]
-        outside = re.findall(r'name="([^"]+)"', form[:form.index("<details")])
-        self.assertEqual(sorted(set(outside)), ["csrfmiddlewaretoken", "style"])
+        # Before the details the options form posts only the style and whether it
+        # was customised; the text size controls belong to a form of their own.
+        form = content[content.index('<form class="form options"'):]
+        before = form[:form.index("<details")]
+        posted = [name for tag, name in re.findall(r'(<(?:input|select)\b[^>]*name="([^"]+)"[^>]*>)', before)
+                  if 'form="appearance"' not in tag]
+        self.assertEqual(sorted(set(posted)), ["csrfmiddlewaretoken", "customised", "style"])
+        # A summary is the control itself, so it holds no heading.
+        self.assertNotRegex(content, r"<summary>[^<]*(<svg.*?</svg>)?\s*<h2")
 
     def test_unpitched_parts_are_described_instead_of_failing(self):
         from music21 import note
@@ -1998,6 +2127,39 @@ class ReaderPageTests(TestCase):
                                   instruments=[InstrumentDescription(1, "Flute", parts=[flute])])
         self.assertEqual([part["label"] for part in solo.bars[0]["parts"]], [""])
 
+    def test_the_toolbar_holds_moving_and_listening_and_the_rest_is_folded(self):
+        html = self._render(self._formatter({"style": "standard"}),
+                            web_path="/midis/x/y.musicxml", options_url="/score_options/x/y.musicxml")
+        toolbar = html[html.index('id="toolbar"'):html.index('id="reader-live"')]
+        self.assertEqual(re.findall(r'<button[^>]*id="([^"]+)"', toolbar),
+                         ["previous-group", "next-group", "read-aloud", "play-group", "play-whole-score"])
+        self.assertNotIn("<select", toolbar)
+        self.assertNotIn("<input", toolbar)
+        # The bar box, the group size and the speed sit behind the folded panels.
+        for control in ('id="goto-bar"', 'id="bars-per-group"', 'id="speed"', 'id="setting-speaking-voice"'):
+            self.assertIn(control, html)
+            self.assertGreater(html.index(control), html.index('id="reader-live"'))
+        self.assertEqual(re.findall(r'<details id="([^"]+)" name="reader-panels"', html),
+                         ["go-to", "settings", "about", "download"])
+        self.assertNotRegex(html, r"<summary>[^<]*(<svg.*?</svg>)?\s*<h2")
+
+    @override_settings(NATURAL_VOICES=False)
+    def test_the_natural_voices_are_offered_only_when_the_site_turns_them_on(self):
+        from talkingscoresapp.views import score as score_view
+        request = RequestFactory().get("/score/x/y.musicxml")
+        page = '<!DOCTYPE html>\n<html lang="en-GB"><body></body></html>'
+        with patch("talkingscoresapp.views.TSScore") as score_class:
+            score_class.return_value.state.return_value = None
+            score_class.return_value.html.return_value = page
+            off = score_view(request, VALID_ID, "y.musicxml")
+            self.assertNotIn(b"data-natural-voices", off.content)
+            with self.settings(NATURAL_VOICES=True, DEBUG=False):
+                on = score_view(request, VALID_ID, "y.musicxml")
+        self.assertIn(b'<html data-natural-voices lang="en-GB">', on.content)
+        directives = {part.split()[0]: part.split()[1:] for part in on["Content-Security-Policy"].split(";") if part.split()}
+        self.assertIn("https://cdn.jsdelivr.net", directives["script-src"])
+        self.assertIn("https://huggingface.co", directives["connect-src"])
+
     def test_the_page_carries_what_the_reader_script_needs(self):
         html = self._render(self._formatter({"style": "standard", "bars_at_a_time": 3}),
                             web_path="/midis/x/y.musicxml", options_url="/score_options/x/y.musicxml")
@@ -2443,7 +2605,7 @@ class MidiFileTests(TestCase):
             with patch("lib.midiHandler.MEDIA_ROOT", temp_dir):
                 self._handler_in(temp_dir).make_midi_file(1, 2)
                 second = self._handler_in(temp_dir)
-                with patch("lib.midiHandler.converter.parse") as mock_parse:
+                with patch("lib.midiHandler.parse_score") as mock_parse:
                     self.assertTrue(second.make_midi_file(1, 2).endswith("b1e2.mid"))
                 mock_parse.assert_not_called()
 
@@ -2738,8 +2900,8 @@ class FindAScorePageTests(TestCase):
         response = self.client.get(reverse("find-a-score"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Scores to start with")
-        self.assertContains(response, "Open talking score")
+        self.assertContains(response, "Scores to try")
+        self.assertContains(response, 'href="/library/')
 
     def test_a_query_returns_the_matching_score(self):
         response = self.client.get(reverse("find-a-score"), {"q": "schubert gute nacht"})
@@ -2757,13 +2919,512 @@ class FindAScorePageTests(TestCase):
 
         self.assertContains(response, "No scores match")
 
-    def test_each_result_posts_a_raw_githubusercontent_url_to_the_link_endpoint(self):
+    def test_each_result_links_to_its_library_address(self):
         response = self.client.get(reverse("find-a-score"), {"q": "schubert gute nacht"})
-        content = response.content.decode("utf-8")
 
-        self.assertIn(f'action="{reverse("index")}"', content)
-        self.assertIn("raw.githubusercontent.com", content)
-        self.assertIn('name="url"', content)
+        self.assertContains(response, 'href="/library/openscore-lc5015378"')
+
+    def test_a_search_covers_the_built_in_scores_too(self):
+        response = self.client.get(reverse("find-a-score"), {"q": "maple leaf"})
+
+        self.assertContains(response, "Maple Leaf Rag")
+        self.assertContains(response, 'href="/library/joplin-maple-leaf-rag"')
+
+    def test_a_collection_is_listed_fifty_at_a_time(self):
+        first = self.client.get(reverse("find-a-score"), {"collection": "Bach chorales"})
+        second = self.client.get(reverse("find-a-score"), {"collection": "Bach chorales", "page": "2"})
+
+        self.assertEqual(len(first.context["results"]), 50)
+        self.assertContains(first, "Showing 1 to 50")
+        self.assertContains(first, "Next scores")
+        self.assertContains(second, "Showing 51 to 100")
+        self.assertContains(second, "Previous scores")
+
+    def test_an_unknown_collection_shows_the_scores_to_try(self):
+        response = self.client.get(reverse("find-a-score"), {"collection": "<script>"})
+
+        self.assertContains(response, "Scores to try")
+        self.assertNotContains(response, "<script>:")
+
+
+class LibraryTests(TestCase):
+    def test_openscore_songs_and_built_in_songs_share_one_collection(self):
+        from talkingscoresapp import library
+
+        names = dict(library.collections())
+
+        self.assertIn("Songs", names)
+        self.assertNotIn("Lieder", names)
+        sources = {entry["source"] for entry in library.in_collection("Songs")}
+        self.assertEqual(sources, {"built-in", "openscore"})
+
+    def test_every_built_in_entry_points_at_a_file_music21_installed(self):
+        from talkingscoresapp import library
+
+        for entry in library._built_in():
+            with self.subTest(entry=entry["id"]):
+                self.assertTrue(library.built_in_bytes(entry))
+
+    def test_a_built_in_path_cannot_leave_the_corpus_folder(self):
+        from talkingscoresapp import library
+
+        with self.assertRaises(FileNotFoundError):
+            library.built_in_bytes({"path": "../../../../etc/passwd"})
+
+    def test_each_example_is_in_the_library(self):
+        from talkingscoresapp import library
+
+        self.assertEqual(len(library.examples()), len(library.EXAMPLES))
+
+    def test_the_home_page_links_to_each_example(self):
+        from talkingscoresapp import library
+
+        response = self.client.get(reverse("index"))
+
+        for example in library.examples():
+            self.assertContains(response, f'href="/library/{example["id"]}"')
+
+
+class LibraryScoreTests(TestCase):
+    """Opening a library score goes straight to the talking score, and its short link outlives the stored copy."""
+
+    ENTRY = "bach-bwv269"
+
+    def setUp(self):
+        from talkingscoresapp import library
+        self.entry = library.get(self.ENTRY)
+        self.score = views_module.store_library_entry(self.entry)
+        self.folder = os.path.dirname(self.score.get_data_file_path())
+        shutil.rmtree(self.folder, ignore_errors=True)
+        self.record = os.path.join(score_settings.MEDIA_ROOT, "links", f"{self.score.id[:10]}.json")
+        links = os.path.join(score_settings.MEDIA_ROOT, "links")
+        remove = lambda: (shutil.rmtree(self.folder, ignore_errors=True), score_models.remove_file_quietly(self.record),
+                          score_models.remove_file_quietly(os.path.join(links, f"{self.score.id[:10]}.name")),
+                          score_models.remove_file_quietly(os.path.join(links, "names", "aus-meines-herzens-grunde-bwv-269")))
+        self.addCleanup(remove)
+        score_models.remove_file_quietly(self.record)
+
+    def test_opening_a_library_score_chooses_the_default_options(self):
+        response = self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        self.assertRedirects(response, reverse("process", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+        with open(self.score.get_data_file_path() + ".opts", encoding="utf-8") as options_file:
+            options = json.load(options_file)
+        self.assertEqual(options["instruments"], [1, 2, 3, 4])
+        self.assertEqual(options["bars_at_a_time"], 2)
+
+    def test_a_library_score_carries_the_library_title_and_composer(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        info = TSScore(id=self.score.id, filename=self.score.filename).info()
+        self.assertEqual(info["title"], self.entry["title"])
+        self.assertEqual(info["composer"], "Johann Sebastian Bach")
+
+    def test_opening_it_again_keeps_the_stored_file_and_its_options(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+        data_path = self.score.get_data_file_path()
+        written = (os.path.getmtime(data_path), os.path.getmtime(data_path + ".opts"))
+
+        response = self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        self.assertRedirects(response, reverse("score", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+        self.assertEqual((os.path.getmtime(data_path), os.path.getmtime(data_path + ".opts")), written)
+
+    def test_an_unknown_library_id_goes_back_to_the_search(self):
+        response = self.client.get(reverse("library-score", args=["no-such-score"]))
+
+        self.assertRedirects(response, reverse("find-a-score"), fetch_redirect_response=False)
+
+    def test_the_title_link_opens_the_stored_score(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+        with patch("talkingscoreslib.HTMLTalkingScoreFormatter._trigger_midi_generation"):
+            TSScore(id=self.score.id, filename=self.score.filename).html(raise_errors=True)
+
+        response = self.client.get("/s/Aus-Meines-Herzens-Grunde-BWV-269")
+
+        self.assertRedirects(response, reverse("score", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+
+    def test_the_old_code_link_opens_the_stored_score(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        response = self.client.get(f"/s/{self.score.id[:10]}")
+
+        self.assertRedirects(response, reverse("score", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+
+    def test_the_short_link_restores_a_cleaned_up_score_with_its_options(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+        data_path = self.score.get_data_file_path()
+        with open(data_path + ".opts", encoding="utf-8") as options_file:
+            options = json.load(options_file)
+        options["bars_at_a_time"] = 8
+        views_module.write_options(self.score, options)
+        shutil.rmtree(self.folder)
+
+        response = self.client.get(f"/s/{self.score.id[:10]}")
+
+        self.assertRedirects(response, reverse("process", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+        with open(data_path + ".opts", encoding="utf-8") as options_file:
+            self.assertEqual(json.load(options_file)["bars_at_a_time"], 8)
+
+    def test_a_short_link_to_an_upload_that_was_cleaned_up_says_so(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+        with open(self.record, encoding="utf-8") as record_file:
+            record = json.load(record_file)
+        record["source"] = None
+        score_models.write_text_file_atomic(self.record, json.dumps(record))
+        shutil.rmtree(self.folder)
+
+        response = self.client.get(f"/s/{self.score.id[:10]}", follow=True)
+
+        self.assertContains(response, views_module.SHARED_SCORE_MISSING_MESSAGE)
+
+    def test_the_short_link_finds_a_stored_score_that_has_no_record(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+        os.remove(self.record)
+
+        response = self.client.get(f"/s/{self.score.id[:10]}")
+
+        self.assertRedirects(response, reverse("score", args=[self.score.id, self.score.filename]), fetch_redirect_response=False)
+
+    def test_a_malformed_or_unknown_code_goes_home_with_a_message(self):
+        for code in ("0000000000", "NOTHEX0000", "abc"):
+            with self.subTest(code=code):
+                response = self.client.get(f"/s/{code}", follow=True)
+                self.assertContains(response, views_module.SHARED_SCORE_MISSING_MESSAGE)
+
+    def test_the_talking_score_offers_its_short_link_and_the_midi_player(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        with patch("talkingscoreslib.HTMLTalkingScoreFormatter._trigger_midi_generation"):
+            html = TSScore(id=self.score.id, filename=self.score.filename).html(raise_errors=True)
+
+        self.assertIn('data-path="/s/aus-meines-herzens-grunde-bwv-269"', html)
+        self.assertIn('id="copy-share-link"', html)
+        self.assertIn("Opens this talking score with the same wording", html)
+        self.assertIn('href="/midi-player"', html)
+
+    def test_a_downloaded_talking_score_has_no_short_link(self):
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+        with patch("talkingscoreslib.HTMLTalkingScoreFormatter._trigger_midi_generation"):
+            html = TSScore(id=self.score.id, filename=self.score.filename).html(export_mode=True, raise_errors=True)
+
+        self.assertNotIn('id="share-link"', html)
+
+
+class ShareNameTests(TestCase):
+    """Short links read as words: a title for a score anyone can find, three music words for an upload."""
+
+    class Score:
+        def __init__(self, id, source=None):
+            self.id = id
+            self._source = source
+
+        def source(self):
+            return self._source
+
+    LIBRARY = {"kind": "library", "value": "bach-bwv269"}
+
+    def setUp(self):
+        from talkingscoresapp import sharing
+        self.sharing = sharing
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+
+    def score(self, digit, source=LIBRARY):
+        return self.Score(digit * 64, source)
+
+    def test_a_library_score_is_named_after_its_title(self):
+        name = self.sharing.share_name(self.score("a"), "Ode to Joy", self.root)
+
+        self.assertEqual(name, "ode-to-joy")
+        self.assertEqual(self.sharing.resolve("ode-to-joy", self.root), "a" * 10)
+
+    def test_a_second_score_with_the_same_title_gets_a_number(self):
+        self.sharing.share_name(self.score("a"), "Ode to Joy", self.root)
+
+        self.assertEqual(self.sharing.share_name(self.score("b"), "Ode to Joy", self.root), "ode-to-joy-2")
+        self.assertEqual(self.sharing.resolve("ode-to-joy", self.root), "a" * 10)
+
+    def test_a_score_keeps_its_name(self):
+        first = self.sharing.share_name(self.score("a", None), "Private", self.root)
+
+        self.assertEqual(self.sharing.share_name(self.score("a", None), "Private", self.root), first)
+
+    def test_an_upload_is_named_with_one_word_from_each_list_and_not_its_title(self):
+        from talkingscoresapp import share_words
+
+        name = self.sharing.share_name(self.score("a", None), "My secret song", self.root)
+
+        mood, instrument, form = name.split("-")
+        self.assertIn(mood, share_words.TEMPOS_AND_MOODS)
+        self.assertIn(instrument, share_words.INSTRUMENTS)
+        self.assertIn(form, share_words.FORMS)
+
+    def test_the_word_lists_hold_about_a_hundred_distinct_words_each_and_no_piano(self):
+        from talkingscoresapp import share_words
+
+        lists = (share_words.TEMPOS_AND_MOODS, share_words.INSTRUMENTS, share_words.FORMS)
+        every = [word for words in lists for word in words]
+        for words in lists:
+            self.assertGreaterEqual(len(words), 90)
+        self.assertEqual(len(every), len(set(every)))
+        self.assertNotIn("piano", every)
+        self.assertTrue(all(word.isascii() and word.isalpha() and word.islower() for word in every))
+
+    def test_a_name_is_found_whatever_its_case(self):
+        self.sharing.share_name(self.score("a"), "Ode to Joy", self.root)
+
+        self.assertEqual(self.sharing.resolve("Ode-To-JOY", self.root), "a" * 10)
+        self.assertEqual(self.sharing.resolve("AAAAAAAAAA", self.root), "a" * 10)
+
+    def test_a_title_that_is_a_site_page_or_untitled_falls_back_to_words(self):
+        for title in ("Find a score", "Untitled work", "", "???"):
+            with self.subTest(title=title):
+                self.assertEqual(self.sharing.title_name(title), "")
+        name = self.sharing.share_name(self.score("a"), "Find a score", self.root)
+        self.assertEqual(len(name.split("-")), 3)
+
+    def test_a_title_that_looks_like_a_code_is_not_used(self):
+        self.assertEqual(self.sharing.title_name("deadbeef12"), "")
+
+    def test_a_long_title_is_cut_at_a_word(self):
+        name = self.sharing.title_name("Sonata in A major for violin and piano with a very long subtitle indeed")
+
+        self.assertLessEqual(len(name), self.sharing.MAX_TITLE_NAME_LENGTH)
+        self.assertFalse(name.endswith("-"))
+        self.assertTrue(name.startswith("sonata-in-a-major"))
+
+    def test_an_upload_takes_over_three_words_whose_score_has_gone(self):
+        gone = self.score("a", None)
+        with patch.object(self.sharing, "word_name", return_value="presto-cello-fugue"):
+            self.sharing.share_name(gone, "", self.root)
+            self.assertEqual(self.sharing.share_name(self.score("b", None), "", self.root), "presto-cello-fugue")
+        self.assertEqual(self.sharing.resolve("presto-cello-fugue", self.root), "b" * 10)
+
+    def test_three_words_whose_score_is_stored_stay_with_it(self):
+        os.makedirs(os.path.join(self.root, "a" * 64))
+        open(os.path.join(self.root, "a" * 64, "score.musicxml"), "w").close()
+        names = iter(["presto-cello-fugue", "largo-oboe-waltz"])
+        with patch.object(self.sharing, "word_name", side_effect=lambda: next(names)):
+            self.sharing.share_name(self.score("a", None), "", self.root)
+            self.assertEqual(self.sharing.share_name(self.score("b", None), "", self.root), "largo-oboe-waltz")
+
+    def test_an_unknown_name_resolves_to_nothing(self):
+        for name in ("no-such-score", "../etc", "", "x" * 200):
+            with self.subTest(name=name):
+                self.assertIsNone(self.sharing.resolve(name, self.root))
+
+
+class LibraryDownloadTests(TestCase):
+    """Every library score's MusicXML can be downloaded from Find a score."""
+
+    def test_a_built_in_score_downloads_as_an_attachment(self):
+        response = self.client.get(reverse("library-musicxml", args=["bach-bwv269"]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment;", response["Content-Disposition"])
+        self.assertRegex(response["Content-Disposition"], r'filename="[^"/]+\.(mxl|xml|musicxml)"')
+        self.assertTrue(response.content)
+
+    def test_an_openscore_score_sends_the_browser_to_openscore(self):
+        from talkingscoresapp import library
+        entry = library.get("openscore-lc5015378")
+
+        response = self.client.get(reverse("library-musicxml", args=["openscore-lc5015378"]))
+
+        self.assertRedirects(response, entry["url"], fetch_redirect_response=False)
+
+    def test_an_unknown_score_goes_back_to_the_search(self):
+        response = self.client.get(reverse("library-musicxml", args=["no-such-score"]))
+
+        self.assertRedirects(response, reverse("find-a-score"), fetch_redirect_response=False)
+
+    def test_each_library_result_offers_its_download(self):
+        response = self.client.get(reverse("find-a-score"), {"q": "maple leaf"})
+
+        self.assertContains(response, 'href="/library/joplin-maple-leaf-rag/musicxml"')
+        self.assertContains(response, "Download MusicXML")
+
+
+class ListingRecordTests(TestCase):
+    """A score starts private, and saving options again keeps whatever listing was chosen."""
+
+    class Score:
+        def __init__(self, id, source=None):
+            self.id = id
+            self.filename = "score.musicxml"
+            self._source = source
+
+        def source(self):
+            return self._source
+
+    def setUp(self):
+        from talkingscoresapp import sharing
+        self.sharing = sharing
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.score = self.Score("c" * 64)
+        os.makedirs(os.path.join(self.root, self.score.id))
+        with open(os.path.join(self.root, self.score.id, self.score.filename), "w") as score_file:
+            score_file.write("<score-partwise/>")
+
+    def test_a_new_record_is_not_listed(self):
+        self.sharing.write_record(self.score, {}, self.root)
+
+        self.assertFalse(self.sharing.read_record("c" * 10, self.root).get("listed"))
+        self.assertEqual(self.sharing.listed_scores(self.root), [])
+
+    def test_saving_options_keeps_the_listing(self):
+        self.sharing.write_record(self.score, {}, self.root)
+        self.sharing.set_listed("c" * 10, True, "Night Song", "A. Reader", self.root)
+
+        self.sharing.write_record(self.score, {"bars_at_a_time": 4}, self.root)
+
+        record = self.sharing.read_record("c" * 10, self.root)
+        self.assertTrue(record["listed"])
+        self.assertEqual(record["title"], "Night Song")
+        self.assertEqual(record["options"], {"bars_at_a_time": 4})
+
+    def test_a_listed_upload_drops_out_once_its_file_is_gone(self):
+        self.sharing.write_record(self.score, {}, self.root)
+        self.sharing.set_listed("c" * 10, True, "Night Song", "", self.root)
+        self.assertEqual([code for code, _ in self.sharing.listed_scores(self.root)], ["c" * 10])
+
+        shutil.rmtree(os.path.join(self.root, self.score.id))
+
+        self.assertEqual(self.sharing.listed_scores(self.root), [])
+
+    def test_listing_a_score_with_no_record_fails(self):
+        with self.assertRaises(FileNotFoundError):
+            self.sharing.set_listed("d" * 10, True, root=self.root)
+
+
+class ScoreListingTests(TestCase):
+    """Only the browser that opened a file can list it, and an upload needs the rights box ticked."""
+
+    ENTRY = "bach-bwv269"
+
+    def setUp(self):
+        from talkingscoresapp import library, sharing
+        self.sharing = sharing
+        entry = library.get(self.ENTRY)
+        self.upload = SimpleUploadedFile(os.path.basename(entry["path"]), library.built_in_bytes(entry))
+        self.links = os.path.join(score_settings.MEDIA_ROOT, "links")
+        self.addCleanup(self.remove_stored)
+
+        response = self.client.post(reverse("index"), {"filename": self.upload})
+        match = re.search(r"/score/([0-9a-f]{64})/", response["Location"])
+        self.assertIsNotNone(match, response["Location"])
+        self.score_id = match.group(1)
+        self.code = self.score_id[:10]
+        score = next(TSScore(id=self.score_id, filename=name) for name in os.listdir(
+            os.path.join(score_settings.MEDIA_ROOT, self.score_id)) if name.endswith(".musicxml"))
+        views_module.write_options(score, views_module.default_options(score.info()))
+        self.name = sharing.share_name(score, "")
+
+    def remove_stored(self):
+        if not getattr(self, "code", None):
+            return
+        shutil.rmtree(os.path.join(score_settings.MEDIA_ROOT, self.score_id), ignore_errors=True)
+        for path in (os.path.join(self.links, f"{self.code}.json"), os.path.join(self.links, f"{self.code}.name"),
+                     os.path.join(self.links, "names", getattr(self, "name", "") or "-")):
+            score_models.remove_file_quietly(path)
+
+    def listing_url(self):
+        return reverse("score-listing", args=[self.name])
+
+    def test_opening_a_file_marks_this_browser_as_its_owner(self):
+        self.assertIn(self.code, views_module.owned_codes(self.client.get(self.listing_url()).wsgi_request))
+
+    def test_a_new_upload_is_private(self):
+        status = self.client.get(reverse("score-listing-status", args=[self.name])).json()
+
+        self.assertEqual(status, {"known": True, "listed": False, "can_change": True, "from_library": False,
+                                  "change_url": self.listing_url()})
+        self.assertContains(self.client.get(self.listing_url()), 'value="private" checked')
+
+    def test_listing_an_upload_needs_the_rights_box(self):
+        response = self.client.post(self.listing_url(), {"listing": "listed"})
+
+        self.assertContains(response, views_module.LISTING_RIGHTS_ERROR, status_code=400)
+        self.assertFalse(self.sharing.read_record(self.code).get("listed"))
+
+    def test_a_listed_upload_appears_in_find_a_score(self):
+        response = self.client.post(self.listing_url(), {"listing": "listed", "rights": "yes"})
+
+        self.assertRedirects(response, f"/s/{self.name}", fetch_redirect_response=False)
+        self.assertTrue(self.sharing.read_record(self.code)["listed"])
+        found = self.client.get(reverse("find-a-score"), {"collection": "Shared by readers"})
+        self.assertContains(found, f'href="/s/{self.name}"')
+        self.assertNotContains(found, f'href="/s/{self.name}/musicxml"')
+        self.assertContains(found, "contact@davidbuik.com")
+
+    def test_making_it_private_again_takes_it_out(self):
+        self.client.post(self.listing_url(), {"listing": "listed", "rights": "yes"})
+        self.client.post(self.listing_url(), {"listing": "private"})
+
+        found = self.client.get(reverse("find-a-score"), {"q": "chorale"})
+        self.assertNotContains(found, f'href="/s/{self.name}"')
+
+    def test_another_browser_cannot_change_the_listing(self):
+        other = Client()
+
+        response = other.post(self.listing_url(), {"listing": "listed", "rights": "yes"})
+
+        self.assertContains(response, "can be changed only in the browser that opened the file")
+        self.assertFalse(self.sharing.read_record(self.code).get("listed"))
+        self.assertFalse(other.get(reverse("score-listing-status", args=[self.name])).json()["can_change"])
+
+    def test_an_unknown_link_has_no_listing(self):
+        self.assertEqual(self.client.get(reverse("score-listing-status", args=["0000000000"])).json(), {"known": False})
+
+
+class LibraryListingTests(TestCase):
+    """A library score is always findable, so its listing cannot be changed."""
+
+    ENTRY = "bach-bwv269"
+
+    def setUp(self):
+        from talkingscoresapp import library
+        self.score = views_module.store_library_entry(library.get(self.ENTRY))
+        self.code = self.score.id[:10]
+        links = os.path.join(score_settings.MEDIA_ROOT, "links")
+        self.addCleanup(lambda: (
+            shutil.rmtree(os.path.dirname(self.score.get_data_file_path()), ignore_errors=True),
+            score_models.remove_file_quietly(os.path.join(links, f"{self.code}.json")),
+            score_models.remove_file_quietly(os.path.join(links, f"{self.code}.name")),
+            score_models.remove_file_quietly(os.path.join(links, "names", "aus-meines-herzens-grunde-bwv-269")),
+        ))
+        self.client.get(reverse("library-score", args=[self.ENTRY]))
+
+    def test_a_library_score_says_it_is_in_the_library(self):
+        response = self.client.post(reverse("score-listing", args=[self.code]), {"listing": "listed"})
+
+        self.assertContains(response, "This score is from the library")
+        self.assertTrue(self.client.get(reverse("score-listing-status", args=[self.code])).json()["from_library"])
+        self.assertFalse(self.client.get(reverse("score-listing-status", args=[self.code])).json()["can_change"])
+
+    def test_the_talking_score_has_a_place_for_the_listing(self):
+        with patch("talkingscoreslib.HTMLTalkingScoreFormatter._trigger_midi_generation"):
+            html = TSScore(id=self.score.id, filename=self.score.filename).html(raise_errors=True)
+
+        self.assertIn('id="listing-status" hidden', html)
+
+
+class MidiPlayerPageTests(TestCase):
+    def test_the_page_offers_a_file_field_and_loads_the_synthesizer(self):
+        response = self.client.get(reverse("midi-player"))
+
+        self.assertContains(response, 'id="midi-file"')
+        self.assertContains(response, "js/vendor/spessasynth.js")
+        self.assertContains(response, "js/midi-player.js")
+        self.assertContains(response, "sound/GeneralUserGS.sf3")
+
+    def test_the_site_navigation_links_to_it(self):
+        response = self.client.get(reverse("index"))
+
+        self.assertContains(response, f'href="{reverse("midi-player")}"')
 
 
 class UserFacingCopyTests(TestCase):
@@ -2775,6 +3436,200 @@ class UserFacingCopyTests(TestCase):
         scanner = os.path.join(os.getcwd(), "scripts", "check_copy.py")
         result = subprocess.run([sys.executable, scanner], capture_output=True, text=True, timeout=120)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+CHORD_SYMBOL_SCORE = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Melody</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>-4</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+      <harmony><root><root-step>C</root-step></root><kind text="7">dominant</kind>
+        <degree><degree-value>9</degree-value><degree-alter>1</degree-alter><degree-type>alter</degree-type></degree></harmony>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <harmony><root><root-step>B</root-step><root-alter>-1</root-alter></root><kind>minor-seventh</kind></harmony>
+      <note><rest/><duration>2</duration><type>half</type></note>
+      <harmony><root><root-step>E</root-step><root-alter>-1</root-alter></root><kind>dominant</kind></harmony>
+      <note><rest/><duration>2</duration><type>half</type></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+class ChordSymbolTests(TestCase):
+    """Lead sheets: chord symbols are read, named with flats and sharps, and never stop a score loading."""
+
+    def _text(self, xml, **options):
+        return render_score_text(xml, **options)
+
+    def test_a_ninth_altered_on_a_seventh_chord_loads_as_an_added_ninth(self):
+        text = self._text(CHORD_SYMBOL_SCORE, chord_symbol_reading="written", chord_symbols_on_own_line=False)
+        self.assertIn("chord symbol C7 add ♯9", text)
+
+    def test_files_music21_reads_as_written_are_not_rewritten(self):
+        from talkingscoreslib import parse_score
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "plain.musicxml")
+            with open(path, "w", encoding="utf-8") as score_file:
+                score_file.write(CHORD_SYMBOL_SCORE.replace("<degree-type>alter</degree-type>", "<degree-type>add</degree-type>"))
+            with patch("talkingscoreslib.add_degrees_missing_from_chord") as rewrite:
+                parse_score(path)
+        rewrite.assert_not_called()
+
+    def test_chord_symbols_are_named_with_flat_and_sharp_signs(self):
+        from lib.vocabulary import chord_figure_with_symbols
+        self.assertEqual(chord_figure_with_symbols("B-m7"), "B♭m7")
+        self.assertEqual(chord_figure_with_symbols("E--7/B-"), "E♭♭7/B♭")
+        self.assertEqual(chord_figure_with_symbols("C7 add #9"), "C7 add ♯9")
+        self.assertEqual(chord_figure_with_symbols("F#m7b5"), "F♯m7b5")
+
+    def test_a_bar_of_rests_under_chord_symbols_reads_the_chords(self):
+        text = self._text(CHORD_SYMBOL_SCORE, chord_symbol_reading="written", chord_symbols_on_own_line=False)
+        self.assertIn("Beat 1 chord symbol B♭m7, minim rest, Beat 3 chord symbol E♭7, minim rest", text)
+        self.assertNotIn("Rests for the whole bar", text)
+
+    def test_chord_symbols_are_named_in_words_on_a_line_above_the_part(self):
+        text = self._text(CHORD_SYMBOL_SCORE)
+        self.assertIn("Melody - Chord symbols\nBar 1\nBeat 1 C seventh add sharp ninth\n"
+                      "Bar 2\nBeat 1 B flat minor seventh, Beat 3 E flat seventh\nMelody\n", text)
+        # With the chords on their own line, the melody's bar of rests is read as one.
+        self.assertIn("Melody\nBar 1\nBeat 1 semibreve high C\nBar 2\nRests for the whole bar", text)
+        self.assertNotIn("chord symbol", text)
+
+    def test_the_notes_reading_spells_out_each_chord_from_the_bass_up(self):
+        text = self._text(PIANO_VOICES_SCORE, chord_symbol_reading="notes")
+        self.assertIn("Beat 1 C major, notes C, E and G, "
+                      "Beat 3 B flat seventh over D, notes D, F, A flat and B flat", text)
+
+    def test_symbols_on_either_staff_are_read_once_above_both_hands(self):
+        text = self._text(PIANO_VOICES_SCORE)
+        self.assertIn("Piano - Chord symbols\nBar 1\nBeat 1 C major, Beat 3 B flat seventh over D\n"
+                      "Piano - Right hand\n", text)
+        hands = text.split("Piano - Right hand", 1)[1]
+        self.assertNotIn("C major", hands)
+        self.assertNotIn("seventh", hands)
+        self.assertEqual(text.count("B flat seventh over D"), 1)
+
+    def test_symbols_can_stay_among_the_notes_of_the_staff_they_are_written_on(self):
+        text = self._text(PIANO_VOICES_SCORE, chord_symbols_on_own_line=False)
+        self.assertNotIn("Chord symbols", text)
+        self.assertIn("Beat 1 chord symbol C major, minim high E", text)
+        self.assertIn("Beat 1 chord symbol C major, semibreve low C", text)
+
+    def test_symbols_are_left_out_when_the_reader_turns_them_off(self):
+        text = self._text(PIANO_VOICES_SCORE, chord_symbols=False)
+        self.assertNotIn("Chord symbols", text)
+        self.assertNotIn("B flat seventh", text)
+
+    def test_chord_names_read_slash_basses_and_altered_and_missing_degrees(self):
+        from lib.events import TSChordSymbol
+        from lib.render_settings import RenderSettings
+        from lib.vocabulary import Vocabulary
+        words = Vocabulary(RenderSettings())
+        half_diminished = TSChordSymbol("Cm7b5", root=("C", 0), chord_kind="minor-seventh",
+                                        modifications=[("alter", 5, -1)])
+        self.assertEqual(words.chord_name(half_diminished), "C minor seventh flat fifth")
+        no_third = TSChordSymbol("F#7omit3/A#", root=("F", 1), bass=("A", 1), chord_kind="dominant-seventh",
+                                 modifications=[("subtract", 3, 0)])
+        self.assertEqual(words.chord_name(no_third), "F sharp seventh no third over A sharp")
+        symbols = Vocabulary(RenderSettings(accidental_style="symbols"))
+        self.assertEqual(symbols.chord_name(no_third), "F♯ seventh no third over A♯")
+        self.assertEqual(words.chord_symbol(TSChordSymbol("N.C.", no_chord=True), on_own_line=True), "no chord")
+
+
+class SeparateVoicesTests(TestCase):
+    """A stave holding two voices is read one voice at a time, so each line can be followed through the bar."""
+
+    def test_each_voice_is_read_through_the_bar_on_its_own_line(self):
+        text = render_score_text(PIANO_VOICES_SCORE)
+        self.assertIn("Piano - Right hand\nBar 1\n"
+                      "Voice 1: Beat 1 minim high E slur starts, Beat 3 D slur ends\n"
+                      "Voice 2: Beat 1 crotchet mid G, Beat 2 A, Beat 3 minim F\n", text)
+        # A stave with one voice reads without a voice label.
+        self.assertIn("Piano - Left hand\nBar 1\nBeat 1 semibreve low C", text)
+
+    def test_voices_can_be_read_together_moment_by_moment(self):
+        text = render_score_text(PIANO_VOICES_SCORE, separate_voices=False)
+        self.assertNotIn("Voice 1", text)
+        self.assertIn("Beat 1 minim high E slur starts together with crotchet mid G, Beat 2 A", text)
+
+    def test_hidden_rests_are_skipped_and_stave_marks_go_with_the_first_voice(self):
+        text = render_score_text(TWO_VOICES_WITH_HIDDEN_REST_SCORE)
+        self.assertIn("Voice 1: Beat 1 forte, semibreve high C\n"
+                      "Voice 2: Beat 3 minim mid E\n", text)
+        self.assertNotIn("rest", text)
+
+    def test_the_page_labels_each_voice_above_its_beats(self):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "voices.musicxml")
+            with open(path, "w", encoding="utf-8") as score_file:
+                score_file.write(PIANO_VOICES_SCORE)
+            formatter = HTMLTalkingScoreFormatter(Music21TalkingScore(path), options={"style": "standard"})
+            with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+                html = formatter.generateHTML(web_path="/midis/x/y")
+        self.assertRegex(html, r'<p class="voice">Voice 1</p>\s*<ul class="beats">\s*<li><b>Beat 1</b>')
+        self.assertIn('<p class="voice">Voice 2</p>', html)
+        self.assertIn('<p class="label">Piano - Chord symbols</p>', html)
+
+
+def render_score_text(xml, **options):
+    from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+    with tempfile.TemporaryDirectory() as temp_dir:
+        path = os.path.join(temp_dir, "score.musicxml")
+        with open(path, "w", encoding="utf-8") as score_file:
+            score_file.write(xml)
+        formatter = HTMLTalkingScoreFormatter(Music21TalkingScore(path), options={"style": "standard", **options})
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            return formatter.render_text()
+
+
+# Right hand: two voices under C and B flat 7 over D, the upper one slurred. Left hand: one voice,
+# under a C major symbol the file repeats on the lower staff.
+PIANO_VOICES_SCORE = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time>
+        <staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef></attributes>
+      <harmony><root><root-step>C</root-step></root><kind>major</kind><staff>1</staff></harmony>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>half</type><staff>1</staff><notations><slur type="start" number="1"/></notations></note>
+      <harmony><root><root-step>B</root-step><root-alter>-1</root-alter></root><kind>dominant</kind><bass><bass-step>D</bass-step></bass><staff>1</staff></harmony>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>half</type><staff>1</staff><notations><slur type="stop" number="1"/></notations></note>
+      <backup><duration>4</duration></backup>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><voice>2</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><voice>2</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>2</duration><voice>2</voice><type>half</type><staff>1</staff></note>
+      <backup><duration>4</duration></backup>
+      <harmony><root><root-step>C</root-step></root><kind>major</kind><staff>2</staff></harmony>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>4</duration><voice>5</voice><type>whole</type><staff>2</staff></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+TWO_VOICES_WITH_HIDDEN_REST_SCORE = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Flute</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef></attributes>
+      <direction placement="below"><direction-type><dynamics><f/></dynamics></direction-type></direction>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+      <backup><duration>4</duration></backup>
+      <note print-object="no"><rest/><duration>2</duration><voice>2</voice><type>half</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><voice>2</voice><type>half</type></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
 
 
 READER_FIXTURE = os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml")

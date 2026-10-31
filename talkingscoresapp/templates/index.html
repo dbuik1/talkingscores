@@ -1,67 +1,67 @@
 {% extends "base_site.html" %}
 
-{% block title %}Talking Scores - sheet music written out bar by bar{% endblock %}
-{% block meta-description %}Open a MusicXML file and read every bar as words, with a screen reader, a braille display or a magnifier, and hear any bar on its own.{% endblock %}
+{% block title %}Talking Scores - sheet music in words, bar by bar{% endblock %}
+{% block meta-description %}Sheet music written out in words for blind and partially sighted musicians. Read each bar with a screen reader, a braille display or large text, and play any bar to hear it.{% endblock %}
 
 {% block content %}
 <div>
-    <h1>Sheet music, written out bar by bar</h1>
-    <p class="lead">Open a MusicXML file and Talking Scores writes out every bar: the rhythm, the pitch, the dynamics. Any bar can be played on its own.</p>
+    <h1>Sheet music in words, bar by bar</h1>
+    <p class="lead">Talking Scores writes out sheet music in words, for blind and partially sighted musicians. Read each bar with a screen reader, a braille display or large text, and play any bar to hear it.</p>
 </div>
 
 {% if reads_images %}
-<p class="callout" id="file-rules"><strong>MusicXML files</strong> (.musicxml, .xml or .mxl) up to 10 MB, or <strong>a PDF or photo of printed music</strong> (.pdf, .png or .jpg) up to 20 MB. Your file stays on this server and is not shared.</p>
+<p class="callout" id="file-rules">Open a <strong>MusicXML file</strong> (.musicxml, .xml or .mxl) up to 10 MB, or <strong>a PDF or photo of printed music</strong> (.pdf, .png or .jpg) up to 20 MB. Your file stays on this site and is not shared.</p>
 {% else %}
-<p class="callout" id="file-rules"><strong>MusicXML files</strong> (.musicxml, .xml or .mxl) up to 10 MB. Your file stays on this server and is not shared.</p>
+<p class="callout" id="file-rules">Open a <strong>MusicXML file</strong>: a file ending in .musicxml, .xml or .mxl, up to 10 MB. Your file stays on this site and is not shared.</p>
 {% endif %}
 
 <form id="open" class="form" action="{% url 'index' %}" method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <div class="field" id="file-field">
         <label for="id_filename">Score file</label>
-        <input type="file" id="id_filename" name="filename" accept="{{ accepted_extensions }}" aria-describedby="file-rules file-drop-hint">
-        <p class="small muted" id="file-drop-hint">Or drop the file here</p>
+        <input type="file" id="id_filename" name="filename" accept="{{ accepted_extensions }}" aria-describedby="file-rules">
+        <p class="small muted" id="file-drop-hint" aria-hidden="true">Or drag the file here</p>
         <p class="small" id="file-drop-status" aria-live="polite" hidden></p>
     </div>
     <details class="plain">
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Or paste a link</h2></summary>
         <div class="field" style="padding: 12px 0 8px;">
-            <label for="id_url">Link to the file</label>
+            <label for="id_url">Link to a MusicXML file</label>
             <input type="url" class="input" id="id_url" name="url" aria-describedby="url-help">
-            <p class="small muted" id="url-help">The link has to point at the file itself, or at its page on GitHub</p>
+            <p class="small muted" id="url-help">A link straight to the file, or to its page on GitHub</p>
         </div>
     </details>
     <button class="btn primary" type="submit" id="open-submit">Open score</button>
 </form>
 
-<p class="small muted">No file to hand? <a href="{% url 'find-a-score' %}">Find a free score</a></p>
+<p class="small muted">No file yet? <a href="{% url 'find-a-score' %}">Find a free score</a>, or open an example: {% for example in examples %}<a href="{% url 'library-score' example.id %}">{{ example.label }}</a>{% if forloop.revcounter > 2 %}, {% elif forloop.revcounter == 2 %} or {% endif %}{% endfor %}.</p>
 
 <div>
     <details>
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Where to find a MusicXML file</h2></summary>
         <div class="panel">
-            <p>Many scores can be downloaded as MusicXML from a score library.</p>
+            <p>Many score websites let you download a score as a MusicXML file.</p>
             <ul class="bullets">
                 <li><a href="https://musescore.com/sheetmusic" rel="noopener noreferrer">MuseScore.com</a> has the most scores. Open a score, choose Download, then MusicXML. A free account is needed, and some scores need a paid plan.</li>
-                <li><a href="{% url 'find-a-score' %}">OpenScore</a> has songs and string quartets that open here directly.</li>
+                <li><a href="{% url 'find-a-score' %}">Find a score</a> on this site has over 2,000 free scores that open here directly: piano pieces, songs, string quartets and Bach chorales.</li>
                 <li><a href="https://www.cpdl.org/" rel="noopener noreferrer">CPDL</a> has choral music. Look for MusicXML in the list of files for each edition.</li>
             </ul>
-            <p>In most notation programs, choose File, then Export, then MusicXML.</p>
+            <p>If you write music in a program such as MuseScore, Sibelius or Dorico, choose File, then Export, then MusicXML.</p>
             {% if reads_images %}
-            <p class="small muted">A PDF or photo of printed music opens here too. It is read by a scanning program, which misreads some notes, so the talking score may not match the printed page.</p>
+            <p class="small muted">A PDF or photo of printed music opens here too. It is read by a scanning program, which can misread some notes, so the talking score may not match the printed page.</p>
             {% else %}
-            <p class="small muted">A PDF can be turned into MusicXML by a scanning program such as <a href="https://audiveris.github.io/audiveris/" rel="noopener noreferrer">Audiveris</a>, which is free. Scanning programs misread some notes, so the talking score may not match the printed page.</p>
+            <p class="small muted">A free program such as <a href="https://audiveris.github.io/audiveris/" rel="noopener noreferrer">Audiveris</a> can turn a PDF into MusicXML. It can misread some notes, so the talking score may not match the printed page.</p>
             {% endif %}
         </div>
     </details>
     <details>
-        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>What it does</h2></summary>
+        <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>What a talking score includes</h2></summary>
         <div class="panel">
-            <p>It writes out the notes, rests, rhythms, dynamics and repeats a MusicXML file holds, bar by bar, in the words you choose. Any range of bars can be played, and the whole talking score can be downloaded as a page, as plain text or as uncontracted braille.</p>
+            <p>Each bar is written out in words: its notes, rests, rhythms, dynamics and repeats. You choose how it is worded. You can play any bars or the whole score, and download the talking score as a web page, plain text or braille.</p>
             {% if reads_images %}
-            <p>A PDF or photo of printed music is read into MusicXML first, and the talking score then says so at the top. It does not read handwritten music, and it does not teach the music. Lyrics, chord symbols and figured bass are read only where the file records them.</p>
+            <p>A PDF or photo of printed music is read into MusicXML first, and the talking score says so at the top. It cannot read handwritten music. Lyrics, chord symbols and figured bass are included only when the file has them.</p>
             {% else %}
-            <p>It does not read PDFs, images or scans, and it does not teach the music. Lyrics, chord symbols and figured bass are read only where the file records them.</p>
+            <p>It cannot open a PDF, a photo or a scan. Lyrics, chord symbols and figured bass are included only when the file has them.</p>
             {% endif %}
         </div>
     </details>

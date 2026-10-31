@@ -98,6 +98,22 @@ CONTENT_SECURITY_POLICY = (
     "upgrade-insecure-requests"
 )
 
+# The natural voices on the reading page are off unless this is set. When on, the
+# reading page alone may load the kokoro-js voice code and its runtime from
+# jsDelivr and the voice model from Hugging Face; the words being read stay in
+# the browser. The browser keeps the model, so later visits fetch nothing.
+NATURAL_VOICES = os.environ.get("DJANGO_NATURAL_VOICES", "false").lower() == "true"
+NATURAL_VOICE_HOSTS = (
+    "https://cdn.jsdelivr.net https://huggingface.co https://cdn-lfs.huggingface.co "
+    "https://cas-bridge.xethub.hf.co"
+)
+READER_POLICY_WITH_NATURAL_VOICES = (
+    CONTENT_SECURITY_POLICY
+    .replace("script-src 'self'", "script-src 'self' https://cdn.jsdelivr.net")
+    .replace("connect-src 'self'", "connect-src 'self' " + NATURAL_VOICE_HOSTS)
+    .replace("worker-src 'none'", "worker-src 'self' blob:")
+)
+
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = not DEBUG
 SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '31536000' if not DEBUG else '0'))

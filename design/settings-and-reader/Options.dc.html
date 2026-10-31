@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Options for To a Wild Rose</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&amp;family=Atkinson+Hyperlegible+Next:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f7f4ee}
+a{color:#155e66;text-underline-offset:3px}a:hover{color:#1c1a17}
+button,select{font:inherit}
+.btn{display:inline-flex;align-items:center;gap:10px;min-height:52px;padding:0 24px;border:2px solid #1e6a73;border-radius:6px;background:#1e6a73;color:#fff;font-weight:700;font-size:20px;cursor:pointer}
+.btn:hover{background:#155e66}
+.sum{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:0;background:none;border:0;border-top:1px solid #d9d3c7;cursor:pointer;color:#1c1a17;font-size:19px;text-align:left}
+.sum svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;flex:none}
+.sum .what{margin-left:auto;font-size:16px;color:#5b5650}
+.input{min-height:48px;padding:0 12px;border:2px solid #5b5650;border-radius:6px;background:#fff;color:#1c1a17;font-size:18px}
+.check{display:flex;align-items:center;gap:12px;min-height:44px;font-size:18px}
+.check input{width:24px;height:24px;accent-color:#1e6a73;flex:none}
+.btn:focus-visible,.sum:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #9a5f00;outline-offset:3px}
+</style>
+</helmet>
+<div style="max-width: 880px; margin: 0 auto; padding: 32px 40px 64px; display: flex; flex-direction: column; gap: 36px; font-family: 'Atkinson Hyperlegible Next', Verdana, sans-serif; color: #1c1a17; font-size: 20px; line-height: 1.5">
+  <header style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #d9d3c7; padding-bottom: 16px">
+    <a href="#" style="display: flex; align-items: center; gap: 12px; color: #1c1a17; text-decoration: none; font-family: Newsreader, Georgia, serif; font-size: 22px; font-weight: 500"><svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h20M4 13h20M4 18h20M4 23h20"></path><circle cx="17" cy="20.5" r="3" fill="currentColor" stroke="none"></circle><path d="M20 20.5V7l4 2"></path></svg>Talking Scores</a>
+    <nav style="display: flex; gap: 24px; font-size: 17px"><a href="#">Find a score</a><a href="#">Change log</a></nav>
+  </header>
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <p style="margin: 0; font-size: 17px; color: #5b5650"><b style="color: #1c1a17">To a Wild Rose</b> by Edward MacDowell · <a href="#">Open a different score</a></p>
+    <h1 style="margin: 0; font-family: Newsreader, Georgia, serif; font-weight: 500; font-size: 40px; line-height: 1.15">Options</h1>
+  </div>
+
+  <fieldset style="border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px">
+    <legend style="padding: 0; margin-bottom: 4px; font-family: Newsreader, Georgia, serif; font-size: 28px; font-weight: 500">How bars are written</legend>
+    <p style="margin: 0 0 6px; font-size: 17px; color: #5b5650">Each example is bar 1 of this score</p>
+    <sc-for list="{{styles}}" as="s" hint-placeholder-count="5">
+      <label style="{{s.box}}">
+        <input type="radio" name="style" checked="{{s.checked}}" onChange="{{s.pick}}" style="width: 24px; height: 24px; margin: 4px 0 0; accent-color: #1e6a73; flex: none">
+        <span style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+          <span style="font-weight: 700; font-size: 20px">{{s.name}}</span>
+          <span style="font-size: 17px; color: #5b5650">{{s.summary}}</span>
+          <span style="font-family: Newsreader, Georgia, serif; font-size: 21px; padding-left: 12px; border-left: 1px solid #8a8378; margin-top: 4px">{{s.sample}}</span>
+        </span>
+      </label>
+    </sc-for>
+  </fieldset>
+
+  <section aria-labelledby="text-heading" style="display: flex; flex-direction: column; gap: 14px">
+    <h2 id="text-heading" style="margin: 0; font-family: Newsreader, Georgia, serif; font-size: 28px; font-weight: 500">Text size and colours</h2>
+    <p style="margin: -6px 0 0; font-size: 17px; color: #5b5650">Applies to every score on this device and changes this page as you choose</p>
+    <fieldset style="border: 0; padding: 0; margin: 0">
+      <legend style="font-weight: 700; font-size: 18px; margin-bottom: 8px">Text size</legend>
+      <div style="display: flex; flex-wrap: wrap; gap: 4px 28px">
+        <label class="check"><input type="radio" name="size">Standard</label>
+        <label class="check"><input type="radio" name="size" checked>Large</label>
+        <label class="check"><input type="radio" name="size">Extra large</label>
+        <label class="check"><input type="radio" name="size">My browser’s size</label>
+      </div>
+    </fieldset>
+    <label class="check"><input type="checkbox" checked>Make buttons and menus larger too</label>
+    <label style="display: flex; align-items: center; gap: 12px; font-size: 18px">Colours <select class="input"><option>Match my system</option><option>Light</option><option>Dark</option><option>High contrast</option></select></label>
+  </section>
+
+  <section aria-labelledby="details-heading" style="display: flex; flex-direction: column">
+    <h2 id="details-heading" style="margin: 0 0 4px; font-family: Newsreader, Georgia, serif; font-size: 28px; font-weight: 500">Change the details</h2>
+    <p style="margin: 0 0 10px; font-size: 17px; color: #5b5650">Any change here turns the wording into your own, starting from the one chosen above</p>
+    <sc-for list="{{sections}}" as="d" hint-placeholder-count="7">
+      <div>
+        <button class="sum" type="button" aria-expanded="{{d.expanded}}" onClick="{{d.toggle}}"><svg viewBox="0 0 24 24" aria-hidden="true" style="{{d.chev}}"><path d="M9 6l6 6-6 6"></path></svg>{{d.label}}<span class="what">{{d.current}}</span></button>
+        <sc-if value="{{d.isInclude}}" hint-placeholder-val="{{ false }}">
+          <fieldset style="border: 0; margin: 0; padding: 4px 0 20px 28px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px">
+            <legend style="font-weight: 700; font-size: 18px; padding: 0 0 6px 28px">Say these</legend>
+            <label class="check"><input type="checkbox" checked="{{rests}}" onChange="{{flipRests}}">Rests</label>
+            <label class="check"><input type="checkbox" checked>Ties</label>
+            <label class="check"><input type="checkbox" checked>Slurs</label>
+            <label class="check"><input type="checkbox" checked>Articulations (staccato, accent)</label>
+            <label class="check"><input type="checkbox" checked>Written directions (dolce)</label>
+            <label class="check"><input type="checkbox" checked>Dynamics (piano, forte)</label>
+            <label class="check"><input type="checkbox" checked>Arpeggios</label>
+            <label class="check"><input type="checkbox" checked>Number of notes in a chord</label>
+          </fieldset>
+        </sc-if>
+        <sc-if value="{{d.isChords}}" hint-placeholder-val="{{ false }}">
+          <div style="padding: 4px 0 20px 28px; display: flex; flex-direction: column; gap: 10px">
+            <label class="check"><input type="checkbox" checked>Read each voice on its own</label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 18px; font-weight: 700">Chord symbols
+              <select class="input" style="max-width: 520px; font-weight: 400"><option selected>Name the chord (C seventh)</option><option>Name the chord and its notes (C seventh, notes C, E, G and B flat)</option><option>As written (C7)</option></select></label>
+            <label class="check"><input type="checkbox" checked>Chord symbols on their own line</label>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </section>
+
+  <div style="display: flex; flex-direction: column; gap: 14px; border-top: 2px solid #1c1a17; padding-top: 20px">
+    <p style="margin: 0; font-size: 18px"><b>{{summaryName}}</b> · {{summaryLine}}</p>
+    <label class="check"><input type="checkbox" checked>Remember these options on this device</label>
+    <div><button class="btn" type="submit">Create talking score</button></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":2000}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { style: 'standard', own: false, open: 'include', rests: true }; }
+  renderVals() {
+    const s = this.state;
+    const presets = [
+      ['plain', 'Everyday words', 'Note lengths in beats, no musical terms', 'Beat 1 high D for 1 beat, Beat 2 middle G for half a beat, A for half a beat'],
+      ['standard', 'Musical terms', 'Rhythm then pitch, grouped by beat', 'Beat 1 crotchet high D, Beat 2 quaver mid G, A'],
+      ['compact', 'Short', 'No beat numbers, octave numbers only when they change', 'crotchet D 5, quaver G 4, A, B, C 5'],
+      ['braille40', 'Braille display', 'Abbreviations and braille octave marks, pitch first', 'b1 D 5 cr, b2 G 4 qv, A, b3 B, C'],
+      ['reference', 'Every detail', 'Every note named in full, with intervals and beams', 'Beat 1 crotchet D 5, Beat 2 quaver G 4 down a fifth, beam starts']
+    ];
+    const base = presets.find(p => p[0] === s.style);
+    const rows = presets.map(([id, name, summary, sample]) => ({
+      name, summary, sample,
+      checked: !s.own && s.style === id,
+      box: 'display: flex; gap: 16px; padding: 16px 18px; border-radius: 8px; cursor: pointer; ' + (!s.own && s.style === id ? 'border: 2px solid #1e6a73; background: #efeae0' : 'border: 1px solid #8a8378'),
+      pick: () => this.setState({ style: id, own: false, rests: true })
+    }));
+    if (s.own) rows.push({ name: 'Your own, from ' + base[1], summary: 'Rests left out', sample: base[3].replace(/, Beat 4 crotchet rest/, ''), checked: true, box: 'display: flex; gap: 16px; padding: 16px 18px; border-radius: 8px; border: 2px solid #1e6a73; background: #efeae0', pick: () => {} });
+    const list = [
+      ['rhythm', 'Rhythm and pitch', 'Crotchet, letters (C, D, E)'],
+      ['octave', 'Octaves and accidentals', 'Low, mid, high · words (sharp, flat)'],
+      ['include', 'What is said', s.rests ? 'Everything' : 'Everything except rests'],
+      ['chords', 'Chords and voices', 'Each voice on its own · name the chord'],
+      ['repeats', 'Repeated bars', 'Say when a bar repeats'],
+      ['parts', 'Parts and playback', 'Right hand, left hand'],
+      ['colour', 'Colour the words', 'Off'],
+      ['groups', 'Groups', '2 bars, by beat']
+    ];
+    const sections = list.map(([id, label, current]) => ({
+      label, current, expanded: String(s.open === id),
+      chev: s.open === id ? 'transform: rotate(90deg)' : '',
+      isInclude: s.open === id && id === 'include',
+      isChords: s.open === id && id === 'chords',
+      toggle: () => this.setState({ open: s.open === id ? null : id })
+    }));
+    return {
+      styles: rows, sections, rests: s.rests,
+      flipRests: () => this.setState({ rests: !s.rests, own: s.rests ? true : s.own }),
+      summaryName: s.own ? 'Your own, from ' + base[1] : base[1],
+      summaryLine: 'large text on buttons and menus too'
+    };
+  }
+}
+</script>
+</body>
+</html>

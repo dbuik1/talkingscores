@@ -23,12 +23,12 @@
     padding: 6px 0;
 }
 html:not(.js) .group-toggle { cursor: default; }
+.group .here { display: none; align-items: center; gap: 12px; }
+.group.current .here { display: flex; }
+.group .here .chev { width: 0.8em; height: 0.8em; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transform: rotate(90deg); }
+html:not(.js) .group .here { display: none; }
 .group-toggle .chev { width: 0.8em; height: 0.8em; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex: none; transition: transform 0.15s; }
 html:not(.js) .group-toggle .chev { display: none; }
-/* The open group's toggle carries aria-current, not aria-expanded: it has no
-   closed state to expand into, so the chevron tracks .group.current instead
-   of a toggle state. */
-.group.current .group-toggle .chev { transform: rotate(90deg); }
 .group h2:focus-visible { outline: none; }
 .group:not(.current) h2 { font-size: 1.5rem; font-weight: 400; }
 .group h2 .prev { color: var(--muted); font-family: var(--font-body); font-size: 1.0625rem; margin-left: auto; font-weight: 400; }
@@ -61,6 +61,7 @@ html.js .group:not(.current) > .body { display: none; }
 .bar .parts { grid-column: 2; display: flex; flex-direction: column; gap: 22px; }
 .part .label { font-weight: 700; font-size: 1rem; color: var(--muted); margin-bottom: 6px; }
 .part .change { font-style: italic; margin: 4px 0; }
+.part .voice { font-weight: 700; font-size: 0.875rem; margin: 10px 0 2px; }
 .part .same {
     background: var(--panel);
     border: 1px solid var(--edge);

@@ -9,17 +9,17 @@
     <h1 style="margin-top: 8px;">Preparing your talking score</h1>
 </div>
 
-<p id="processing-status" role="status">Starting to read the file</p>
+<p id="processing-status" role="status">Opening the file</p>
 
 <div id="processing-next" tabindex="-1" hidden>
     <p id="processing-next-message"></p>
     <p><a id="processing-next-link" class="btn" href="{% url 'index' %}">Open a different score</a></p>
 </div>
 
-<p id="processing-wait">Usually about a minute. The talking score opens here when it is ready.</p>
+<p id="processing-wait">This usually takes about a minute. The talking score opens on this page when it is ready.</p>
 
 <noscript>
-    <p class="noscript">JavaScript is turned off, so this page cannot check on its own. Reload it every minute or so to see whether the talking score is ready.</p>
+    <p class="noscript">JavaScript is turned off, so this page cannot update by itself. Reload the page every minute or so until the talking score opens.</p>
 </noscript>
 {% endblock content %}
 
@@ -58,7 +58,7 @@
     (function pollStatus() {
         if (Date.now() > pollDeadline) {
             stopWithNextStep(
-                'The talking score is taking longer than expected. Reload this page to keep waiting.',
+                'The talking score is taking longer than usual. Reload this page to keep waiting.',
                 "{% url 'index' %}",
                 'Open a different score'
             );
