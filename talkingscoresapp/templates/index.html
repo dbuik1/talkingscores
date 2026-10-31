@@ -9,13 +9,17 @@
     <p class="lead">Open a MusicXML file and Talking Scores writes out every bar: the rhythm, the pitch, the dynamics. Any bar can be played on its own.</p>
 </div>
 
+{% if reads_images %}
+<p class="callout" id="file-rules"><strong>MusicXML files</strong> (.musicxml, .xml or .mxl) up to 10 MB, or <strong>a PDF or photo of printed music</strong> (.pdf, .png or .jpg) up to 20 MB. Your file stays on this server and is not shared.</p>
+{% else %}
 <p class="callout" id="file-rules"><strong>MusicXML files</strong> (.musicxml, .xml or .mxl) up to 10 MB. Your file stays on this server and is not shared.</p>
+{% endif %}
 
 <form id="open" class="form" action="{% url 'index' %}" method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <div class="field" id="file-field">
         <label for="id_filename">Score file</label>
-        <input type="file" id="id_filename" name="filename" accept=".xml,.musicxml,.mxl" aria-describedby="file-rules file-drop-hint">
+        <input type="file" id="id_filename" name="filename" accept="{{ accepted_extensions }}" aria-describedby="file-rules file-drop-hint">
         <p class="small muted" id="file-drop-hint">Or drop the file here</p>
         <p class="small" id="file-drop-status" aria-live="polite" hidden></p>
     </div>
@@ -43,14 +47,22 @@
                 <li><a href="https://www.cpdl.org/" rel="noopener noreferrer">CPDL</a> has choral music. Look for MusicXML in the list of files for each edition.</li>
             </ul>
             <p>In most notation programs, choose File, then Export, then MusicXML.</p>
+            {% if reads_images %}
+            <p class="small muted">A PDF or photo of printed music opens here too. It is read by a scanning program, which misreads some notes, so the talking score may not match the printed page.</p>
+            {% else %}
             <p class="small muted">A PDF can be turned into MusicXML by a scanning program such as <a href="https://audiveris.github.io/audiveris/" rel="noopener noreferrer">Audiveris</a>, which is free. Scanning programs misread some notes, so the talking score may not match the printed page.</p>
+            {% endif %}
         </div>
     </details>
     <details>
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>What it does</h2></summary>
         <div class="panel">
             <p>It writes out the notes, rests, rhythms, dynamics and repeats a MusicXML file holds, bar by bar, in the words you choose. Any range of bars can be played, and the whole talking score can be downloaded as a page, as plain text or as uncontracted braille.</p>
+            {% if reads_images %}
+            <p>A PDF or photo of printed music is read into MusicXML first, and the talking score then says so at the top. It does not read handwritten music, and it does not teach the music. Lyrics, chord symbols and figured bass are read only where the file records them.</p>
+            {% else %}
             <p>It does not read PDFs, images or scans, and it does not teach the music. Lyrics, chord symbols and figured bass are read only where the file records them.</p>
+            {% endif %}
         </div>
     </details>
 </div>
@@ -65,7 +77,7 @@
         var input = document.getElementById("id_filename");
         var status = document.getElementById("file-drop-status");
         var submit = document.getElementById("open-submit");
-        var allowedExtensions = [".musicxml", ".xml", ".mxl"];
+        var allowedExtensions = "{{ accepted_extensions }}".split(",");
 
         function extensionOf(name) {
             var dot = name.lastIndexOf(".");
@@ -103,7 +115,11 @@
             }
             var file = files[0];
             if (allowedExtensions.indexOf(extensionOf(file.name)) === -1) {
+                {% if reads_images %}
+                showStatus("Choose a MusicXML file, a PDF or a photo. The name has to end in .musicxml, .xml, .mxl, .pdf, .png or .jpg.", true);
+                {% else %}
                 showStatus("Choose a MusicXML file. The name has to end in .musicxml, .xml or .mxl.", true);
+                {% endif %}
                 return;
             }
             try {

@@ -2775,3 +2775,171 @@ class UserFacingCopyTests(TestCase):
         scanner = os.path.join(os.getcwd(), "scripts", "check_copy.py")
         result = subprocess.run([sys.executable, scanner], capture_output=True, text=True, timeout=120)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+READER_FIXTURE = os.path.join(os.getcwd(), "test_scores", "G1A1-flute-part.xml")
+PNG_PAGE = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+
+def stand_in_reader_command(source):
+    """A reader command that copies a MusicXML file into its work folder, as a real reader writes its output."""
+    script = "import shutil, sys; shutil.copyfile(sys.argv[1], sys.argv[2] + '/read.musicxml')"
+    return [sys.executable, "-c", script, source, "{workdir}"]
+
+
+class ImageReadingTests(TestCase):
+    """A PDF or photo of printed music is read into a score by a reader program."""
+
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.media, ignore_errors=True)
+        patcher = patch("talkingscoresapp.reading.MEDIA_ROOT", self.media)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        original = TSScore.get_data_file_path
+        media = self.media
+
+        def data_path_in_temp_media(score, root=None):
+            return original(score, root=media)
+
+        patcher = patch.object(TSScore, "get_data_file_path", data_path_in_temp_media)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def reader_settings(self, command=None, **overrides):
+        values = {"SCORE_READER_COMMAND": command or stand_in_reader_command(READER_FIXTURE),
+                  "SCORE_READER_OUTPUT": "*.musicxml", "SCORE_READER_TIMEOUT": 60,
+                  "SCORE_READER_CONCURRENCY": 1}
+        values.update(overrides)
+        return override_settings(**values)
+
+    def run_reading(self, page_reading):
+        threads = []
+
+        def capture(*args, **kwargs):
+            thread = REAL_THREAD(*args, **kwargs)
+            threads.append(thread)
+            return thread
+
+        with patch("talkingscoresapp.reading.threading.Thread", side_effect=capture):
+            started = page_reading.start()
+        for thread in threads:
+            thread.join(timeout=60)
+        return started
+
+    def test_without_a_reader_the_form_takes_musicxml_only(self):
+        from talkingscoresapp.views import MusicXMLSubmissionForm
+        with override_settings(SCORE_READER_COMMAND=[]):
+            form = MusicXMLSubmissionForm(files={"filename": SimpleUploadedFile("page.png", PNG_PAGE)})
+            self.assertFalse(form.is_valid())
+            self.assertIn("Choose a MusicXML file.", form.errors["filename"][0])
+            page = self.client.get(reverse("index")).content.decode()
+        self.assertIn('accept=".xml,.musicxml,.mxl"', page)
+        self.assertNotIn("a PDF or photo of printed music", page)
+
+    def test_with_a_reader_the_form_takes_pdfs_and_photos(self):
+        from talkingscoresapp.views import MusicXMLSubmissionForm
+        with self.reader_settings():
+            for name, content in (("page.png", PNG_PAGE), ("page.jpg", b"\xff\xd8\xff\xe0rest"),
+                                  ("page.pdf", b"%PDF-1.7\nrest")):
+                form = MusicXMLSubmissionForm(files={"filename": SimpleUploadedFile(name, content)})
+                self.assertTrue(form.is_valid(), (name, form.errors))
+            page = self.client.get(reverse("index")).content.decode()
+        self.assertIn('accept=".xml,.musicxml,.mxl,.pdf,.png,.jpg,.jpeg"', page)
+        self.assertIn("a PDF or photo of printed music", page)
+
+    def test_a_file_whose_bytes_do_not_match_its_name_is_refused(self):
+        from talkingscoresapp.views import MusicXMLSubmissionForm
+        with self.reader_settings():
+            form = MusicXMLSubmissionForm(files={"filename": SimpleUploadedFile("page.pdf", b"<html>")})
+            self.assertFalse(form.is_valid())
+        self.assertIn("could not be opened as a PDF or photo", form.errors["filename"][0])
+
+    @patch("talkingscoresapp.reading.MAX_UPLOADED_PAGE_BYTES", 10)
+    def test_a_page_over_the_size_limit_is_refused(self):
+        from talkingscoresapp.views import MusicXMLSubmissionForm
+        with self.reader_settings():
+            form = MusicXMLSubmissionForm(files={"filename": SimpleUploadedFile("page.png", PNG_PAGE)})
+            self.assertFalse(form.is_valid())
+        self.assertIn("smaller than 20 MB", form.errors["filename"][0])
+
+    def test_an_uploaded_photo_goes_to_the_reading_page(self):
+        with self.reader_settings(), patch("talkingscoresapp.reading.ImageReading.start") as start:
+            response = self.client.post(reverse("index"), {"filename": SimpleUploadedFile("Minuet.png", PNG_PAGE)})
+        reading_id = response.url.rstrip("/").split("/")[-1]
+        self.assertEqual(response.url, reverse("reading", args=[reading_id]))
+        start.assert_called_once()
+        page = self.client.get(response.url).content.decode()
+        self.assertIn("Reading the printed music", page)
+        self.assertIn("Minuet", page)
+
+    def test_a_read_page_becomes_a_score_marked_as_read_from_an_image(self):
+        from talkingscoresapp.reading import ImageReading
+        with self.reader_settings():
+            page_reading = ImageReading.from_uploaded_file(SimpleUploadedFile("Flute part.png", PNG_PAGE))
+            self.assertTrue(self.run_reading(page_reading))
+            status = self.client.get(reverse("reading-status", args=[page_reading.id])).json()
+
+        self.assertEqual(status["status"], "complete")
+        score = TSScore(id=page_reading.status()["score_id"], filename=page_reading.status()["score_filename"])
+        self.assertEqual(score.filename, "Flute part.musicxml")
+        self.assertTrue(score.read_from_image())
+        self.assertEqual(status["score_url"], reverse("score", args=[score.id, score.filename]))
+        self.assertFalse(page_reading.is_running())
+
+    def test_reading_the_same_page_again_does_not_run_the_reader_twice(self):
+        from talkingscoresapp.reading import ImageReading
+        with self.reader_settings():
+            page_reading = ImageReading.from_uploaded_file(SimpleUploadedFile("page.png", PNG_PAGE))
+            self.run_reading(page_reading)
+            again = ImageReading.from_uploaded_file(SimpleUploadedFile("page.png", PNG_PAGE))
+            self.assertEqual(again.id, page_reading.id)
+            self.assertFalse(self.run_reading(again))
+
+    def test_a_reader_that_fails_leads_back_to_the_upload_page(self):
+        from talkingscoresapp.reading import ImageReading, READ_FAILED_MESSAGE
+        with self.reader_settings(command=[sys.executable, "-c", "raise SystemExit(2)"]):
+            page_reading = ImageReading.from_uploaded_file(SimpleUploadedFile("page.png", PNG_PAGE))
+            self.run_reading(page_reading)
+            status = self.client.get(reverse("reading-status", args=[page_reading.id])).json()
+        self.assertEqual(status, {"status": "failed", "message": READ_FAILED_MESSAGE, "next_url": reverse("index")})
+
+    def test_a_reader_that_writes_nothing_counts_as_failed(self):
+        from talkingscoresapp.reading import ImageReading
+        with self.reader_settings(command=[sys.executable, "-c", "pass"]):
+            page_reading = ImageReading.from_uploaded_file(SimpleUploadedFile("page.png", PNG_PAGE))
+            self.run_reading(page_reading)
+        self.assertEqual(page_reading.status()["status"], "failed")
+
+    def test_a_reading_that_died_with_the_server_is_started_again(self):
+        from talkingscoresapp.reading import ImageReading
+        with self.reader_settings():
+            page_reading = ImageReading.from_uploaded_file(SimpleUploadedFile("page.png", PNG_PAGE))
+            with patch("talkingscoresapp.reading.ImageReading.start") as start:
+                status = self.client.get(reverse("reading-status", args=[page_reading.id])).json()
+        self.assertEqual(status["status"], "reading")
+        start.assert_called_once()
+
+    def test_an_unknown_reading_is_not_found(self):
+        response = self.client.get(reverse("reading-status", args=[VALID_ID]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_the_score_page_says_it_was_read_from_an_image(self):
+        env = Environment(loader=FileSystemLoader(os.path.join(os.getcwd(), "lib")))
+        template = env.get_template("talkingscore.html")
+        marked = template.render(reader_context(read_from_image=True))
+        plain = template.render(reader_context())
+        self.assertIn("Read from an image of the printed music.", marked)
+        self.assertNotIn("read-from-image", plain)
+
+    def test_cleanup_removes_old_uploaded_pages(self):
+        old_reading = os.path.join(self.media, "readings", VALID_ID)
+        os.makedirs(old_reading)
+        page = os.path.join(old_reading, "page.png")
+        with open(page, "wb") as handle:
+            handle.write(PNG_PAGE)
+        old_time = time.time() - (40 * 24 * 60 * 60)
+        os.utime(page, (old_time, old_time))
+        with patch.object(cleanup_media, "MEDIA_ROOT", self.media):
+            call_command("cleanup_media", "--older-than-days", "30", stdout=StringIO())
+        self.assertFalse(os.path.exists(old_reading))

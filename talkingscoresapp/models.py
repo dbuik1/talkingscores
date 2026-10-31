@@ -444,6 +444,22 @@ class TSScore(object):
         data_path = self.get_data_file_path()
         return data_path + ".lock" if data_path else None
 
+    def get_from_image_marker_path(self):
+        data_path = self.get_data_file_path()
+        return data_path + ".from-image" if data_path else None
+
+    def mark_read_from_image(self):
+        """Record that a reader program wrote this score from a PDF or photo, so its page says so."""
+        write_text_file_atomic(self.get_from_image_marker_path(), "")
+        # A cached page made before the marker existed would not carry the note.
+        for path in (self.get_html_cache_file_path(), self.get_processing_status_file_path()):
+            if path:
+                remove_file_quietly(path)
+
+    def read_from_image(self):
+        marker_path = self.get_from_image_marker_path()
+        return bool(marker_path) and os.path.exists(marker_path)
+
     def options_epoch(self):
         """A digest of the current options file, so a run started under older options can tell they changed."""
         data_path = self.get_data_file_path()
@@ -723,6 +739,7 @@ class TSScore(object):
                 download_text_url=download_text_url,
                 download_braille_url=download_braille_url,
                 options_url=options_url,
+                read_from_image=self.read_from_image(),
             )
             # Options that changed during the run belong to a newer run, which writes its own cache.
             if not export_mode and html_cache_path and self.options_epoch() == epoch:

@@ -49,6 +49,10 @@
         <p class="meta"><b>{{ basic_information.composer }}</b>{% for item in meta_line %} · {{ item }}{% endfor %}</p>
     </div>
 
+    {% if read_from_image %}
+    <p class="callout" id="read-from-image"><strong>Read from an image of the printed music.</strong> Some notes or markings may not match the page.</p>
+    {% endif %}
+
     {% if music_segments %}
     <noscript><p class="callout noscript">Every bar is on this page. Use your browser's find command or the headings list to move between bars. Playback and the group controls need JavaScript.</p></noscript>
 

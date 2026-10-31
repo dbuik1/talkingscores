@@ -124,6 +124,29 @@ $env:DJANGO_DEBUG = "false"
 $env:DJANGO_ALLOWED_HOSTS = "www.example.com,127.0.0.1"
 ```
 
+### Reading PDFs and photos
+
+The upload form also takes a PDF or photo of printed music when a reader
+program is set up. The reader turns the page into MusicXML on a background
+thread, and the talking score made from it starts with a note that it was read
+from an image. With no reader set, the form takes MusicXML only.
+
+| Setting | What it holds | Default |
+| --- | --- | --- |
+| `DJANGO_SCORE_READER_COMMAND` | The command as a JSON list; `{image}` is the page, `{workdir}` an empty folder it runs in | none, so the feature is off |
+| `DJANGO_SCORE_READER_OUTPUT` | Where in that folder the reader leaves its MusicXML | `**/*.mxl` |
+| `DJANGO_SCORE_READER_TIMEOUT` | Seconds before a reading is given up | `600` |
+| `DJANGO_SCORE_READER_CONCURRENCY` | Readings at once in each server process | `1` |
+
+For Audiveris installed in `/opt/audiveris`:
+
+```text
+DJANGO_SCORE_READER_COMMAND=["/opt/audiveris/bin/Audiveris", "-batch", "-export", "-output", "{workdir}", "--", "{image}"]
+```
+
+Uploaded pages are kept in `MEDIA_ROOT/readings/` and removed by
+`cleanup_media` on the same schedule as score folders.
+
 ## Railway deployment
 
 If you deploy this repo on Railway:
