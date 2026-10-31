@@ -49,6 +49,7 @@
     <details>
         <summary><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><h2>Security</h2></summary>
         <div class="panel">
+            {% if natural_voices %}<p>The natural voices for reading aloud are the one exception to what follows: when you press Download natural voices, the talking score page fetches the voice code from jsDelivr and the voice model from Hugging Face. The words being read stay in your browser.</p>{% endif %}
             <p>Pages are sent over HTTPS. Each page tells your browser not to load anything from other sites. Uploads are checked for size and file type before they are read. This lowers the risk but cannot remove it: any file sent over the internet and stored online could be reached by someone who should not have it.</p>
             <p>The code this site runs is open source and can be read on <a href="https://github.com/dbuik1/talkingscores" rel="noopener noreferrer">GitHub</a>.</p>
         </div>

@@ -6,6 +6,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.contrib import messages
 from django.utils.text import slugify
+from django.middleware.csrf import get_token
 from pathvalidate import sanitize_filename
 import os
 import json
@@ -21,7 +22,7 @@ from talkingscoresapp.models import TSScore, TSScoreState, ScoreGenerationInProg
 from talkingscoresapp.models import RemoteAddressNotAllowed, RemoteHostNotFound, RemoteFetchRefused
 from talkingscoresapp.models import remove_file_quietly
 from talkingscoresapp import library, sharing
-from lib.render_settings import DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES
+from lib.render_settings import DEFAULT_STYLE, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES, RenderSettings
 from lib.style_samples import style_samples
 
 
@@ -43,7 +44,7 @@ def submitted_settings(post):
 
 
 CHECKBOX_FIELDS = (
-    "chk_playAll", "chk_playSelected", "chk_playUnselected", "chk_include_rests",
+    "chk_playAll", "chk_playSelected", "chk_playUnselected",
     "chk_include_ties", "chk_include_arpeggios", "chk_include_dynamics",
     "chk_include_slurs", "chk_include_articulations", "chk_include_directions",
     "chk_describe_chords", "chk_colourPitch", "chk_separate_voices", "chk_chord_symbol_line",
@@ -68,6 +69,138 @@ def style_choices():
         }
         for style_id in STYLE_IDS
     ]
+
+
+# The options form names some engine values differently; these turn a style's
+# own settings into the form's values, so picking a style on the page fills in
+# every detail that style sets.
+FORM_DURATION_FREQUENCY = {"on_change": "onChange", "every_note": "everyNote"}
+FORM_PITCH_NAMES = {"letters": "noteName", "phonetic": "phonetic", "colours": "colourNotes", "none": "none"}
+FORM_OCTAVE_NAMING = {"descriptive": "name", "plain": "plain", "numeric": "number",
+                      "figurenotes": "figureNotes", "none": "none"}
+FORM_OCTAVE_FREQUENCY = {"on_change": "onChange", "every_note": "everyNote",
+                         "first_note": "firstNote", "braille_rules": "brailleRules"}
+REST_CHOICES = ("all", "structural", "none")
+WORD_ORDER_CHOICES = ("rhythm_first", "pitch_first")
+BEAT_PREFIX_CHOICES = ("words", "short", "none")
+
+
+def form_values_for_style(style_id):
+    settings = RenderSettings.for_style(style_id)
+    return {
+        "rhythm_description": settings.duration_names,
+        "rhythm_announcement": FORM_DURATION_FREQUENCY.get(settings.duration_frequency, "onChange"),
+        "dot_position": settings.dot_position,
+        "pitch_description": FORM_PITCH_NAMES.get(settings.pitch_names, "noteName"),
+        "octave_description": FORM_OCTAVE_NAMING.get(settings.octave_naming, "name"),
+        "octave_announcement": FORM_OCTAVE_FREQUENCY.get(settings.octave_frequency, "onChange"),
+        "octave_position": "before" if settings.octave_before_pitch else "after",
+        "repetition_mode": settings.repetition_mode,
+        "rests": settings.rests,
+        "word_order": settings.word_order,
+        "beat_prefix": settings.beat_prefix,
+        "chk_include_ties": settings.ties,
+        "chk_include_slurs": settings.slurs,
+        "chk_include_articulations": settings.articulations,
+        "chk_include_directions": settings.directions,
+        "chk_include_arpeggios": settings.arpeggios,
+        "chk_describe_chords": settings.chords,
+        "chk_include_dynamics": settings.dynamics,
+    }
+
+
+def style_form_values():
+    return {style_id: form_values_for_style(style_id) for style_id in STYLE_IDS}
+
+
+COLOUR_PROFILES = {
+    "default": {"C": "#FF0000", "D": "#A52A2A", "E": "#808080", "F": "#0000FF", "G": "#000000", "A": "#FFFF00", "B": "#008000"},
+    "classic": {"C": "#FF0000", "D": "#FFA500", "E": "#FFFF00", "F": "#008000", "G": "#0000FF", "A": "#4B0082", "B": "#EE82EE"},
+}
+
+# Stored option -> the options form's checkbox that sets it.
+STORED_CHECKBOXES = {
+    "include_ties": "chk_include_ties", "slurs": "chk_include_slurs",
+    "articulations": "chk_include_articulations", "directions": "chk_include_directions",
+    "include_arpeggios": "chk_include_arpeggios", "describe_chords": "chk_describe_chords",
+    "include_dynamics": "chk_include_dynamics", "play_all": "chk_playAll",
+    "play_selected": "chk_playSelected", "play_unselected": "chk_playUnselected",
+    "colour_pitch": "chk_colourPitch", "separate_voices": "chk_separate_voices",
+    "chord_symbols_on_own_line": "chk_chord_symbol_line",
+}
+STORED_CHOICES = (
+    "style", "beat_division", "pitch_description", "rhythm_description", "dot_position",
+    "rhythm_announcement", "octave_description", "octave_position", "octave_announcement",
+    "accidental_style", "repetition_mode", "key_signature_accidentals", "rests", "word_order",
+    "beat_prefix", "rhythm_colour_mode", "octave_colour_mode",
+)
+
+
+def form_state_from_options(stored):
+    """The options form as it stood when these stored options were saved, in the
+    shape the page's script restores, so a score's own choices can be edited."""
+    state = {key: str(stored[key]) for key in STORED_CHOICES if stored.get(key) is not None}
+    if "bars_at_a_time" in stored:
+        state["bars_at_a_time"] = str(stored["bars_at_a_time"])
+    if "rests" not in stored and "include_rests" in stored:
+        state["rests"] = "all" if stored["include_rests"] else "none"
+    for key, checkbox in STORED_CHECKBOXES.items():
+        if key in stored:
+            state[checkbox] = bool(stored[key])
+    if "colour_position" in stored:
+        state["chk_colourWords"] = stored["colour_position"] != "none"
+    if stored.get("chord_symbols") is False:
+        state["chord_symbol_reading"] = "none"
+    elif stored.get("chord_symbol_reading"):
+        state["chord_symbol_reading"] = stored["chord_symbol_reading"]
+    state["customised"] = "true" if stored.get("customised") is True else "false"
+    if isinstance(stored.get("instruments"), list):
+        state["instruments"] = [str(number) for number in stored["instruments"]]
+
+    pitch = stored.get("figureNoteColours") or {}
+    profile = next((name for name, colours in COLOUR_PROFILES.items()
+                    if {k: v.upper() for k, v in pitch.items()} == colours), None)
+    state["colorProfile"] = profile or ("custom" if pitch else "default")
+    for note, colour in pitch.items():
+        state["color_" + note] = colour
+    for key, colour in (stored.get("advanced_rhythm_colours") or {}).items():
+        state["color_rhythm_" + key] = colour
+    for key, colour in (stored.get("advanced_octave_colours") or {}).items():
+        state["color_octave_" + key] = colour
+    return state
+
+
+def stored_options(options_path):
+    try:
+        with open(options_path) as options_file:
+            stored = json.load(options_file)
+        return stored if isinstance(stored, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def restyle(request, score_obj, options_path, id, filename):
+    """The score page's Wording tab: a new style over the options the score was
+    already made with, every other choice kept."""
+    stored = stored_options(options_path)
+    if stored is None:
+        return redirect('options', id, filename)
+    stored["style"] = clean_style(request.POST.get("style"))
+    stored["customised"] = False
+    write_json_file_atomic(options_path, stored)
+    score_obj.clear_generated_html_state()
+    return redirect('process', id, filename)
+
+
+def form_token(request):
+    """A token for the forms on talking score pages, which are written once and
+    served to everyone, so they cannot carry one of their own."""
+    return JsonResponse({"token": get_token(request)})
+
+
+def chosen(post, name, allowed, default):
+    value = post.get(name, default)
+    return value if value in allowed else default
 
 
 HEX_COLOUR_PATTERN = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
@@ -264,7 +397,6 @@ class TalkingScoreGenerationOptionsForm(forms.Form):
     chk_playAll = forms.BooleanField(required=False)
     chk_playSelected = forms.BooleanField(required=False)
     chk_playUnselected = forms.BooleanField(required=False)
-    chk_include_rests = forms.BooleanField(required=False)
     chk_include_ties = forms.BooleanField(required=False)
     chk_include_slurs = forms.BooleanField(required=False)
     chk_include_articulations = forms.BooleanField(required=False)
@@ -347,7 +479,14 @@ def score(request, id, filename):
     else:
         try:
             html = score_obj.html(raise_errors=True)
-            return HttpResponse(html)
+            if not django_settings.NATURAL_VOICES:
+                return HttpResponse(html)
+            # The page is written once and served many times, so whether it offers
+            # the natural voices is marked as it is served.
+            response = HttpResponse(html.replace("<html ", "<html data-natural-voices ", 1))
+            if not django_settings.DEBUG:
+                response["Content-Security-Policy"] = django_settings.READER_POLICY_WITH_NATURAL_VOICES
+            return response
         except ScoreGenerationInProgress:
             return redirect('process', id, filename)
         except Exception:
@@ -491,7 +630,7 @@ def contact_us(request):
 
 def privacy_policy(request):
     template = loader.get_template('privacy-policy.html')
-    context = {}
+    context = {'natural_voices': django_settings.NATURAL_VOICES}
     return HttpResponse(template.render(context, request))
 
 
@@ -506,11 +645,15 @@ def options(request, id, filename):
         logger.exception("Unable to process score before the options screen: http://%s%s " % (request.get_host(), reverse('score', args=[id, filename])))
         return redirect('error', id, filename)
 
+    if request.method == 'POST' and request.POST.get('restyle'):
+        return restyle(request, score_obj, options_path, id, filename)
+
     if request.method == 'POST':
         form = TalkingScoreGenerationOptionsForm(request.POST)
         if not form.is_valid():
             add_rhythm_colour_defaults(score_info)
             context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
+                       'style_values': style_form_values(),
                        'chosen_style': clean_style(request.POST.get('style', '')),
                        'submitted': submitted_settings(request.POST)}
             return render(request, 'options.html', context)
@@ -522,21 +665,18 @@ def options(request, id, filename):
             add_rhythm_colour_defaults(score_info)
             # The part boxes are what the reader has to change, so they are marked as such.
             context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
+                       'style_values': style_form_values(),
                        'chosen_style': clean_style(request.POST.get('style', '')),
                        'submitted': submitted_settings(request.POST),
                        'instruments_invalid': True}
             return render(request, 'options.html', context)
 
-        color_profiles = {
-            "default": {"C": "#FF0000", "D": "#A52A2A", "E": "#808080", "F": "#0000FF", "G": "#000000", "A": "#FFFF00", "B": "#008000"},
-            "classic": {"C": "#FF0000", "D": "#FFA500", "E": "#FFFF00", "F": "#008000", "G": "#0000FF", "A": "#4B0082", "B": "#EE82EE"}
-        }
         selected_profile = request.POST.get("colorProfile", "default")
         figure_note_colours = {}
         if selected_profile == "custom":
             figure_note_colours = {key.split('_')[1]: val for key, val in request.POST.items() if key.startswith('color_') and not key.startswith('color_rhythm_') and not key.startswith('color_octave_')}
         else:
-            figure_note_colours = color_profiles.get(selected_profile, {})
+            figure_note_colours = COLOUR_PROFILES.get(selected_profile, {})
 
         chord_symbol_reading = request.POST.get("chord_symbol_reading", "name")
         if chord_symbol_reading not in CHORD_SYMBOL_READINGS:
@@ -556,7 +696,10 @@ def options(request, id, filename):
             "octave_description": request.POST.get("octave_description", "name"),
             "octave_position": request.POST.get("octave_position", "before"),
             "octave_announcement": request.POST.get("octave_announcement", "onChange"),
-            "include_rests": "chk_include_rests" in request.POST,
+            "customised": request.POST.get("customised") == "true",
+            "rests": chosen(request.POST, "rests", REST_CHOICES, "all"),
+            "word_order": chosen(request.POST, "word_order", WORD_ORDER_CHOICES, "rhythm_first"),
+            "beat_prefix": chosen(request.POST, "beat_prefix", BEAT_PREFIX_CHOICES, "words"),
             "include_ties": "chk_include_ties" in request.POST,
             "slurs": "chk_include_slurs" in request.POST,
             "articulations": "chk_include_articulations" in request.POST,
@@ -590,8 +733,13 @@ def options(request, id, filename):
         add_rhythm_colour_defaults(score_info)
 
         form = TalkingScoreGenerationOptionsForm()
+        # A score that already has a talking score opens on the choices it was
+        # made with, so the reader changes only what they came back to change.
+        stored = stored_options(options_path)
+        current = form_state_from_options(stored) if stored else None
         context = {'form': form, 'score_info': score_info, 'style_choices': style_choices(),
-                   'chosen_style': DEFAULT_STYLE}
+                   'style_values': style_form_values(), 'current': current,
+                   'chosen_style': clean_style(stored.get('style')) if stored else DEFAULT_STYLE}
         return render(request, 'options.html', context)
 
 

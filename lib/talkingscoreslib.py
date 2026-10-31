@@ -30,7 +30,7 @@ from lib.description import (
 )
 from lib.events import TSChord, TSChordSymbol, TSDynamic, TSNote, TSPitch, TSRest, TSUnpitched
 from lib.musicAnalyser import MusicAnalyser
-from lib.render_settings import RenderSettings
+from lib.render_settings import RenderSettings, STYLE_IDS, STYLE_NAMES, STYLE_SUMMARIES
 from lib.vocabulary import AMERICAN_DURATIONS, BRITISH_DURATIONS, DOT_WORDS, Vocabulary
 
 us = environment.UserSettings()
@@ -1071,6 +1071,10 @@ class HTMLTalkingScoreFormatter:
         return template.render({
             'settings': self.settings,
             'style_name': self.settings.style_name,
+            'style_id': self.settings.style,
+            'style_customised': isinstance(self.options, dict) and self.options.get('customised') is True,
+            'style_choices': [{'id': style_id, 'name': STYLE_NAMES[style_id], 'summary': STYLE_SUMMARIES[style_id]}
+                              for style_id in STYLE_IDS],
             'basic_information': self._get_basic_information(),
             'facts': self.facts,
             'meta_line': self._meta_line(),

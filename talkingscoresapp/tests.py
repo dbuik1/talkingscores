@@ -1,7 +1,7 @@
 """Tests for Talking Scores."""
 
 from django.conf import settings
-from django.test import TestCase, Client, override_settings
+from django.test import TestCase, Client, RequestFactory, override_settings
 from django.urls import reverse
 from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -691,6 +691,111 @@ class DownloadTests(TestCase):
         self.assertIs(stored["separate_voices"], True)
         self.assertIs(stored["chord_symbols_on_own_line"], True)
         self.assertEqual(stored["chord_symbol_reading"], "name")
+
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_a_style_posted_as_its_own_details_reads_the_same_as_the_style(
+            self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        """Picking a style fills the details with that style's values. Saving them
+        as customised, with nothing changed, has to read exactly as the style does,
+        or a reader who opens the details once gets different words."""
+        from lib.render_settings import RenderSettings, STYLE_IDS, WORDING_FIELDS
+        from talkingscoresapp.views import form_values_for_style
+        info = {"title": "Score", "composer": "Composer", "instruments": ["Flute"],
+                "rhythm_range": [], "beat_division_options": [], "octave_range": {}}
+        url = reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_path = os.path.join(temp_dir, "score.musicxml")
+            mock_data_path.return_value = data_path
+            mock_info.return_value = info
+            defaults = self._submitted_defaults(self.client.get(url).content.decode("utf-8"))
+            for style in STYLE_IDS:
+                posted = {key: value for key, value in defaults.items() if not key.startswith("chk_include")
+                          and key != "chk_describe_chords"}
+                for name, value in form_values_for_style(style).items():
+                    if name.startswith("chk_"):
+                        if value:
+                            posted[name] = "checked"
+                    else:
+                        posted[name] = value
+                posted.update({"style": style, "customised": "true"})
+                self.client.post(url, posted)
+                with open(data_path + ".opts") as options_file:
+                    stored = json.load(options_file)
+                own = RenderSettings.from_options(stored)
+                preset = RenderSettings.for_style(style)
+                # "auto" and the side it resolves to place the octave the same way.
+                self.assertEqual(own.octave_before_pitch, preset.octave_before_pitch, style)
+                for name in sorted(WORDING_FIELDS - {"chord_symbols", "octave_position"}):
+                    self.assertEqual(getattr(own, name), getattr(preset, name), f"{style}: {name}")
+
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_options_reopen_on_the_choices_the_score_was_made_with(
+            self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        from talkingscoresapp.views import form_state_from_options
+        info = {"title": "Score", "composer": "Composer", "instruments": ["Flute", "Cello"],
+                "rhythm_range": [], "beat_division_options": [], "octave_range": {}}
+        url = reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_path = os.path.join(temp_dir, "score.musicxml")
+            mock_data_path.return_value = data_path
+            mock_info.return_value = info
+            fresh = self.client.get(url).content.decode("utf-8")
+            self.assertNotIn('id="current-settings"', fresh)
+            posted = self._submitted_defaults(fresh)
+            posted.update({"style": "compact", "customised": "true", "rests": "none",
+                           "octave_description": "number", "instruments": ["2"]})
+            posted.pop("chk_include_slurs", None)
+            self.client.post(url, posted)
+            with open(data_path + ".opts") as options_file:
+                stored = json.load(options_file)
+            reopened = self.client.get(url).content.decode("utf-8")
+
+        state = json.loads(re.search(r'id="current-settings" type="application/json">(.*?)</script>',
+                                     reopened, re.S).group(1))
+        self.assertEqual(state, form_state_from_options(stored))
+        for name in ("style", "customised", "rests", "octave_description", "rhythm_description",
+                     "bars_at_a_time", "accidental_style"):
+            self.assertEqual(state[name], posted[name], name)
+        self.assertEqual(state["instruments"], ["2"])
+        self.assertFalse(state["chk_include_slurs"])
+        self.assertTrue(state["chk_include_ties"])
+        self.assertIn('value="compact" id="style-compact"\n                       aria-describedby="sample-compact" checked', reopened)
+
+    @patch("talkingscoresapp.views.TSScore.info")
+    @patch("talkingscoresapp.views.TSScore.get_data_file_path")
+    @patch("talkingscoresapp.views.TSScore.clear_generated_html_state")
+    @patch("talkingscoresapp.views.logger.info")
+    def test_the_score_page_rewrites_in_a_new_style_keeping_every_other_choice(
+            self, mock_logger_info, mock_clear, mock_data_path, mock_info):
+        mock_info.return_value = {"title": "Score", "instruments": ["Flute"]}
+        url = reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_path = os.path.join(temp_dir, "score.musicxml")
+            mock_data_path.return_value = data_path
+            # Nothing stored yet: the reader is sent to the full options page.
+            response = self.client.post(url, {"restyle": "1", "style": "plain"})
+            self.assertRedirects(response, url, fetch_redirect_response=False)
+            with open(data_path + ".opts", "w") as options_file:
+                json.dump({"style": "standard", "customised": True, "rests": "none", "bars_at_a_time": 4}, options_file)
+            response = self.client.post(url, {"restyle": "1", "style": "plain"})
+            with open(data_path + ".opts") as options_file:
+                stored = json.load(options_file)
+        self.assertRedirects(response, reverse("process", kwargs={"id": VALID_ID, "filename": "score.musicxml"}),
+                             fetch_redirect_response=False)
+        self.assertEqual(stored, {"style": "plain", "customised": False, "rests": "none", "bars_at_a_time": 4})
+        mock_clear.assert_called_once()
+
+    def test_a_form_token_is_handed_to_pages_that_cannot_carry_one(self):
+        client = Client(enforce_csrf_checks=True)
+        token = client.get(reverse("form-token")).json()["token"]
+        self.assertTrue(token)
+        self.assertIn("csrftoken", client.cookies)
 
     @staticmethod
     def _submitted_defaults(html):
@@ -1518,6 +1623,18 @@ class ReviewedEngineTests(TestCase):
         self.assertEqual(standard.duration_names, "american")
         self.assertEqual(standard.repetition_mode, "none")
 
+    def test_a_customised_style_takes_the_stored_wording(self):
+        from lib.render_settings import RenderSettings
+        stored = {"style": "plain", "customised": True, "rests": "none",
+                  "rhythm_description": "plain", "octave_description": "plain"}
+        own = RenderSettings.from_options(stored)
+        self.assertEqual(own.rests, "none")
+        self.assertEqual(own.duration_names, "plain")
+        self.assertEqual(own.word_order, "pitch_first")    # not on the form, so the style's own
+        # Saved before customising existed, or not customised: the style wins.
+        self.assertEqual(RenderSettings.from_options({**stored, "customised": False}).rests, "structural")
+        self.assertEqual(RenderSettings.from_options({**stored, "customised": "true"}).rests, "structural")
+
     @patch("talkingscoresapp.views.TSScore.info")
     @patch("talkingscoresapp.views.TSScore.get_data_file_path")
     @patch("talkingscoresapp.views.logger.info")
@@ -1527,27 +1644,33 @@ class ReviewedEngineTests(TestCase):
                                   "rhythm_range": [], "beat_division_options": []}
         response = self.client.get(reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
         self.assertContains(response, 'name="style"')
-        for name in ("Everyday words", "Musical terms", "Short", "Braille display", "Everything"):
+        for name in ("Everyday words", "Musical terms", "Short", "Braille display", "Every detail"):
             self.assertContains(response, f">{name}<")
 
     @patch("talkingscoresapp.views.TSScore.info")
     @patch("talkingscoresapp.views.TSScore.get_data_file_path")
     @patch("talkingscoresapp.views.logger.info")
-    def test_options_page_keeps_the_detail_behind_one_disclosure(self, mock_logger_info, mock_data_path, mock_info):
+    def test_options_page_puts_the_style_first_and_folds_the_details(self, mock_logger_info, mock_data_path, mock_info):
         mock_data_path.return_value = "/tmp/score.musicxml"
         mock_info.return_value = {"title": "Score", "composer": "Composer", "instruments": ["Piano"],
                                   "rhythm_range": [], "beat_division_options": []}
         response = self.client.get(reverse("options", kwargs={"id": VALID_ID, "filename": "score.musicxml"}))
         content = response.content.decode("utf-8")
 
-        # The style choice is the page; every other setting is folded away behind it.
+        # The style choice is the page; the wording details are folded away after it.
         first_disclosure = content.index("<details")
         self.assertLess(content.index('name="style"'), first_disclosure)
         self.assertIn("Create talking score", content)
 
-        form = content[content.index('<form class="form"'):]
-        outside = re.findall(r'name="([^"]+)"', form[:form.index("<details")])
-        self.assertEqual(sorted(set(outside)), ["csrfmiddlewaretoken", "style"])
+        # Before the details the options form posts only the style and whether it
+        # was customised; the text size controls belong to a form of their own.
+        form = content[content.index('<form class="form options"'):]
+        before = form[:form.index("<details")]
+        posted = [name for tag, name in re.findall(r'(<(?:input|select)\b[^>]*name="([^"]+)"[^>]*>)', before)
+                  if 'form="appearance"' not in tag]
+        self.assertEqual(sorted(set(posted)), ["csrfmiddlewaretoken", "customised", "style"])
+        # A summary is the control itself, so it holds no heading.
+        self.assertNotRegex(content, r"<summary>[^<]*(<svg.*?</svg>)?\s*<h2")
 
     def test_unpitched_parts_are_described_instead_of_failing(self):
         from music21 import note
@@ -2003,6 +2126,39 @@ class ReaderPageTests(TestCase):
         solo = SegmentDescription(3, 4, "Bars 3 to 4", "segment-3",
                                   instruments=[InstrumentDescription(1, "Flute", parts=[flute])])
         self.assertEqual([part["label"] for part in solo.bars[0]["parts"]], [""])
+
+    def test_the_toolbar_holds_moving_and_listening_and_the_rest_is_folded(self):
+        html = self._render(self._formatter({"style": "standard"}),
+                            web_path="/midis/x/y.musicxml", options_url="/score_options/x/y.musicxml")
+        toolbar = html[html.index('id="toolbar"'):html.index('id="reader-live"')]
+        self.assertEqual(re.findall(r'<button[^>]*id="([^"]+)"', toolbar),
+                         ["previous-group", "next-group", "read-aloud", "play-group", "play-whole-score"])
+        self.assertNotIn("<select", toolbar)
+        self.assertNotIn("<input", toolbar)
+        # The bar box, the group size and the speed sit behind the folded panels.
+        for control in ('id="goto-bar"', 'id="bars-per-group"', 'id="speed"', 'id="setting-speaking-voice"'):
+            self.assertIn(control, html)
+            self.assertGreater(html.index(control), html.index('id="reader-live"'))
+        self.assertEqual(re.findall(r'<details id="([^"]+)" name="reader-panels"', html),
+                         ["go-to", "settings", "about", "download"])
+        self.assertNotRegex(html, r"<summary>[^<]*(<svg.*?</svg>)?\s*<h2")
+
+    @override_settings(NATURAL_VOICES=False)
+    def test_the_natural_voices_are_offered_only_when_the_site_turns_them_on(self):
+        from talkingscoresapp.views import score as score_view
+        request = RequestFactory().get("/score/x/y.musicxml")
+        page = '<!DOCTYPE html>\n<html lang="en-GB"><body></body></html>'
+        with patch("talkingscoresapp.views.TSScore") as score_class:
+            score_class.return_value.state.return_value = None
+            score_class.return_value.html.return_value = page
+            off = score_view(request, VALID_ID, "y.musicxml")
+            self.assertNotIn(b"data-natural-voices", off.content)
+            with self.settings(NATURAL_VOICES=True, DEBUG=False):
+                on = score_view(request, VALID_ID, "y.musicxml")
+        self.assertIn(b'<html data-natural-voices lang="en-GB">', on.content)
+        directives = {part.split()[0]: part.split()[1:] for part in on["Content-Security-Policy"].split(";") if part.split()}
+        self.assertIn("https://cdn.jsdelivr.net", directives["script-src"])
+        self.assertIn("https://huggingface.co", directives["connect-src"])
 
     def test_the_page_carries_what_the_reader_script_needs(self):
         html = self._render(self._formatter({"style": "standard", "bars_at_a_time": 3}),

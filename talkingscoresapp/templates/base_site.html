@@ -22,6 +22,9 @@
                 if (["large", "xlarge", "browser"].indexOf(saved.size) !== -1) {
                     document.documentElement.setAttribute("data-size", saved.size);
                 }
+                if ((saved.size === "large" || saved.size === "xlarge") && saved.interface !== false) {
+                    document.documentElement.setAttribute("data-interface", saved.size);
+                }
             } catch (error) {
                 // No stored settings, so the page keeps the colours the browser asks for.
             }

@@ -31,6 +31,7 @@ urlpatterns = [
     path('privacy-policy', views.privacy_policy, name='privacy-policy'),
     path('score/<scoreid:id>/<filename>', views.score, name='score'),
     path('score_options/<scoreid:id>/<filename>', views.options, name='options'),
+    path('form-token', views.form_token, name='form-token'),
     path('process/<scoreid:id>/<filename>', views.process, name='process'),
     path('process_status/<scoreid:id>/<filename>', views.process_status, name='process-status'),
     path('oops/<scoreid:id>/<filename>', views.error, name='error'),
