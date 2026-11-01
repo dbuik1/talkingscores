@@ -56,6 +56,29 @@ For every page, `bench score` records:
 Results go to `runs/<set>/scores.csv` (one row per reader and page) and
 `runs/<set>/summary.md` (tables by kind of page and by texture).
 
+## Training our own reader
+
+`spark_train.sh` trains homr's transcription model on the Spark and adds the
+result to the bench as the reader `homr-spark`, scored against stock homr on
+the same pages.
+
+homr publishes only its finished ONNX models, so training starts from scratch
+on the open scores homr itself uses: OpenScore Lieder and String Quartets,
+GrandStaff, Camera-PrIMuS, PDMX and MuseTrainer. The first hours download the
+scores and draw the training pages with MuseScore; training then takes days,
+at low priority under a 48 GB memory cap (`TRAIN_MEMORY` changes it).
+
+```
+bash omr_bench/spark_train.sh          # set up and start training in the background
+bash omr_bench/spark_train.sh status   # progress, latest scores, GPU use
+bash omr_bench/spark_train.sh stop     # stop; starting again resumes from the last epoch
+bash omr_bench/spark_train.sh export   # add the finished model to the bench
+bash omr_bench/spark_bench.sh run      # score it against the other readers
+```
+
+Camera-PrIMuS is licensed CC BY-NC 4.0, so the trained model is for
+non-commercial use.
+
 ## Running it
 
 On the DGX Spark, `spark_bench.sh` installs everything in `~/omr` and reads
