@@ -81,6 +81,20 @@ trained_model() {
 have git || die "git isn't installed. Run: sudo apt-get install -y git"
 have curl || die "curl isn't installed. Run: sudo apt-get install -y curl"
 [ -d "$REPO/.git" ] || die "the bench isn't installed. Run spark_bench.sh first."
+
+# A clone left at an older commit would run the old steps, so update it and
+# restart on the new copy before doing anything else.
+if [ -z "${OMR_SCRIPT_UPDATED:-}" ] && [ -d "$REPO/.git" ]; then
+  before=$(git -C "$REPO" rev-parse HEAD)
+  if git -C "$REPO" pull -q --ff-only; then
+    if [ "$(git -C "$REPO" rev-parse HEAD)" != "$before" ]; then
+      echo "updated talkingscores to $(git -C "$REPO" rev-parse --short HEAD); restarting with the new script"
+      OMR_SCRIPT_UPDATED=1 exec bash "$REPO/omr_bench/spark_train.sh" "$@"
+    fi
+  else
+    echo "couldn't update $REPO with git pull; carrying on with the copy on disk" >&2
+  fi
+fi
 mkdir -p "$TRAIN"
 
 # --- setup -------------------------------------------------------------------
