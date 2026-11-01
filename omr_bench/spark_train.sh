@@ -130,11 +130,28 @@ setup_python() {
     return
   fi
   [ -x "$VENV/bin/python" ] || python3 -m venv "$VENV"
-  # pip learned --group (dependency groups in pyproject.toml) in 25.1.
-  "$VENV/bin/pip" install -q --upgrade "pip>=25.1"
+  # homr's dev group pins onnx-simplifier, which has no aarch64 build under that
+  # name; the same tool ships aarch64 wheels as onnxsim, so it is swapped in.
+  local reqs="$TRAIN/requirements.txt"
+  "$VENV/bin/python" - "$SRC/pyproject.toml" >"$reqs" <<'PY'
+import sys, tomllib
+project = tomllib.load(open(sys.argv[1], "rb"))
+for req in project["dependency-groups"]["dev"]:
+    if not req.replace("_", "-").startswith("onnx-simplifier"):
+        print(req)
+print("onnxsim >= 0.6.5, < 0.9")
+PY
   if "$VENV/bin/pip" install -q torch torchvision --index-url "$TORCH_INDEX" && \
-     (cd "$SRC" && "$VENV/bin/pip" install -q -e ".[cpu]" --group dev); then
-    done_ "made the training environment in $VENV"
+     (cd "$SRC" && "$VENV/bin/pip" install -q -e ".[cpu]" -r "$reqs"); then
+    # A dependency can swap the CUDA build of torch for a CPU one; put the CUDA one back.
+    if ! "$VENV/bin/python" -c 'import torch; assert torch.cuda.is_available()' 2>/dev/null; then
+      "$VENV/bin/pip" install -q --force-reinstall --no-deps torch torchvision --index-url "$TORCH_INDEX"
+    fi
+    if "$VENV/bin/python" -c 'import torch, transformers, homr; assert torch.cuda.is_available()' 2>/dev/null; then
+      done_ "made the training environment in $VENV"
+    else
+      failed "the training environment installed but torch can't see the GPU; run: $VENV/bin/python -c 'import torch; print(torch.cuda.is_available())'"
+    fi
   else
     failed "the training environment didn't install; the pip error is above"
   fi
