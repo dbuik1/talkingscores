@@ -40,14 +40,16 @@ TORCH_INDEX="https://download.pytorch.org/whl/cu130"
 TRAIN_MEMORY="${TRAIN_MEMORY:-48G}"
 MIN_FREE_GB=80
 
-DONE=(); ALREADY=(); FAILED=()
+DONE=(); ALREADY=(); FAILED=(); DIED=
 done_() { DONE+=("$1"); echo "done: $1"; }
 already() { ALREADY+=("$1"); echo "already: $1"; }
 failed() { FAILED+=("$1"); echo "FAILED: $1" >&2; }
-die() { echo "Stopped: $1" >&2; exit 1; }
+die() { DIED=1; echo "Stopped: $1" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 summary() {
+  local status=$?
+  [ "$status" -eq 0 ] || [ -n "$DIED" ] || [ ${#FAILED[@]} -gt 0 ] || failed "the script stopped early (exit code $status) after the last line above"
   [ ${#DONE[@]} -gt 0 ] || [ ${#ALREADY[@]} -gt 0 ] || [ ${#FAILED[@]} -gt 0 ] || return 0
   echo
   echo "Summary"
@@ -67,11 +69,14 @@ running_pid() {
 
 latest_checkpoint() {
   # Trainer saves one folder per epoch as current_training/checkpoint-<step>.
+  # Before the first epoch the folder doesn't exist, which must mean "none", not an error.
+  [ -d "$SRC/current_training" ] || return 0
   find "$SRC/current_training" -maxdepth 1 -type d -name 'checkpoint-*' 2>/dev/null \
     | sed -E 's#.*/checkpoint-##' | sort -n | tail -1 | sed -E 's#^#checkpoint-#'
 }
 
 trained_model() {
+  [ -d "$SRC/training/architecture/transformer" ] || return 0
   find "$SRC/training/architecture/transformer" -maxdepth 1 -name 'pytorch_model_*.pth' -newer "$SRC/pyproject.toml" \
     -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-
 }
