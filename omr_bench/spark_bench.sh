@@ -56,6 +56,20 @@ capped() {
 [ "$(uname -m)" = aarch64 ] || die "this is for the DGX Spark (aarch64); this machine is $(uname -m)."
 have git || die "git isn't installed. Run: sudo apt-get install -y git"
 have curl || die "curl isn't installed. Run: sudo apt-get install -y curl"
+
+# A clone left at an older commit would run the old steps, so update it and
+# restart on the new copy before doing anything else.
+if [ -z "${OMR_SCRIPT_UPDATED:-}" ] && [ -d "$REPO/.git" ]; then
+  before=$(git -C "$REPO" rev-parse HEAD)
+  if git -C "$REPO" pull -q --ff-only; then
+    if [ "$(git -C "$REPO" rev-parse HEAD)" != "$before" ]; then
+      echo "updated talkingscores to $(git -C "$REPO" rev-parse --short HEAD); restarting with the new script"
+      OMR_SCRIPT_UPDATED=1 exec bash "$REPO/omr_bench/spark_bench.sh" "$@"
+    fi
+  else
+    echo "couldn't update $REPO with git pull; carrying on with the copy on disk" >&2
+  fi
+fi
 have nvidia-smi && nvidia-smi >/dev/null 2>&1 || die "the GPU isn't answering. Run nvidia-smi to see why, or run agent-kit's spark-setup.sh first."
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' || die "Python 3.11 or newer is needed. Run: sudo apt-get install -y python3"
 python3 -m venv --help >/dev/null 2>&1 || die "Python venv is missing. Run: sudo apt-get install -y python3-venv"
