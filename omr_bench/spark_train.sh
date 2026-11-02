@@ -31,6 +31,7 @@ SRC="$TRAIN/homr"
 VENV="$TRAIN/venv"
 LOG="$TRAIN/train.log"
 PIDFILE="$TRAIN/train.pid"
+LASTRUN="$TRAIN/last-run.txt"
 HOMR_URL="https://github.com/liebharc/homr"
 # The commit whose training scripts this was written against; a newer homr can
 # rename the dataset converters or the model file names this script relies on.
@@ -222,7 +223,13 @@ start_training() {
     # MuseScore draws the pages with no screen attached, and runs without mounting its AppImage.
     export PYTHONPATH="$SRC" PATH="$VENV/bin:$PATH" GIT_TERMINAL_PROMPT=0 \
       QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1
-    setsid nohup "${cap[@]}" nice -n 10 "$VENV/bin/python" -c "$call" </dev/null >>"$LOG" 2>&1 &
+    echo "$(date '+%Y-%m-%d %H:%M') training started" >"$LASTRUN"
+    # The wrapper records how the run ended, so status can tell finished, failed and never started apart.
+    setsid nohup "${cap[@]}" nice -n 10 bash -c '
+      "$1" -c "$2"; code=$?
+      if [ "$code" -eq 0 ]; then how="finished"; else how="stopped with exit code $code"; fi
+      echo "$(date "+%Y-%m-%d %H:%M") training $how" >"$3"
+    ' _ "$VENV/bin/python" "$call" "$LASTRUN" </dev/null >>"$LOG" 2>&1 &
     echo $! >"$PIDFILE"
   )
   sleep 5
@@ -232,7 +239,7 @@ start_training() {
     else
       done_ "training started (process $pid). The first hours build the training pages; then it trains for days"
     fi
-    echo "Progress: $0 status    Log: $LOG"
+    echo "Training runs in the background; this terminal is free. Progress: $0 status"
   else
     failed "training stopped straight away; the end of $LOG says why"
     tail -20 "$LOG" >&2 || true
@@ -246,9 +253,18 @@ show_status() {
   elif [ -n "$(trained_model)" ]; then
     echo "Training finished: $(trained_model)"
     echo "Add it to the bench with: $0 export"
+  elif [ ! -f "$LASTRUN" ] && [ ! -f "$LOG" ]; then
+    echo "Training has never been started on this machine. Start it with: $0"
+    return 0
   else
-    echo "Training isn't running."
+    local last="unknown"
+    [ -f "$LASTRUN" ] && last=$(cat "$LASTRUN")
+    case "$last" in
+      *"training started") echo "Training isn't running. It started at ${last% training started} and ended without recording why: stopped by hand, or the machine restarted." ;;
+      *) echo "Training isn't running. Last run: $last." ;;
+    esac
     [ -n "$(latest_checkpoint)" ] && echo "Last saved: $(latest_checkpoint). Carry on with: $0"
+    echo "Why it ended: tail -40 $LOG"
   fi
   [ -f "$LOG" ] || return 0
   echo
