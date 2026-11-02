@@ -16,8 +16,12 @@ const [file, parts] = process.argv.slice(2);
 const bytes = fs.readFileSync(file);
 const music = collect(parseMidi(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
     parseInt(parts, 10));
+const rounded = (seconds) => Math.round(seconds * 1000) / 1000;
 process.stdout.write(JSON.stringify({
     parts: music.parts.map(notes => notes.map(note => note.note)),
+    timings: music.parts.map(notes => notes.map(note => [note.note, rounded(note.start), rounded(note.end)])),
+    bars: music.bars.map(bar => [bar.number, rounded(bar.at)]),
+    matches: music.matches,
     clicks: music.clicks.length,
     duration: music.duration
 }));

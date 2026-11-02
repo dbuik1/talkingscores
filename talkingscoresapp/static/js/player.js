@@ -93,6 +93,11 @@
                 var after = reader.at + length;
                 if (type === 0x51 && length >= 3) {
                     events.push({ ticks: ticks, kind: "tempo", value: reader.word(3) });
+                } else if (type === 0x06) {
+                    var bar = /^bar (\d+)$/.exec(reader.text(Math.min(length, after - reader.at)));
+                    if (bar) {
+                        events.push({ ticks: ticks, kind: "bar", number: parseInt(bar[1], 10) });
+                    }
                 } else if (type === 0x58 && length >= 2) {
                     events.push({
                         ticks: ticks,
@@ -234,6 +239,37 @@
         return beats;
     }
 
+    /* One instrument sounds a pitch once at a time: a second start on a pitch
+       already sounding cuts the first short there and holds on to whichever ends
+       later. Sounded as written, the first note to stop silences both, and two
+       starts in the same instant sound as one louder note. */
+    var RESTRIKE_GAP = 0.004;
+
+    function oneAtATime(notes) {
+        var last = {};
+        var kept = [];
+        notes.forEach(function (next) {
+            var key = (next.percussion ? "p" : "") + next.note;
+            var before = last[key];
+            if (before && next.start < before.end) {
+                if (next.start - before.start < RESTRIKE_GAP) {
+                    before.end = Math.max(before.end, next.end);
+                    before.velocity = Math.max(before.velocity, next.velocity);
+                    return;
+                }
+                next.end = Math.max(next.end, before.end);
+                before.end = next.start - RESTRIKE_GAP;
+            } else if (before && next.start - before.end < RESTRIKE_GAP) {
+                // A note restruck the instant the last one stops is let go just
+                // before, so the stop cannot land after the new start.
+                before.end = Math.max(before.start, next.start - RESTRIKE_GAP);
+            }
+            last[key] = next;
+            kept.push(next);
+        });
+        return kept;
+    }
+
     /* The notes of every part, in the order the reading page names them, with the
        click track alongside. */
 
@@ -268,6 +304,10 @@
             var sounding = {};
             var programs = {};
             var channel = { number: -1, program: 0 };
+            // A note can be written as stopping in the same instant it starts, with
+            // the stop first. Its stop is kept so the start that follows ends there
+            // rather than sounding to the end of the range.
+            var stoppedEarly = {};
             track.forEach(function (event) {
                 if (event.kind === "program") {
                     programs[event.channel] = event.program;
@@ -278,10 +318,19 @@
                 }
                 var key = event.channel + ":" + event.note;
                 if (event.kind === "on") {
+                    if (stoppedEarly[key] === event.ticks) {
+                        delete stoppedEarly[key];
+                        notes.push(held(event, event.ticks));
+                        return;
+                    }
                     // Two voices in one part can hold the same pitch at once.
                     (sounding[key] = sounding[key] || []).push(event);
-                } else if (event.kind === "off" && sounding[key] && sounding[key].length) {
-                    notes.push(held(sounding[key].shift(), event.ticks));
+                } else if (event.kind === "off") {
+                    if (sounding[key] && sounding[key].length) {
+                        notes.push(held(sounding[key].shift(), event.ticks));
+                    } else {
+                        stoppedEarly[key] = event.ticks;
+                    }
                 }
             });
             // A note left sounding at the end of the file is held to the end of the
@@ -293,8 +342,24 @@
             });
             notes.sort(function (a, b) { return a.start - b.start; });
             channels.push(channel);
-            return notes;
+            return oneAtATime(notes);
         });
+
+        // The markers naming each bar sit on a track of their own, which belongs to no part.
+        var bars = [];
+        tracks = tracks.filter(function (notes, index) {
+            var marks = midi.tracks[index].filter(function (event) { return event.kind === "bar"; });
+            marks.forEach(function (event) {
+                bars.push({ number: event.number, at: seconds(event.ticks) });
+            });
+            var markersOnly = marks.length > 0 && !notes.length;
+            if (markersOnly) {
+                channels[index] = null;
+            }
+            return !markersOnly;
+        });
+        channels = channels.filter(function (channel) { return channel !== null; });
+        bars.sort(function (a, b) { return a.at - b.at; });
 
         // The file carries a conductor track holding the speed and the time signature
         // before the parts, so a leading track with no notes belongs to no part. Every
@@ -315,6 +380,9 @@
             parts: tracks,
             channels: channels,
             clicks: clicks,
+            // Each bar as it is reached, in seconds into the file. A bar played again
+            // after a repeat is listed again.
+            bars: bars,
             duration: seconds(lastTick),
             // Seconds into the file for a point given in crotchets from its start,
             // which is how the page gives the start of each bar.
@@ -388,6 +456,37 @@
         oscillator.stop(at + 0.07);
     }
 
+    var PERCUSSION_CHANNEL = 9;
+
+    /* A synthesizer channel for each part. Percussion stays on the percussion
+       channel; every other part takes a channel of its own while there are any
+       left, and after that shares with an earlier part playing the same
+       instrument, or else with the last part given one. */
+    function assignChannels(channels) {
+        var free = [];
+        for (var number = 0; number < 16; number++) {
+            if (number !== PERCUSSION_CHANNEL) {
+                free.push(number);
+            }
+        }
+        var given = [];
+        return channels.map(function (channel) {
+            if (channel.number === -1) {
+                return -1;
+            }
+            if (channel.number === PERCUSSION_CHANNEL) {
+                return PERCUSSION_CHANNEL;
+            }
+            if (free.length) {
+                var number = free.shift();
+                given.push({ number: number, program: channel.program });
+                return number;
+            }
+            var same = given.filter(function (taken) { return taken.program === channel.program; })[0];
+            return (same || given[given.length - 1]).number;
+        });
+    }
+
     window.TalkingScoresPlayer = function (data, controls) {
         var group = null;
         // The bars being played or loaded: the open group, or every bar at once.
@@ -395,6 +494,12 @@
         var whole = { start: data.firstBar, end: data.lastBar, whole: true };
         var context = null;
         var master = null;
+        // Every note of a full chord at once adds up past what the speakers can
+        // take, so the sum goes through a limiter rather than clipping.
+        var limiter = null;
+        // The synthesizer channel each part plays on, its own wherever there are
+        // enough, so each part's level and notes stay apart from the others.
+        var partChannels = [];
         var partGains = [];
         // The sampled instruments, once their sound bank has loaded. Until then,
         // and whenever they cannot load, the notes sound as simple tones.
@@ -503,9 +608,16 @@
                     return null;
                 }
                 context = new Context();
+                limiter = context.createDynamicsCompressor();
+                limiter.threshold.value = -10;
+                limiter.knee.value = 6;
+                limiter.ratio.value = 12;
+                limiter.attack.value = 0.003;
+                limiter.release.value = 0.25;
+                limiter.connect(context.destination);
                 master = context.createGain();
                 master.gain.value = 0.9;
-                master.connect(context.destination);
+                master.connect(limiter);
             }
             return context;
         }
@@ -522,7 +634,7 @@
                 old.disconnect();
                 master = context.createGain();
                 master.gain.value = 0.9;
-                master.connect(context.destination);
+                master.connect(limiter);
                 if (synth) {
                     synth.disconnect(old);
                     synth.connect(master);
@@ -607,13 +719,18 @@
                 return;
             }
             // Each part plays on its own channel with the instrument it was written
-            // for, at the level its balance setting gives it.
+            // for, at the level its balance setting gives it. The file can put
+            // several parts on one channel, where one part's level would set them all.
+            partChannels = assignChannels(music.channels);
             music.channels.forEach(function (channel, index) {
-                if (channel.number === -1) {
+                var number = partChannels[index];
+                if (number === -1) {
                     return;
                 }
-                synth.programChange(channel.number, channel.program);
-                synth.midiChannels[channel.number].setSystemParameter("gain", partGains[index].gain.value);
+                if (number !== PERCUSSION_CHANNEL) {
+                    synth.programChange(number, channel.program);
+                }
+                synth.midiChannels[number].setSystemParameter("gain", partGains[index].gain.value);
             });
             var wait = staleUntil - context.currentTime;
             if (wait > 0) {
@@ -637,8 +754,8 @@
                     // clock runs on. Notes whose moment has passed are let go rather
                     // than sounded together on the next pass.
                     if (partGains[part].gain.value > 0 && start >= now - LATE_TOLERANCE) {
-                        if (sampled && music.channels[part].number !== -1) {
-                            var channel = music.channels[part].number;
+                        if (sampled && partChannels[part] !== -1) {
+                            var channel = partChannels[part];
                             synth.noteOn(channel, note.note, note.velocity, { time: Math.max(start, now) });
                             synth.noteOff(channel, note.note, { time: end });
                         } else if (note.percussion) {
@@ -679,6 +796,11 @@
         // The page gives each bar's start in crotchets from the top of the score,
         // so the bars of a run are measured from the first bar it plays.
         function timesOfBars(range, parsed) {
+            if (parsed.bars && parsed.bars.length) {
+                return parsed.bars.filter(function (bar) {
+                    return bar.number >= range.start && bar.number <= range.end;
+                });
+            }
             var starts = data.midi.barStarts || {};
             var first = starts[range.start];
             if (typeof first !== "number" || !parsed.at) {
@@ -743,12 +865,14 @@
             return promise;
         }
 
-        function fetchRange(start, end) {
-            var key = start + "-" + end;
+        // The whole score is played with its repeats, the way it is performed; a
+        // group is played as written, so it sounds the bars on screen.
+        function fetchRange(start, end, repeats) {
+            var key = start + "-" + end + (repeats ? "r" : "");
             if (scores[key]) {
                 return scores[key];
             }
-            return remember(key, fetch(data.midi.base + "?start=" + start + "&end=" + end)
+            return remember(key, fetch(data.midi.base + "?start=" + start + "&end=" + end + (repeats ? "&repeats=1" : ""))
                 .then(function (response) {
                     if (!response.ok) {
                         var refused = new Error("the server refused the range");
@@ -810,7 +934,7 @@
             pending = true;
             var loadingSounds = sampledWanted() && !synth && !synthFailed;
             report(said + "Loading " + (loadingSounds ? "the instrument sounds and " : "") + label(range) + ".");
-            var loaded = fetchRange(range.start, range.end);
+            var loaded = fetchRange(range.start, range.end, Boolean(range.whole));
             // The browser holds the audio clock until a gesture releases it, so
             // playback waits for the resume as well as for the file.
             Promise.all([loaded, context.resume(), loadSampled()]).then(function (results) {
@@ -948,6 +1072,7 @@
             }
         };
     };
-    // Reading a file and laying its tracks against the parts is checked on its own.
-    window.TalkingScoresPlayer.reading = { parseMidi: parseMidi, collect: collect };
+    // Reading a file, laying its tracks against the parts and giving each part a
+    // channel are checked on their own.
+    window.TalkingScoresPlayer.reading = { parseMidi: parseMidi, collect: collect, assignChannels: assignChannels };
 })();
