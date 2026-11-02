@@ -3536,7 +3536,7 @@ class FingeringTests(TestCase):
         # The alternative fingering printed for E is left out.
         self.assertIn("Every finger: D 3-1, E 2.", text)
 
-    def test_a_part_not_played_on_a_keyboard_gets_printed_fingers_only(self):
+    def test_printed_fingers_on_a_violin_are_kept_and_suggestions_fill_the_rest(self):
         from music21 import articulations, instrument, meter, note, stream
         part = stream.Part()
         part.insert(0, instrument.Violin())
@@ -3550,8 +3550,18 @@ class FingeringTests(TestCase):
         part.append(measure)
         score = stream.Score()
         score.append(part)
-        text, html = self._text(score, {"fingering": "suggested"})
+        text, _ = self._text(score, {"fingering": "printed"})
         self.assertIn("Fingering: A 0, B 1, C 2.", text)
+        text, _ = self._text(score, {"fingering": "suggested"})
+        self.assertIn("Suggested fingering: first position, on the A string.", text)
+        self.assertIn("Every finger: A 0, B 1, C 2, D 3 on A.", text)
+
+    def test_a_part_with_no_fingering_rules_gets_printed_fingers_only(self):
+        from music21 import articulations, instrument
+        score = self._single_part(instrument.Flute(), ["C5", "D5", "E5", "F5"])
+        score.parts[0].flatten().notes[0].articulations.append(articulations.Fingering(1))
+        text, html = self._text(score, {"fingering": "suggested"})
+        self.assertIn("Fingering: C 1.", text)
         self.assertNotIn("Suggested", text)
         self.assertNotIn("every-finger", html)
 
@@ -3563,11 +3573,67 @@ class FingeringTests(TestCase):
         text, _ = self._text(score, {"fingering": "suggested", "key_signature_accidentals": "printed"})
         self.assertIn("F sharp", text.split("Every finger: D")[1].split("\n")[0])
 
+    @staticmethod
+    def _single_part(instrument_object, names):
+        from music21 import meter, note, stream
+        part = stream.Part()
+        part.insert(0, instrument_object)
+        measure = stream.Measure(number=1)
+        measure.append(meter.TimeSignature("4/4"))
+        for name in names:
+            measure.append(note.Note(name, quarterLength=4 / len(names)))
+        part.append(measure)
+        score = stream.Score()
+        score.append(part)
+        return score
+
+    def test_guitar_parts_get_strings_and_frets(self):
+        from music21 import instrument
+        score = self._single_part(instrument.AcousticGuitar(), ["C4", "D4", "E4", "F4"])
+        text, _ = self._text(score, {"fingering": "suggested"})
+        self.assertIn("Suggested fingering: hand at fret 1.", text)
+        self.assertIn("Every finger: C string 2 fret 1, D string 2 fret 3, E string 1 open, F string 1 fret 1.", text)
+
+    def test_violin_parts_get_first_position_strings_and_fingers(self):
+        from music21 import instrument
+        score = self._single_part(instrument.Violin(), ["A4", "B4", "C#5", "E5"])
+        text, _ = self._text(score, {"fingering": "suggested"})
+        self.assertIn("Suggested fingering: first position, on the A string, to the E string.", text)
+        self.assertIn("Every finger: A A string open, B 1 on A, C sharp high 2 on A, E E string open.", text)
+
+    def test_trumpet_parts_get_valves_at_written_pitch(self):
+        from music21 import instrument
+        # The file holds written pitch for a B flat trumpet, so written C is open.
+        score = self._single_part(instrument.Trumpet(), ["C4", "D4", "E4", "F4"])
+        text, _ = self._text(score, {"fingering": "suggested"})
+        self.assertIn("Suggested fingering: C open, D valves 1 and 3, E valves 1 and 2, F valve 1.", text)
+
+    def test_another_instrument_replaces_printed_fingers_in_every_part(self):
+        from music21 import articulations
+        score = self._piano([["C4", "D4", "E4", "F4"]], [["C3"]])
+        score.parts[0].flatten().notes[0].articulations.append(articulations.Fingering(1))
+        text, _ = self._text(score, {"fingering": "printed", "fingering_instrument": "guitar"})
+        self.assertIn("Suggested guitar fingering: hand at fret 1.", text)
+        self.assertIn("Every finger: C string 2 fret 1,", text)
+        self.assertNotIn("Fingering: 1 on C", text)
+        self.assertIn("Every finger: C string 5 fret 3.", text.split("Left hand")[1])
+
+    def test_a_part_can_be_fingered_for_the_piano_instead(self):
+        from music21 import instrument
+        score = self._single_part(instrument.Flute(), ["C5", "D5", "E5", "F5"])
+        text, _ = self._text(score, {"fingering": "none"})
+        self.assertNotIn("inger", text)
+        text, _ = self._text(score, {"fingering": "printed", "fingering_instrument": "piano"})
+        self.assertIn("Suggested piano fingering: 1 on C.", text)
+        self.assertIn("Every finger: C 1, D 2, E 3, F 4.", text)
+
     def test_options_store_the_fingering_choice(self):
         self.assertEqual(views_module.clean_fingering("suggested"), "suggested")
         self.assertEqual(views_module.clean_fingering("none"), "none")
         self.assertEqual(views_module.clean_fingering("<script>"), "printed")
         self.assertEqual(views_module.clean_fingering(None), "printed")
+        self.assertEqual(views_module.clean_fingering_instrument("violin"), "violin")
+        self.assertEqual(views_module.clean_fingering_instrument("tuba"), "score")
         from lib.render_settings import RenderSettings
         # Fingering is read in every style, not only the one the wording options edit.
         self.assertEqual(RenderSettings.from_options({"style": "plain", "fingering": "suggested"}).fingering,

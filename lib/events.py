@@ -85,6 +85,9 @@ class TSPitch:
         # finger on a held note; printed says whether the score wrote it.
         self.finger = None
         self.finger_printed = False
+        # Suggested fingering for an instrument other than the piano: its words
+        # and the string, fret or valves behind them.
+        self.finger_info = None
 
     @property
     def diatonic_number(self):
