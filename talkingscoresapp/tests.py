@@ -1257,6 +1257,45 @@ class CacheAndMaintenanceTests(TestCase):
             with open(output_path, encoding="utf-8") as output:
                 self.assertEqual(output.read(), "<score-partwise/>")
 
+    def test_cleanup_media_keeps_a_listed_upload_however_old(self):
+        from talkingscoresapp import sharing
+
+        class Upload:
+            id = "c" * 64
+            filename = "score.musicxml"
+
+            def source(self):
+                return None
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = os.path.join(temp_dir, Upload.id)
+            os.makedirs(folder)
+            score_file = os.path.join(folder, Upload.filename)
+            with open(score_file, "w", encoding="utf-8") as file:
+                file.write("<score-partwise/>")
+            old_time = time.time() - (400 * 24 * 60 * 60)
+            os.utime(score_file, (old_time, old_time))
+            sharing.write_record(Upload(), {}, temp_dir)
+            sharing.set_listed("c" * 10, True, "Night Song", "", temp_dir)
+
+            with patch.object(cleanup_media, "MEDIA_ROOT", temp_dir):
+                call_command("cleanup_media", "--older-than-days", "30", stdout=StringIO())
+
+            self.assertTrue(os.path.isfile(score_file))
+
+    def test_media_root_follows_the_volume_it_is_given(self):
+        settings_file = os.path.join(score_settings.BASE_DIR, "talkingscores", "settings.py")
+
+        def media_root(environment):
+            base = {key: value for key, value in os.environ.items()
+                    if key not in ("DJANGO_MEDIA_ROOT", "RAILWAY_VOLUME_MOUNT_PATH")}
+            with patch.dict(os.environ, dict(base, **environment), clear=True):
+                return runpy.run_path(settings_file)["MEDIA_ROOT"]
+
+        self.assertEqual(media_root({}), os.path.join(score_settings.BASE_DIR, "media"))
+        self.assertEqual(media_root({"RAILWAY_VOLUME_MOUNT_PATH": "/data"}), "/data")
+        self.assertEqual(media_root({"RAILWAY_VOLUME_MOUNT_PATH": "/data", "DJANGO_MEDIA_ROOT": "/srv/media"}), "/srv/media")
+
     def test_cleanup_media_dry_run_and_delete(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             old_dir = os.path.join(temp_dir, "a" * 64)

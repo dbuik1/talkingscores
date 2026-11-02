@@ -6,6 +6,7 @@ import time
 from django.core.management.base import BaseCommand
 
 from talkingscores.settings import MEDIA_ROOT
+from talkingscoresapp import sharing
 
 # A score folder is named for the score id: 64 lower-case hex digits.
 SCORE_FOLDER_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -38,6 +39,9 @@ class Command(BaseCommand):
 
         removed = 0
         skipped = 0
+        # A listed upload cannot be fetched again, so removing its folder would
+        # take it out of Find a score. Listed scores are kept however old.
+        listed = {record["id"] for _code, record in sharing.listed_scores(MEDIA_ROOT)}
 
         # Uploaded PDFs and photos are kept per reading under readings/, named
         # the same way as score folders, and age out the same way.
@@ -50,7 +54,7 @@ class Command(BaseCommand):
             path = os.path.join(parent, name)
             # Only score and reading folders are removed; the media root also holds
             # the log and music21's own cache, which this command does not own.
-            if not os.path.isdir(path) or not SCORE_FOLDER_PATTERN.match(name):
+            if not os.path.isdir(path) or not SCORE_FOLDER_PATTERN.match(name) or name in listed:
                 skipped += 1
                 continue
 
