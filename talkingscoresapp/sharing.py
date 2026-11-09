@@ -2,19 +2,21 @@
 
 A score from the library or a web address is named after its title, such as
 /s/ode-to-joy, with -2, -3 and so on when another score has that title. An
-uploaded score is named with three music words, such as /s/presto-cello-fugue,
-so the link says nothing about what was uploaded. A screen reader reads either
+uploaded score is named with three music words and a three-digit number, such as
+/s/presto-cello-fugue-482, so the link says nothing about what was uploaded and
+cannot be guessed. Links named with three words alone before the number was added
+keep working. A screen reader reads either
 as words. Names are stored under MEDIA_ROOT/links/names, each holding the code
 it opens: the first ten hex digits of the score's id, which is the SHA-256 of
 its file. That code works as a link too, so links made before names keep working.
 
 Each time options are saved, a record is written under MEDIA_ROOT/links: the
 score's id and file name, where the file came from and the options. The score
-folders are cleaned up after a while, and the links folder is not, so a link to
-a score that came from a web address or the library still opens: the file is
+folders are cleaned up after a while, and the records of scores from a web
+address or the library are kept, so a link to one of those still opens: the file is
 fetched again and the options put back. A link to an uploaded file works only
-while that file is stored; once it has gone, its three words can name another
-upload.
+while that file is stored; once it has gone, cleanup_media removes its record
+and its name, which can then name another upload.
 """
 
 import json
@@ -139,8 +141,11 @@ def title_name(title):
 
 
 def word_name():
-    return "-".join(secrets.choice(words) for words in (
-        share_words.TEMPOS_AND_MOODS, share_words.INSTRUMENTS, share_words.FORMS))
+    # Three words give a million names, few enough for a stored upload to be found
+    # by guessing; the three-digit number takes that to 900 million.
+    words = [secrets.choice(words) for words in (
+        share_words.TEMPOS_AND_MOODS, share_words.INSTRUMENTS, share_words.FORMS)]
+    return "-".join(words + [str(100 + secrets.randbelow(900))])
 
 
 def _abandoned(code, root):
@@ -248,6 +253,42 @@ def listed_scores(root=MEDIA_ROOT):
         found.append((os.path.getmtime(os.path.join(links, file_name)), code, record))
     found.sort(reverse=True)
     return [(code, record) for _, code, record in found]
+
+
+def forget_abandoned(root=MEDIA_ROOT, dry_run=False):
+    """Remove the link records and names of uploads that are no longer stored. Returns the codes.
+
+    A score from a web address or the library keeps its record, since its link
+    fetches the file again."""
+    links = os.path.join(root, "links")
+    try:
+        file_names = os.listdir(links)
+    except OSError:
+        return []
+    forgotten = []
+    for file_name in file_names:
+        code, extension = os.path.splitext(file_name)
+        if extension != ".json":
+            continue
+        record = read_record(code, root)
+        if not record or record.get("source") or os.path.isdir(os.path.join(root, record["id"])):
+            continue
+        forgotten.append(code)
+        if dry_run:
+            continue
+        name = _read_text(_name_of_code_path(code, root))
+        if name and NAME_PATTERN.match(name) and _read_text(_name_path(name, root)) == code:
+            _remove_quietly(_name_path(name, root))
+        _remove_quietly(_name_of_code_path(code, root))
+        _remove_quietly(_record_path(code, root))
+    return forgotten
+
+
+def _remove_quietly(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
 
 
 def link_name(code, root=MEDIA_ROOT):
