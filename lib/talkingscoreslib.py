@@ -405,6 +405,26 @@ def get_accidental_steps(num_accidentals):
     return []
 
 
+def _offset_in_bar(element):
+    """Offset from the start of the bar, for a note inside a voice or directly in the bar."""
+    site = element.activeSite
+    if isinstance(site, stream.Voice):
+        return site.offset + element.offset
+    return element.offset
+
+
+def _readable_part_name(instrument, part_id):
+    """The part's own name, else its instrument's name, skipping the placeholders
+    notation programs write on parts nobody named: "(Inst3)", or the part id such as "P1"."""
+    for candidate in (instrument.partName, instrument.instrumentName):
+        name = (candidate or "").strip()
+        if not name or re.fullmatch(r"\(Inst\d+\)", name) or name == part_id or re.fullmatch(r"P\d+", name):
+            continue
+        # "Piano (2)" numbers a second copy of an instrument in the score's sound set.
+        return re.sub(r"\s*\(\d+\)$", "", name)
+    return ""
+
+
 class TalkingScoreBase(object, metaclass=ABCMeta):
     @abstractmethod
     def get_title(self):
@@ -622,10 +642,7 @@ class Music21TalkingScore(TalkingScoreBase):
             part_id = instrument.partId or part.id
             if (len(self.part_instruments) == 0 or
                     self.part_instruments[ins_count - 1][3] != part_id):
-                part_name = (instrument.partName or "").strip()
-                # Notation programs leave "(Inst3)" style names on parts nobody named.
-                if not part_name or re.fullmatch(r"\(Inst\d+\)", part_name):
-                    part_name = f"Instrument {ins_count} (unnamed)"
+                part_name = _readable_part_name(instrument, part_id) or f"Instrument {ins_count} (unnamed)"
                 self.part_instruments[ins_count] = [part_name, c, 1, part_id]
                 instrument_names.append(part_name)
                 ins_count += 1
@@ -844,24 +861,29 @@ class Music21TalkingScore(TalkingScoreBase):
             spanner_type = type(spanner).__name__
             if spanner_type not in names:
                 continue
-            first = spanner.getFirst()
-            last = spanner.getLast()
-            if (first is None or last is None or first.measureNumber is None or last.measureNumber is None
+            # A hairpin across voices lists its notes in file order, not time order.
+            spanned = [element for element in spanner.getSpannedElements() if element.measureNumber is not None]
+            if not spanned:
+                continue
+            spanned.sort(key=lambda element: (element.measureNumber, _offset_in_bar(element)))
+            first = spanned[0]
+            last = spanned[-1]
+            if (first.measureNumber > end_bar or last.measureNumber < start_bar
                     or first.measureNumber > end_bar or last.measureNumber < start_bar):
                 continue
             start_name, end_name = names[spanner_type]
             if first.measureNumber >= start_bar:
                 event = TSDynamic(long_name=start_name)
-                event.start_offset = first.offset
+                event.start_offset = _offset_in_bar(first)
                 event.beat = first.beat
                 intermediate_events.setdefault(first.measureNumber, {}).setdefault(
-                    first.offset, {}).setdefault(1, []).append(event)
+                    event.start_offset, {}).setdefault(1, []).append(event)
             if last.measureNumber <= end_bar and last is not first:
                 # The hairpin closes on its last note, so the ending is read with that note.
                 # A wedge the file never closes has nothing to end.
                 event = TSDynamic(long_name=end_name)
                 event.trailing = True
-                event.start_offset = last.offset
+                event.start_offset = _offset_in_bar(last)
                 event.beat = last.beat
                 intermediate_events.setdefault(last.measureNumber, {}).setdefault(
                     event.start_offset, {}).setdefault(1, []).append(event)

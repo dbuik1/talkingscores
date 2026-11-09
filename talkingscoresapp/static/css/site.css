@@ -236,7 +236,7 @@ select.input { padding-right: 10px; }
 /* A phone or a magnified window too short to spare the height leaves it in place. */
 @media (min-width: 641px) and (min-height: 600px) {
     html.pin-controls .toolbar { position: sticky; top: 0; z-index: 2; }
-    html.pin-controls .group { scroll-margin-top: calc(var(--toolbar-height, 0px) + 8px); }
+    html.pin-controls .group, html.pin-controls .bar h3 { scroll-margin-top: calc(var(--toolbar-height, 0px) + 8px); }
 }
 .toolbar .cluster { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .pos { font-weight: 700; color: var(--ink); min-width: 9.5em; text-align: center; padding: 0 4px; }

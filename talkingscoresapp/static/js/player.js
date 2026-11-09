@@ -999,11 +999,17 @@
             if (!(playing || pending) || !target) {
                 return false;
             }
-            return button === controls.playAll ? Boolean(target.whole) : !target.whole;
+            if (button === controls.playAll) {
+                return Boolean(target.whole);
+            }
+            if (button === controls.playRange) {
+                return Boolean(target.chosen);
+            }
+            return !target.whole && !target.chosen;
         }
 
         function reflectButtons() {
-            [[controls.play, "Play this group"], [controls.playAll, "Play the whole score"]].forEach(function (pair) {
+            [[controls.play, "Play this group"], [controls.playAll, "Play the whole score"], [controls.playRange, "Play these bars"]].forEach(function (pair) {
                 var button = pair[0];
                 if (!button) {
                     return;
@@ -1023,6 +1029,18 @@
                     stop(true);
                 } else {
                     play(group);
+                }
+            });
+        }
+        if (controls.playRange && controls.chosenRange) {
+            controls.playRange.addEventListener("click", function () {
+                if (soundingFrom(controls.playRange)) {
+                    stop(true);
+                    return;
+                }
+                var chosen = controls.chosenRange();
+                if (chosen) {
+                    play({ start: chosen.start, end: chosen.end, chosen: true });
                 }
             });
         }
@@ -1057,9 +1075,9 @@
                     return;
                 }
                 group = next;
-                // The whole score plays on while the reader moves through the bars,
-                // so only a group of its own stops when the page leaves it.
-                if (target && target.whole && (playing || pending)) {
+                // The whole score and a chosen range play on while the reader moves
+                // through the bars, so only a group of its own stops when the page leaves it.
+                if (target && (target.whole || target.chosen) && (playing || pending)) {
                     return;
                 }
                 var wasSounding = playing || pending;

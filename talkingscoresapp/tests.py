@@ -3964,7 +3964,7 @@ class SeparateVoicesTests(TestCase):
                 html = formatter.generateHTML(web_path="/midis/x/y")
         self.assertRegex(html, r'<p class="voice">Voice 1</p>\s*<ul class="beats">\s*<li><b>Beat 1</b>')
         self.assertIn('<p class="voice">Voice 2</p>', html)
-        self.assertIn('<p class="label">Piano - Chord symbols</p>', html)
+        self.assertIn('<h4 class="label">Piano - Chord symbols</h4>', html)
 
 
 def render_score_text(xml, **options):
@@ -4187,3 +4187,46 @@ class ImageReadingTests(TestCase):
         with patch.object(cleanup_media, "MEDIA_ROOT", self.media):
             call_command("cleanup_media", "--older-than-days", "30", stdout=StringIO())
         self.assertFalse(os.path.exists(old_reading))
+
+
+class ReaderAuditFixTests(TestCase):
+    """Hairpins, part names and the reader page controls on a two-hand piano score."""
+
+    FIXTURE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "test_scores", "macdowell-to-a-wild-rose.xml")
+
+    def _formatter(self):
+        from talkingscoreslib import Music21TalkingScore, HTMLTalkingScoreFormatter
+        return HTMLTalkingScoreFormatter(Music21TalkingScore(self.FIXTURE), options={"bars_at_a_time": 2})
+
+    def _text(self):
+        from talkingscoreslib import HTMLTalkingScoreFormatter
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            return self._formatter().render_text()
+
+    def test_a_hairpin_across_voices_starts_before_it_ends(self):
+        bar_3 = self._text().split("\nBar 3\n", 1)[1].split("\n", 1)[0]
+        self.assertLess(bar_3.index("crescendo starts"), bar_3.index("crescendo ends"))
+        self.assertTrue(bar_3.startswith("Voice 1: Beat 1 crescendo starts"))
+        self.assertTrue(bar_3.endswith("crescendo ends"))
+
+    def test_a_part_named_by_its_id_takes_its_instrument_name(self):
+        text = self._text()
+        self.assertIn("Instruments: Piano\n", text)
+        self.assertIn("\nPiano - Right hand\n", text)
+        self.assertNotIn("P1", text)
+
+    def test_parts_within_a_bar_are_headings_and_ranges_can_be_played(self):
+        from talkingscoreslib import HTMLTalkingScoreFormatter
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            html = self._formatter().generateHTML(web_path="/midis/x/y.musicxml")
+        self.assertIn('<h4 class="label">Piano - Left hand</h4>', html)
+        self.assertIn('<option value="0">The whole score</option>', html)
+        self.assertIn('id="range-start"', html)
+        self.assertIn('id="play-range"', html)
+
+    def test_a_downloaded_page_offers_no_range_playback(self):
+        from talkingscoreslib import HTMLTalkingScoreFormatter
+        with patch.object(HTMLTalkingScoreFormatter, "_trigger_midi_generation"):
+            html = self._formatter().generateHTML()
+        self.assertNotIn('id="play-range"', html)
