@@ -117,7 +117,7 @@
             return;
         }
 
-        if (prefs.barsPerGroup && perGroup && hasOption(perGroup, String(prefs.barsPerGroup))) {
+        if (typeof prefs.barsPerGroup === "number" && perGroup && hasOption(perGroup, String(prefs.barsPerGroup))) {
             barsPerGroup = prefs.barsPerGroup;
         }
         if (perGroup) {
@@ -137,6 +137,8 @@
         // halves of a repeat ending print the same number.
         var printedNumbers = {};
         var countedForPrinted = {};
+        // Where two bars print one number, a range ending on it runs to the second.
+        var lastCountedForPrinted = {};
         bars.forEach(function (bar) {
             var counted = barNumber(bar);
             var printed = bar.getAttribute("data-printed") || String(counted);
@@ -144,6 +146,9 @@
             var typed = parseInt(printed, 10);
             if (!isNaN(typed) && !(typed in countedForPrinted)) {
                 countedForPrinted[typed] = counted;
+            }
+            if (!isNaN(typed)) {
+                lastCountedForPrinted[typed] = counted;
             }
         });
 
@@ -161,12 +166,14 @@
             return (capital ? "Bars " : "bars ") + printedNumber(start) + " to " + printedNumber(end);
         }
 
+        // A size of 0 is the whole score: one group, the pickup bar included, so
+        // headings and find reach every bar.
         function buildGroups(size) {
             var plan = [];
             var chunk = [];
             bars.forEach(function (bar) {
                 var number = barNumber(bar);
-                if (number === data.pickupBar) {
+                if (number === data.pickupBar && size > 0) {
                     plan.push([bar]);
                     return;
                 }
@@ -299,7 +306,7 @@
             });
         }
 
-        function show(index, focus, keepTyped) {
+        function show(index, focus, keepTyped, bar) {
             current = Math.max(0, Math.min(groups.length - 1, index));
             groups.forEach(function (group, i) {
                 var open = i === current;
@@ -319,9 +326,21 @@
                 position.href = "#" + group.section.id;
             }
             if (gotoInput && !keepTyped) {
-                gotoInput.value = String(group.start);
+                var printed = parseInt(printedNumber(group.start), 10);
+                gotoInput.value = String(isNaN(printed) ? group.start : printed);
             }
-            if (focus) {
+            var rangeStart = document.getElementById("range-start");
+            var rangeEnd = document.getElementById("range-end");
+            if (rangeStart && rangeEnd && document.activeElement !== rangeStart && document.activeElement !== rangeEnd) {
+                rangeStart.value = String(parseInt(printedNumber(group.start), 10) || group.start);
+                rangeEnd.value = String(parseInt(printedNumber(group.end), 10) || group.end);
+            }
+            var barHeading = bar === undefined ? null : group.section.querySelector("#bar-" + bar + " h3");
+            if (focus && barHeading) {
+                barHeading.tabIndex = -1;
+                barHeading.scrollIntoView({block: "start", behavior: reducedMotion() ? "auto" : "smooth"});
+                barHeading.focus({preventScroll: true});
+            } else if (focus) {
                 group.section.scrollIntoView({block: "start", behavior: reducedMotion() ? "auto" : "smooth"});
                 group.heading.focus({preventScroll: true});
             }
@@ -387,7 +406,7 @@
             gotoError.textContent = "";
             gotoInput.removeAttribute("aria-invalid");
             closeGoTo();
-            show(index, true, true);
+            show(index, true, true, number);
         }
 
         // The bar is open on screen once the reader has gone to it, so the panel
@@ -829,6 +848,41 @@
             });
         }
 
+        // The bars typed into From bar and To bar, as counted bars, or null after
+        // saying what to type instead.
+        function chosenRange() {
+            var fromInput = document.getElementById("range-start");
+            var toInput = document.getElementById("range-end");
+            var error = document.getElementById("range-error");
+            var from = countedForPrinted[parseInt(fromInput.value, 10)];
+            var to = lastCountedForPrinted[parseInt(toInput.value, 10)];
+            var message = "";
+            var wrong = null;
+            if (from === undefined) {
+                message = "Enter a first bar from " + data.firstPrintedBar + " to " + data.lastPrintedBar + ".";
+                wrong = fromInput;
+            } else if (to === undefined) {
+                message = "Enter a last bar from " + data.firstPrintedBar + " to " + data.lastPrintedBar + ".";
+                wrong = toInput;
+            } else if (to < from) {
+                message = "Enter a last bar no earlier than bar " + fromInput.value + ".";
+                wrong = toInput;
+            }
+            [fromInput, toInput].forEach(function (input) {
+                if (input === wrong) {
+                    input.setAttribute("aria-invalid", "true");
+                } else {
+                    input.removeAttribute("aria-invalid");
+                }
+            });
+            error.textContent = message;
+            if (wrong) {
+                announce(message);
+                return null;
+            }
+            return { start: from, end: to };
+        }
+
         // The saved file follows the open group, so it holds the bars on screen.
         var midiLink = data.midi ? document.getElementById("download-midi") : null;
 
@@ -849,6 +903,8 @@
                 repeat: document.getElementById("setting-repeat"),
                 sampled: document.getElementById("setting-sampled"),
                 rangeLabel: rangeLabel,
+                playRange: document.getElementById("play-range"),
+                chosenRange: chosenRange,
                 remember: rememberPlayback
             };
             restorePlayback(playbackControls);

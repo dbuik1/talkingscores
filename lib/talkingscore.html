@@ -85,6 +85,14 @@
                     <button class="btn" type="button" id="goto-go">Go to bar</button>
                     <p class="error" id="goto-error"></p>
                 </div>
+                {% if score_data.midi %}
+                <div class="row goto-row">
+                    <label class="goto"><span>From bar</span><input class="input" type="number" id="range-start" min="{{ score_data.firstPrintedBar }}" max="{{ score_data.lastPrintedBar }}" value="{{ score_data.firstPrintedBar }}" aria-describedby="range-error"></label>
+                    <label class="goto"><span>To bar</span><input class="input" type="number" id="range-end" min="{{ score_data.firstPrintedBar }}" max="{{ score_data.lastPrintedBar }}" value="{{ score_data.firstPrintedBar }}" aria-describedby="range-error"></label>
+                    <button class="btn" type="button" id="play-range" aria-describedby="status-text"><span class="label">Play these bars</span></button>
+                    <p class="error" id="range-error"></p>
+                </div>
+                {% endif %}
                 <nav aria-label="Groups">
                 <ol class="contents" id="contents-list">
                     {% for segment in music_segments %}
@@ -178,7 +186,7 @@
                 {% endif %}
 
                 <form class="tab-panel" id="panel-groups" role="tabpanel" aria-labelledby="tab-groups" onsubmit="return false" hidden>
-                    <label class="goto"><span>Bars per group</span><select class="input" id="bars-per-group">{% for n in score_data.groupSizes %}<option value="{{ n }}"{% if n == score_data.barsPerGroup %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+                    <label class="goto"><span>Bars per group</span><select class="input" id="bars-per-group">{% for n in score_data.groupSizes %}<option value="{{ n }}"{% if n == score_data.barsPerGroup %} selected{% endif %}>{{ n }}</option>{% endfor %}<option value="0">The whole score</option></select></label>
                     <label class="check"><input type="checkbox" id="setting-pin" checked>Keep the controls on screen while scrolling</label>
                     <dl class="keys">
                         <dt>Alt + N</dt><dd>Next group</dd>
@@ -257,7 +265,7 @@
                     {% if not bar.parts %}<p class="muted">Nothing is written for this bar.</p>{% endif %}
                     {% for part in bar.parts %}
                         <div class="part">
-                            {% if part.label %}<p class="label">{{ part.label }}</p>{% endif %}
+                            {% if part.label %}<h4 class="label">{{ part.label }}</h4>{% endif %}
                             {% for signature in part.bar.signatures %}<p class="change">{{ signature }}</p>{% endfor %}
                             {% if part.bar.repeat_note %}<p class="same">{{ part.bar.repeat_note }}</p>{% endif %}
                             {% if part.bar.repeat_detail %}<p class="change">{{ part.bar.repeat_detail }}</p>{% endif %}
