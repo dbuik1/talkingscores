@@ -14,3 +14,7 @@ from django.core.wsgi import get_wsgi_application
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'talkingscores.settings')
 
 application = get_wsgi_application()
+
+from talkingscoresapp import housekeeping  # noqa: E402  (needs the app registry loaded above)
+
+housekeeping.start()

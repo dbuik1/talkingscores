@@ -111,9 +111,11 @@ def join_split_bars(score):
             if previous is None or not previous.paddingRight or _barline_divides(previous, measure):
                 continue
             first = previous
-            for element in list(measure):
+            # An element's offset is read before it leaves the bar: once removed it
+            # has no place in the bar, and every note would land on the first beat.
+            for offset, element in [(element.offset, element) for element in measure]:
                 measure.remove(element)
-                first.insert(measure.paddingLeft + element.offset, element)
+                first.insert(measure.paddingLeft + offset, element)
             first.paddingRight = 0.0
             part.remove(measure)
     return score

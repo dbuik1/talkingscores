@@ -50,6 +50,19 @@ NAT64_NETWORKS = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64
 NO_PROXIES = {"http": None, "https": None}
 
 GENERATION_FAILED_MESSAGE = "The talking score could not be created from this file."
+EXPORT_THEMES = ("light", "dark", None)
+
+_generation_slots = None
+_generation_slots_guard = threading.Lock()
+
+
+def generation_slots():
+    global _generation_slots
+    from django.conf import settings
+    with _generation_slots_guard:
+        if _generation_slots is None:
+            _generation_slots = threading.BoundedSemaphore(max(1, settings.SCORE_GENERATION_CONCURRENCY))
+        return _generation_slots
 
 
 class ScoreGenerationInProgress(Exception):
@@ -173,22 +186,31 @@ def fetch_remote_score(url):
             declared = response.headers.get("Content-Length")
             if declared and declared.isdigit() and int(declared) > MAX_REMOTE_SCORE_BYTES:
                 raise RemoteFetchRefused("The file at that link is larger than 10 MB. Choose a smaller file.")
-            file_chunks = []
-            total_bytes = 0
-            for chunk in response.iter_content(chunk_size=65536):
-                if time.monotonic() > deadline:
-                    raise RemoteFetchRefused("The file at that link took too long to download. Try again, or save the file to your device and open it from there.")
-                if not chunk:
-                    continue
-                total_bytes += len(chunk)
-                if total_bytes > MAX_REMOTE_SCORE_BYTES:
-                    raise RemoteFetchRefused("The file at that link is larger than 10 MB. Choose a smaller file.")
-                file_chunks.append(chunk)
-            return b"".join(file_chunks), current_url
+            return read_within_deadline(response.raw, deadline), current_url
         finally:
             session.close()
     raise RemoteFetchRefused("That link sends you on through too many pages. Paste a link straight to the file.")
 
+
+
+def read_within_deadline(raw, deadline):
+    """The body of a streamed response, refused once it passes 10 MB or the deadline.
+
+    read1 returns whatever one socket read brings, so a server sending a byte at a
+    time still comes back to the deadline check within one read timeout; a
+    fixed-size read would wait for the whole chunk however long that takes."""
+    file_chunks = []
+    total_bytes = 0
+    while True:
+        if time.monotonic() > deadline:
+            raise RemoteFetchRefused("The file at that link took too long to download. Try again, or save the file to your device and open it from there.")
+        chunk = raw.read1(65536, decode_content=True)
+        if not chunk:
+            return b"".join(file_chunks)
+        total_bytes += len(chunk)
+        if total_bytes > MAX_REMOTE_SCORE_BYTES:
+            raise RemoteFetchRefused("The file at that link is larger than 10 MB. Choose a smaller file.")
+        file_chunks.append(chunk)
 
 def configure_score_logger():
     score_logger = logging.getLogger("TSScore")
@@ -467,6 +489,10 @@ class TSScore(object):
         data_path = self.get_data_file_path()
         return data_path + ".html" if data_path else None
 
+    def get_export_cache_file_path(self, export_theme):
+        data_path = self.get_data_file_path()
+        return f"{data_path}.export-{export_theme or 'plain'}.html" if data_path else None
+
     def get_text_cache_file_path(self):
         data_path = self.get_data_file_path()
         return data_path + ".txt" if data_path else None
@@ -674,8 +700,9 @@ class TSScore(object):
             return {"status": "unknown", "message": "Checking on the talking score"}
 
     def clear_generated_html_state(self):
+        exports = tuple(self.get_export_cache_file_path(theme) for theme in EXPORT_THEMES)
         for path in (self.get_html_cache_file_path(), self.get_text_cache_file_path(),
-                     self.get_braille_cache_file_path(), self.get_processing_status_file_path()):
+                     self.get_braille_cache_file_path(), self.get_processing_status_file_path()) + exports:
             if path and os.path.exists(path):
                 os.remove(path)
 
@@ -721,8 +748,9 @@ class TSScore(object):
         if not data_path:
             return "<h1>This score is no longer stored here</h1><p>Open the file again to make a new talking score.</p><p><a href=\"/\">Talking Scores home</a></p>"
 
-        html_cache_path = self.get_html_cache_file_path()
-        if not export_mode and not force_refresh and self._is_html_cache_fresh(html_cache_path, data_path):
+        html_cache_path = (self.get_export_cache_file_path(export_theme) if export_mode
+                           else self.get_html_cache_file_path())
+        if not force_refresh and self._is_html_cache_fresh(html_cache_path, data_path):
             with open(html_cache_path, "r", encoding="utf-8") as html_file:
                 return html_file.read()
 
@@ -767,32 +795,41 @@ class TSScore(object):
         
         self.logger.info(f"Dynamically generating HTML for {data_path}")
         try:
-            mxmlScore = Music21TalkingScore(data_path)
-            tsf = HTMLTalkingScoreFormatter(mxmlScore)
-            html_content = tsf.generateHTML(
-                output_path=midi_output_path,
-                web_path=web_path,
-                download_html_url=download_html_url,
-                export_theme=export_theme,
-                export_mode=export_mode,
-                download_text_url=download_text_url,
-                download_braille_url=download_braille_url,
-                options_url=options_url,
-                share_path="" if export_mode else sharing.share_path(self, mxmlScore.get_title()),
-                share_kept=self.source() is not None,
-                read_from_image=self.read_from_image(),
-            )
-            # Options that changed during the run belong to a newer run, which writes its own cache.
-            if not export_mode and html_cache_path and self.options_epoch() == epoch:
-                write_text_file_atomic(html_cache_path, html_content)
-                write_text_file_atomic(self.get_text_cache_file_path(), tsf.render_text())
-                write_text_file_atomic(self.get_braille_cache_file_path(), tsf.render_braille())
-            return html_content
-            
+            with generation_slots():
+                return self._render_html(data_path, html_cache_path, export_theme, export_mode, epoch,
+                                         midi_output_path, web_path, download_html_url, download_text_url,
+                                         download_braille_url, options_url)
         except Exception:
             self.logger.exception(f"Failed to generate HTML from score {data_path}")
             raise
-    
+
+    def _render_html(self, data_path, html_cache_path, export_theme, export_mode, epoch, midi_output_path,
+                     web_path, download_html_url, download_text_url, download_braille_url, options_url):
+        mxmlScore = Music21TalkingScore(data_path)
+        tsf = HTMLTalkingScoreFormatter(mxmlScore)
+        html_content = tsf.generateHTML(
+            output_path=midi_output_path,
+            web_path=web_path,
+            download_html_url=download_html_url,
+            export_theme=export_theme,
+            export_mode=export_mode,
+            download_text_url=download_text_url,
+            download_braille_url=download_braille_url,
+            options_url=options_url,
+            share_path="" if export_mode else sharing.share_path(self, mxmlScore.get_title()),
+            share_kept=self.source() is not None,
+            read_from_image=self.read_from_image(),
+        )
+        # Options that changed during the run belong to a newer run, which writes its own cache.
+        if self.options_epoch() == epoch:
+            if export_mode:
+                write_text_file_atomic(self.get_export_cache_file_path(export_theme), html_content)
+            elif html_cache_path:
+                write_text_file_atomic(html_cache_path, html_content)
+                write_text_file_atomic(self.get_text_cache_file_path(), tsf.render_text())
+                write_text_file_atomic(self.get_braille_cache_file_path(), tsf.render_braille())
+        return html_content
+
     @classmethod
     def from_uploaded_file(cls, uploaded_file):
         score = cls()

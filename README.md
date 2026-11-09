@@ -52,9 +52,20 @@ python .\manage.py cleanup_media --older-than-days 30 --dry-run
 python .\manage.py cleanup_media --older-than-days 30
 ```
 
-Use `--dry-run` first to inspect what would be deleted. Nothing runs this on a
-schedule, so files are kept until it is run. Scores a reader listed in Find a
-score are kept however old they are, since an upload cannot be fetched again.
+Use `--dry-run` first to inspect what would be deleted. Scores a reader listed
+in Find a score are kept however old they are, since an upload cannot be fetched
+again. The same run removes the link records of uploads that are no longer
+stored, and files older than the cutoff from music21's cache in
+`MEDIA_ROOT/music21`.
+
+With `DJANGO_DEBUG` off, the web server runs `cleanup_media` and `cleanup_midi`
+itself once a day. One server process runs them at a time, and a stamp file on
+the volume, `MEDIA_ROOT/.cleanup-last-run`, records when they last ran. Set
+`DJANGO_CLEANUP_EVERY_HOURS` to change the interval, or to `0` to turn it off.
+
+Each score keeps at most 200 MIDI files, one per range of bars played. Past
+that, the ranges played least recently are removed and written again if a
+reader asks for them.
 
 The talking score page asks for one MIDI file per range of bars. Files written before
 that, whose names carry a selection of instruments, a speed or a click setting,
@@ -112,16 +123,18 @@ Every talking score has a short link that reads as words. A score from the
 library or a web address is named after its title, such as `/s/ode-to-joy`,
 with `-2` and so on when titles clash. An uploaded score gets one word from each
 of three lists in `talkingscoresapp/share_words.py` (tempo or mood, instrument,
-form), such as `/s/presto-cello-fugue`, so the link does not give away what was
-uploaded. Names ignore case. The older links, `/s/` and the first ten
+form) and a three-digit number, such as `/s/presto-cello-fugue-482`, so the link
+does not give away what was uploaded and cannot be guessed. Three-word links made
+before the number was added still work. Names ignore case. The older links, `/s/` and the first ten
 characters of the score id, still work.
 
 Names live under `MEDIA_ROOT/links/names`. Saving options also writes a record
-of the score, its source and its options under `MEDIA_ROOT/links`, which
-`cleanup_media` leaves alone. A short link to a score from a web address or the
-library therefore still opens after its folder has been removed: the file is
+of the score, its source and its options under `MEDIA_ROOT/links`.
+`cleanup_media` keeps the records of scores from a web address or the library,
+so their short links still open after the folder has been removed: the file is
 fetched again and the options put back. A short link to an uploaded file works
-while the file is stored; after that its three words can name a new upload.
+while the file is stored; after that `cleanup_media` removes its record and its
+name, which can then name a new upload.
 
 ## Listing a talking score
 
@@ -227,6 +240,7 @@ If you deploy this repo on Railway:
    python manage.py collectstatic --noinput && python manage.py migrate && gunicorn talkingscores.wsgi:application --bind 0.0.0.0:$PORT
    ```
 5. Static files are served by WhiteNoise, so Railway does not need a separate static-file service.
+6. Optional: `DJANGO_SCORE_GENERATION_CONCURRENCY` sets how many talking scores each server process writes at once (default `2`; a large score takes a few hundred MB while it is written). `DJANGO_CLEANUP_EVERY_HOURS` sets how often old files are removed (default `24`).
 
 Without a volume, every short link stops working after a deploy, because the names and records under `MEDIA_ROOT/links` go with the disk. Only `/library/<id>` addresses keep working.
 

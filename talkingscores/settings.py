@@ -254,3 +254,10 @@ SCORE_READER_TIMEOUT = int(os.environ.get('DJANGO_SCORE_READER_TIMEOUT', '600'))
 # Readers such as Audiveris use a gigabyte or more of memory each, so only
 # this many run at once in each server process; the rest wait their turn.
 SCORE_READER_CONCURRENCY = int(os.environ.get('DJANGO_SCORE_READER_CONCURRENCY', '1'))
+# Writing out a large score takes a few hundred MB, so only this many talking
+# scores are written at once in each server process; the rest wait their turn.
+SCORE_GENERATION_CONCURRENCY = int(os.environ.get('DJANGO_SCORE_GENERATION_CONCURRENCY', '2'))
+# Hours between runs of cleanup_media and cleanup_midi inside the web server; 0
+# turns the schedule off. Off by default while developing, so a local run never
+# removes files.
+CLEANUP_EVERY_HOURS = int(os.environ.get('DJANGO_CLEANUP_EVERY_HOURS', '0' if DEBUG else '24'))

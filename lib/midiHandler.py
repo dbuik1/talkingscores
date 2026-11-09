@@ -16,10 +16,44 @@ from talkingscoreslib import Music21TalkingScore, join_split_bars, number_bars_i
 
 logger = logging.getLogger("TSScore")
 
+
+def mark_played(path):
+    """Record that a file was served, so pruning keeps the ranges readers return to."""
+    try:
+        os.utime(path)
+    except OSError:
+        pass
+    return path
+
+
+def prune_midi_files(folder, keep=None):
+    """Remove the least recently played MIDI files beyond the folder's limit."""
+    keep = MAX_MIDI_FILES_PER_SCORE if keep is None else keep
+    try:
+        names = [name for name in os.listdir(folder) if name.endswith(".mid")]
+    except OSError:
+        return
+    if len(names) <= keep:
+        return
+    def played(name):
+        try:
+            return os.path.getmtime(os.path.join(folder, name))
+        except OSError:
+            return 0
+    for name in sorted(names, key=played)[:len(names) - keep]:
+        try:
+            os.remove(os.path.join(folder, name))
+        except OSError:
+            pass
+
 # Part of every MIDI file name. A file already written under an older number was
 # made by code that sounded different, so it is never served again and the
 # cleanup command removes it.
 MIDI_FORMAT = 2
+# Every range a reader plays is written once and kept, so a score's folder holds
+# at most this many; the least recently played go first and are written again
+# if asked for.
+MAX_MIDI_FILES_PER_SCORE = 200
 # The longest a grace note sounds, in crotchets. Each grace note takes its time
 # from the start of the note it decorates, so the bar still adds up.
 GRACE_NOTE_LENGTH = 0.125
@@ -83,7 +117,7 @@ class MidiHandler:
     def make_midi_file(self, start=None, end=None, repeats=False):
         # A range already written is served without reparsing the score.
         if start is not None and end is not None and os.path.exists(self.midi_path(start, end, repeats)):
-            return self.midi_path(start, end, repeats)
+            return mark_played(self.midi_path(start, end, repeats))
 
         if not self.score:
             self.score = parse_score(os.path.join(MEDIA_ROOT, self.folder, self.filename))
@@ -103,7 +137,7 @@ class MidiHandler:
 
         path = self.midi_path(start, end, repeats)
         if os.path.exists(path):
-            return path
+            return mark_played(path)
 
         order = playing_order(self.score) if repeats else None
         if order:
@@ -140,6 +174,7 @@ class MidiHandler:
             if os.path.exists(partial_path):
                 os.remove(partial_path)
         logger.info(f"Wrote MIDI for bars {start} to {end}: {path}")
+        prune_midi_files(os.path.dirname(path))
         return path
 
     def written_range(self, start, end):
