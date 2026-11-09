@@ -35,6 +35,20 @@ REAL_THREAD = threading.Thread
 PUBLIC_ADDRINFO = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
 
 
+class FakeRawBody:
+    """A streamed response body: the given chunks, then the end; None sends a byte forever."""
+
+    def __init__(self, chunks):
+        self.chunks = chunks
+
+    def read1(self, amount, decode_content=True):
+        if isinstance(self.chunks, Exception):
+            raise self.chunks
+        if self.chunks is None:
+            return b"x"
+        return self.chunks.pop(0) if self.chunks else b""
+
+
 
 def reader_context(**overrides):
     """The context the score template needs, with nothing to show."""
@@ -1038,9 +1052,7 @@ class CacheAndMaintenanceTests(TestCase):
             def raise_for_status(self):
                 pass
 
-            def iter_content(self, chunk_size=65536):
-                yield b"<score-partwise>"
-                yield b"</score-partwise>"
+            raw = FakeRawBody([b"<score-partwise>", b"</score-partwise>"])
 
         mock_get.return_value = FakeResponse()
 
@@ -1072,8 +1084,7 @@ class CacheAndMaintenanceTests(TestCase):
             def raise_for_status(self):
                 pass
 
-            def iter_content(self, chunk_size=65536):
-                yield b"123456"
+            raw = FakeRawBody([b"123456"])
 
         mock_get.return_value = FakeResponse()
 
@@ -1091,15 +1102,43 @@ class CacheAndMaintenanceTests(TestCase):
             def raise_for_status(self):
                 pass
 
-            def iter_content(self, chunk_size=65536):
-                while True:
-                    yield b"x"
+            raw = FakeRawBody(None)
 
         mock_get.return_value = FakeResponse()
 
         with patch.object(score_models, "REMOTE_FETCH_DEADLINE_SECONDS", 0):
             with self.assertRaises(score_models.RemoteFetchRefused):
                 TSScore.from_url("https://example.com/score.musicxml")
+
+    def test_a_byte_at_a_time_from_a_real_socket_still_meets_the_deadline(self):
+        import threading
+        import requests
+
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+
+        def trickle():
+            connection, _ = listener.accept()
+            connection.recv(4096)
+            connection.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 1000000\r\n\r\n")
+            try:
+                for _ in range(40):
+                    connection.sendall(b"x")
+                    time.sleep(0.1)
+            except OSError:
+                pass
+            connection.close()
+
+        threading.Thread(target=trickle, daemon=True).start()
+        response = requests.get(f"http://127.0.0.1:{listener.getsockname()[1]}/score.musicxml",
+                                stream=True, timeout=2, proxies={"http": None, "https": None})
+        started = time.monotonic()
+        with self.assertRaises(score_models.RemoteFetchRefused):
+            score_models.read_within_deadline(response.raw, started + 0.5)
+        self.assertLess(time.monotonic() - started, 1.5)
+        response.close()
+        listener.close()
 
     @patch("talkingscoresapp.models.socket.getaddrinfo", return_value=PUBLIC_ADDRINFO)
     @patch("talkingscoresapp.models.requests.Session.get")
@@ -1111,8 +1150,7 @@ class CacheAndMaintenanceTests(TestCase):
             def raise_for_status(self):
                 pass
 
-            def iter_content(self, chunk_size=65536):
-                raise AssertionError("The body should not be read.")
+            raw = FakeRawBody(AssertionError("The body should not be read."))
 
         mock_get.return_value = FakeResponse()
 
@@ -1301,7 +1339,7 @@ class CacheAndMaintenanceTests(TestCase):
             old_dir = os.path.join(temp_dir, "a" * 64)
             new_dir = os.path.join(temp_dir, "b" * 64)
             # Named as neither a score is, so the command has to leave it alone.
-            other_dir = os.path.join(temp_dir, "music21")
+            other_dir = os.path.join(temp_dir, "notes")
             os.makedirs(old_dir)
             os.makedirs(new_dir)
             os.makedirs(other_dir)
@@ -2622,9 +2660,10 @@ class MidiFileTests(TestCase):
                 self.assertGreaterEqual(tracks, 2)     # one track per part
                 self.assertFalse(glob.glob(path + ".*.partial"))
 
-                written_at = os.path.getmtime(path)
+                # A file written again is put in place by a rename, which gives it a new inode.
+                written = os.stat(path).st_ino
                 self.assertEqual(handler.make_midi_file(2, 3), path)
-                self.assertEqual(os.path.getmtime(path), written_at)
+                self.assertEqual(os.stat(path).st_ino, written)
 
     def test_the_requested_range_comes_from_the_query(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -3289,7 +3328,7 @@ class LibraryScoreTests(TestCase):
 
 
 class ShareNameTests(TestCase):
-    """Short links read as words: a title for a score anyone can find, three music words for an upload."""
+    """Short links read as words: a title for a score anyone can find, three music words and a number for an upload."""
 
     class Score:
         def __init__(self, id, source=None):
@@ -3332,10 +3371,11 @@ class ShareNameTests(TestCase):
 
         name = self.sharing.share_name(self.score("a", None), "My secret song", self.root)
 
-        mood, instrument, form = name.split("-")
+        mood, instrument, form, number = name.split("-")
         self.assertIn(mood, share_words.TEMPOS_AND_MOODS)
         self.assertIn(instrument, share_words.INSTRUMENTS)
         self.assertIn(form, share_words.FORMS)
+        self.assertRegex(number, r"^[1-9][0-9]{2}$")
 
     def test_the_word_lists_hold_about_a_hundred_distinct_words_each_and_no_piano(self):
         from talkingscoresapp import share_words
@@ -3359,7 +3399,7 @@ class ShareNameTests(TestCase):
             with self.subTest(title=title):
                 self.assertEqual(self.sharing.title_name(title), "")
         name = self.sharing.share_name(self.score("a"), "Find a score", self.root)
-        self.assertEqual(len(name.split("-")), 3)
+        self.assertEqual(len(name.split("-")), 4)
 
     def test_a_title_that_looks_like_a_code_is_not_used(self):
         self.assertEqual(self.sharing.title_name("deadbeef12"), "")
@@ -4187,3 +4227,109 @@ class ImageReadingTests(TestCase):
         with patch.object(cleanup_media, "MEDIA_ROOT", self.media):
             call_command("cleanup_media", "--older-than-days", "30", stdout=StringIO())
         self.assertFalse(os.path.exists(old_reading))
+
+
+class ServerLimitsTests(TestCase):
+    """Generation is capped per process, downloads are kept, and the disk is pruned on a schedule."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+
+    def _stored_score(self):
+        folder = os.path.join(self.root, VALID_ID)
+        os.makedirs(folder)
+        with open(os.path.join(folder, "score.musicxml"), "w") as score_file:
+            score_file.write("<score-partwise/>")
+        score = TSScore(id=VALID_ID, filename="score.musicxml")
+        return score, os.path.join(folder, "score.musicxml")
+
+    def test_only_the_set_number_of_scores_are_written_at_once(self):
+        score, data_path = self._stored_score()
+        running = []
+        most = []
+        guard = threading.Lock()
+
+        def render(*args, **kwargs):
+            with guard:
+                running.append(1)
+                most.append(len(running))
+            time.sleep(0.05)
+            with guard:
+                running.pop()
+            return "<html></html>"
+
+        with override_settings(SCORE_GENERATION_CONCURRENCY=1), \
+                patch.object(score_models, "_generation_slots", None), \
+                patch.object(score_models, "MEDIA_ROOT", self.root), \
+                patch.object(TSScore, "get_data_file_path", return_value=data_path), \
+                patch.object(TSScore, "_render_html", side_effect=render):
+            threads = [threading.Thread(target=score._generate_html, args=(None, False, None)) for _ in range(3)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(max(most), 1)
+
+    def test_a_second_web_page_download_reuses_the_first(self):
+        score, data_path = self._stored_score()
+        with patch.object(score_models, "MEDIA_ROOT", self.root), \
+                patch.object(TSScore, "get_data_file_path", return_value=data_path), \
+                patch.object(score_models, "Music21TalkingScore"), \
+                patch.object(score_models, "HTMLTalkingScoreFormatter") as formatter:
+            formatter.return_value.generateHTML.return_value = "<html>dark</html>"
+            first = score.html(export_theme="dark", export_mode=True, raise_errors=True)
+            second = score.html(export_theme="dark", export_mode=True, raise_errors=True)
+        self.assertEqual((first, second), ("<html>dark</html>", "<html>dark</html>"))
+        self.assertEqual(formatter.return_value.generateHTML.call_count, 1)
+        self.assertTrue(os.path.exists(data_path + ".export-dark.html"))
+
+    def test_the_least_recently_played_midi_files_go_first(self):
+        from lib.midiHandler import prune_midi_files
+        for index in range(5):
+            path = os.path.join(self.root, f"score.musicxmlp2b{index}e{index}.mid")
+            open(path, "w").close()
+            os.utime(path, (1000 + index, 1000 + index))
+        prune_midi_files(self.root, keep=3)
+        self.assertEqual(sorted(os.listdir(self.root)),
+                         [f"score.musicxmlp2b{index}e{index}.mid" for index in (2, 3, 4)])
+
+    def test_cleanup_forgets_uploads_that_are_gone_and_keeps_the_rest(self):
+        from talkingscoresapp import sharing
+        links = os.path.join(self.root, "links")
+        os.makedirs(os.path.join(links, "names"))
+        stored = "b" * 64
+        os.makedirs(os.path.join(self.root, stored))
+        for score_id, source in (("a" * 64, None), (stored, None), ("c" * 64, {"url": "https://example.com/s.xml"})):
+            code = score_id[:10]
+            with open(os.path.join(links, f"{code}.json"), "w") as record:
+                json.dump({"id": score_id, "filename": "s.musicxml", "source": source, "options": {}}, record)
+            with open(os.path.join(links, f"{code}.name"), "w") as name_file:
+                name_file.write(f"name-{score_id[0]}")
+            with open(os.path.join(links, "names", f"name-{score_id[0]}"), "w") as name_file:
+                name_file.write(code)
+        self.assertEqual(sharing.forget_abandoned(self.root), ["a" * 10])
+        self.assertEqual(sorted(os.listdir(os.path.join(links, "names"))), ["name-b", "name-c"])
+        self.assertFalse(os.path.exists(os.path.join(links, "a" * 10 + ".json")))
+
+    def test_cleanup_removes_old_files_from_the_music21_cache(self):
+        cache = os.path.join(self.root, "music21")
+        os.makedirs(cache)
+        old, new = os.path.join(cache, "old.p.gz"), os.path.join(cache, "new.p.gz")
+        for path in (old, new):
+            open(path, "w").close()
+        stale = time.time() - 40 * 24 * 60 * 60
+        os.utime(old, (stale, stale))
+        with patch.object(cleanup_media, "MEDIA_ROOT", self.root):
+            call_command("cleanup_media", "--older-than-days", "30", stdout=StringIO())
+        self.assertEqual(os.listdir(cache), ["new.p.gz"])
+
+    def test_the_schedule_runs_the_cleanup_once_a_day(self):
+        from talkingscoresapp import housekeeping
+        with override_settings(MEDIA_ROOT=self.root), \
+                patch.object(housekeeping, "call_command") as command:
+            self.assertTrue(housekeeping.run_if_due(24, now=100000))
+            self.assertFalse(housekeeping.run_if_due(24, now=100000 + 3600))
+            self.assertTrue(housekeeping.run_if_due(24, now=100000 + 25 * 3600))
+        self.assertEqual([call.args[0] for call in command.call_args_list],
+                         ["cleanup_media", "cleanup_midi"] * 2)

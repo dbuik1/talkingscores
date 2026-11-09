@@ -55,8 +55,9 @@ The rules that matter most here, each with the shape to use instead:
 ## Enforcement
 
 `scripts/check_copy.py` scans the templates, scripts and comments for the
-tells above. It runs on every edit through the hook in `.claude/settings.json`
-and as `UserFacingCopyTests` in the Django suite, so a leak fails the build.
+tells above. It runs on every edit through the hook in `.claude/settings.json`,
+as `UserFacingCopyTests` in the Django suite, and in the GitHub Actions workflow
+in `.github/workflows/tests.yml` on every pull request, so a leak fails the build.
 Run it alone with:
 
 ```

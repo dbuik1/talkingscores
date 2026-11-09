@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install -r requirements.txt
+      - name: Copy checker
+        run: python scripts/check_copy.py
+      - name: Django tests
+        env:
+          DJANGO_DEBUG: "1"
+        run: python manage.py test talkingscoresapp
+      - name: JavaScript tests
+        run: node --test talkingscoresapp/static/js/tests/*.test.mjs

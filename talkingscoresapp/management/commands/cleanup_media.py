@@ -52,8 +52,9 @@ class Command(BaseCommand):
 
         for parent, name in candidates:
             path = os.path.join(parent, name)
-            # Only score and reading folders are removed; the media root also holds
-            # the log and music21's own cache, which this command does not own.
+            # Only score and reading folders are removed here; the media root also
+            # holds the log, the link records and music21's cache; the records and
+            # the cache are pruned below.
             if not os.path.isdir(path) or not SCORE_FOLDER_PATTERN.match(name) or name in listed:
                 skipped += 1
                 continue
@@ -72,6 +73,30 @@ class Command(BaseCommand):
 
         action = "Would remove" if dry_run else "Removed"
         self.stdout.write(self.style.SUCCESS(f"{action} {removed} folder(s); skipped {skipped}."))
+
+        # A link to an upload stops working once its folder has gone, and its
+        # record and name would otherwise stay on the disk for good.
+        forgotten = sharing.forget_abandoned(MEDIA_ROOT, dry_run=dry_run)
+        self.stdout.write(f"{action} {len(forgotten)} link record(s) of uploads no longer stored.")
+
+        # music21 keeps a parsed copy of every score it opens and never removes one.
+        cached = self._remove_old_files(os.path.join(MEDIA_ROOT, "music21"), cutoff, dry_run)
+        self.stdout.write(f"{action} {cached} file(s) from music21's cache.")
+
+    def _remove_old_files(self, folder, cutoff, dry_run):
+        count = 0
+        for root, _dirs, files in os.walk(folder):
+            for filename in files:
+                file_path = os.path.join(root, filename)
+                try:
+                    if os.path.getmtime(file_path) > cutoff:
+                        continue
+                    if not dry_run:
+                        os.remove(file_path)
+                except OSError:
+                    continue
+                count += 1
+        return count
 
     def _newest_mtime(self, path):
         newest = None
