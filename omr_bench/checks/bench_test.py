@@ -6,11 +6,13 @@ Run in the bench environment:
 
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
 from music21 import corpus, converter, dynamics
 
+from omr_bench.bench import sync_engines
 from omr_bench.engines import Engine, extract_music, run
 from omr_bench.score import score_item
 from omr_bench.sets import Item, load_items
@@ -97,6 +99,13 @@ class RunnerTest(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("wrote no file", result.error)
 
+    def test_a_prediction_file_beside_the_page_is_kept(self):
+        script = ("import sys, pathlib; p = pathlib.Path(sys.argv[1]); print('[inference] Generating...'); "
+                  "p.with_name(p.stem + '_pred.krn').write_text('**kern\\t**kern\\n4c\\t4e\\n*-\\t*-\\n')")
+        result = run(self.engine(script, output="*_pred.krn"), self.item, self.out)
+        self.assertTrue(result.ok, result.error)
+        self.assertEqual(result.output.name, "page-1.krn")
+
     def test_abc_starts_at_the_tune_header(self):
         self.assertEqual(extract_music("step 1\nX:1\nK:C\nC", "abc"), "X:1\nK:C\nC\n")
         self.assertEqual(extract_music("no music here", "kern"), "")
@@ -118,6 +127,27 @@ class SetTest(unittest.TestCase):
         self.assertEqual(items[1].truth, items[0].truth)
         self.assertEqual(items[1].kind, "photo")
         self.assertIsNone(items[2].pdf)
+
+
+class SyncEnginesTest(unittest.TestCase):
+    EXAMPLE = ("# readers\n\n"
+               "[engines.audiveris]\ncommand = [\"audiveris\"]\n\n"
+               "[engines.transcoda]\noutput = \"*_pred.krn\"\n")
+
+    def test_example_sections_replace_old_ones_and_added_readers_stay(self):
+        config = ("# readers\n\n"
+                  "[engines.audiveris]\ncommand = [\"old\"]\n\n"
+                  "[engines.transcoda]\noutput = \"stdout\"\n\n"
+                  "[engines.legato]\noutput = \"stdout\"\n\n"
+                  "[engines.homr-spark]\ncommand = [\"mine\"]\n")
+        synced = sync_engines(self.EXAMPLE, config)
+        engines = tomllib.loads(synced)["engines"]
+        self.assertEqual(list(engines), ["audiveris", "transcoda", "homr-spark"])
+        self.assertEqual(engines["transcoda"]["output"], "*_pred.krn")
+        self.assertEqual(engines["homr-spark"]["command"], ["mine"])
+
+    def test_a_missing_config_becomes_the_example(self):
+        self.assertEqual(tomllib.loads(sync_engines(self.EXAMPLE, "")), tomllib.loads(self.EXAMPLE))
 
 
 if __name__ == "__main__":
