@@ -16,7 +16,6 @@ site uses. Nothing in it is imported by the site or its tests.
 | Audiveris | Open-source, Java, rule-based with trained symbol classifiers | The PDF of clean pages, the image of photos |
 | homr | Open-source, Python, segmentation plus a transformer per staff | The image |
 | Transcoda | Research model (2026), 59M parameters, whole page to `**kern` | The image |
-| LEGATO | Research model (2025), about 940M parameters, whole page to ABC | The image |
 | Flat | Paid web service, 1 credit a page | The image; needs `FLAT_TOKEN` |
 
 Each is described in `engines.toml` (copied from `engines.example.toml`).

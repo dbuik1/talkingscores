@@ -6,8 +6,8 @@
 # Usage:  spark_bench.sh          install everything and read one page with each reader
 #         spark_bench.sh run      read every page with every reader and write the scores
 # Changes: everything lives in ~/omr (about 30 GB with the models): a JDK, the
-#          bench and its own Python environment, Audiveris, homr, Transcoda and
-#          LEGATO. Installs libcairo2, fontconfig and freetype with apt, and
+#          bench and its own Python environment, Audiveris, homr and Transcoda.
+#          Installs libcairo2, fontconfig and freetype with apt, and
 #          Verovio's Leipzig font in ~/.local/share/fonts. Nothing else on the
 #          machine changes. Undo: rm -rf ~/omr.
 # Readers run under a 24 GB memory cap so CI and the local models keep their room.
@@ -102,12 +102,18 @@ setup_bench() {
   "$OMR/bench-venv/bin/pip" install -q -r "$REPO/omr_bench/requirements.txt"
   already "bench packages match omr_bench/requirements.txt"
 
-  if [ ! -f "$REPO/omr_bench/engines.toml" ]; then
-    cp "$REPO/omr_bench/engines.example.toml" "$REPO/omr_bench/engines.toml"
-    done_ "wrote omr_bench/engines.toml from the example"
-  else
-    already "omr_bench/engines.toml exists (kept as it is)"
-  fi
+  sync_engines
+}
+
+# engines.toml keeps readers added on the Spark (such as homr-spark) and takes
+# every other section from the example, so a fixed reader command reaches it.
+sync_engines() {
+  local said
+  said=$(cd "$REPO" && "$OMR/bench-venv/bin/python" -m omr_bench.bench sync-engines)
+  case "$said" in
+    updated*) done_ "$said" ;;
+    *) already "$said" ;;
+  esac
 }
 
 # --- readers -------------------------------------------------------------------
@@ -193,25 +199,6 @@ setup_transcoda() {
   fi
 }
 
-setup_legato() {
-  local dir="$OMR/legato"
-  [ -d "$dir/.git" ] || { git clone -q --depth 1 https://github.com/guang-yng/legato "$dir" && done_ "cloned LEGATO"; }
-  if "$OMR/legato-venv/bin/python" -c 'import transformers' 2>/dev/null; then
-    already "LEGATO packages installed"
-    return
-  fi
-  # Its requirements pin an x86 CUDA build of torch; the Spark keeps the aarch64 one.
-  # They also fetch musicdiff over SSH, which needs a GitHub key; the repo is public, so HTTPS works without one.
-  if torch_venv "$OMR/legato-venv" && \
-     grep -v -E '^(torch|torchvision|torchaudio)([=<>~ ]|$)' "$dir/requirements.txt" | \
-       sed -E 's#git\+ssh://git@github\.com/#git+https://github.com/#' > "$OMR/legato-requirements.txt" && \
-     "$OMR/legato-venv/bin/pip" install -q -r "$OMR/legato-requirements.txt"; then
-    done_ "installed LEGATO's packages"
-  else
-    failed "LEGATO's packages didn't install"
-  fi
-}
-
 # --- running -----------------------------------------------------------------
 bench() { (cd "$REPO" && JAVA_HOME="$JDK" TESSDATA_PREFIX="$TESSDATA" "$OMR/bench-venv/bin/python" -m omr_bench.bench "$@"); }
 
@@ -265,7 +252,6 @@ case "$MODE" in
     setup_audiveris
     setup_homr
     setup_transcoda
-    setup_legato
     build_sets
     smoke_test
     echo
@@ -273,6 +259,7 @@ case "$MODE" in
     ;;
   run)
     [ -x "$OMR/bench-venv/bin/python" ] || die "the bench isn't installed yet. Run this script with no arguments first."
+    sync_engines
     full_run
     ;;
   *)

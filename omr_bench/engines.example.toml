@@ -3,7 +3,8 @@
 # Placeholders in a command: {image} is the page (copied into an empty work
 # folder, named after the page), {workdir} is that folder, {stem} the page name.
 # output is a file pattern inside the work folder, or "stdout" for readers
-# that print the music. setup_spark.sh installs everything listed here.
+# that print the music. spark_bench.sh installs everything listed here and
+# rewrites these sections in engines.toml, keeping any section added there.
 
 [engines.audiveris]
 # Java; reads PDFs best, so it is given the PDF of clean pages when there is one.
@@ -18,21 +19,11 @@ command = ["~/omr/homr-venv/bin/homr", "{image}"]
 output = "*.musicxml"
 
 [engines.transcoda]
-# Prints **kern after any progress lines.
+# Writes <page>_pred.krn next to the page and prints only progress lines.
+# Its output always has two staves, so it suits piano music best.
 command = ["uv", "run", "--directory", "~/omr/transcoda", "scripts/inference.py",
            "--weights", "~/omr/transcoda/weights/model.ckpt", "--image", "{image}"]
-output = "stdout"
-suffix = ".krn"
-extract = "kern"
-
-[engines.legato]
-# Prints ABC after any progress lines; music21 reads ABC directly.
-command = ["~/omr/legato-venv/bin/python", "~/omr/legato/scripts/inference.py",
-           "--model_path", "guangyangmusic/legato", "--image_path", "{image}"]
-env = { PYTHONPATH = "~/omr/legato" }
-output = "stdout"
-suffix = ".abc"
-extract = "abc"
+output = "*_pred.krn"
 
 [engines.flat]
 # Paid, 1 credit a page. Needs FLAT_TOKEN with the omr scope.
