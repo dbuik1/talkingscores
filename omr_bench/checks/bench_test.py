@@ -13,7 +13,7 @@ from pathlib import Path
 from music21 import corpus, converter, dynamics
 
 from omr_bench.bench import sync_engines
-from omr_bench.engines import Engine, extract_music, run
+from omr_bench.engines import Engine, extract_music, fix_kern_header, run, tidy_output
 from omr_bench.score import score_item
 from omr_bench.sets import Item, load_items
 
@@ -109,6 +109,37 @@ class RunnerTest(unittest.TestCase):
     def test_abc_starts_at_the_tune_header(self):
         self.assertEqual(extract_music("step 1\nX:1\nK:C\nC", "abc"), "X:1\nK:C\nC\n")
         self.assertEqual(extract_music("no music here", "kern"), "")
+
+
+class KernHeaderTest(unittest.TestCase):
+    QUARTET = ("**kern\t**kern\n"
+               "*clefG2\t*clefG2\t*clefC3\t*clefF4\n"
+               "*k[]\t*k[]\t*k[]\t*k[]\n"
+               "*M4/4\t*M4/4\t*M4/4\t*M4/4\n"
+               "1e\t1c\t1G\t1C\n"
+               "==\t==\t==\t==\n"
+               "*-\t*-\t*-\t*-\n")
+
+    def test_the_header_gets_one_entry_per_column(self):
+        fixed = fix_kern_header(self.QUARTET)
+        self.assertEqual(fixed.splitlines()[0], "\t".join(["**kern"] * 4))
+        self.assertEqual(fix_kern_header(fixed), fixed)
+
+    def test_a_header_that_fits_is_left_alone(self):
+        text = "**kern\t**dynam\n*clefG2\t*\n4c\tp\n*-\t*-\n"
+        self.assertEqual(fix_kern_header(text), text)
+
+    def test_a_single_line_keeps_one_column(self):
+        text = "!! made by a reader\n**kern\t**kern\n!comment\n*clefG2\n*k[]\n4c\n*-\n"
+        self.assertEqual(fix_kern_header(text).splitlines()[1], "**kern")
+
+    def test_the_fixed_answer_parses_with_every_part(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "quartet.krn"
+            path.write_text(self.QUARTET, encoding="utf-8")
+            tidy_output(Engine(name="stand-in", kern_header=True), path)
+            score = converter.parse(path)
+        self.assertEqual(len(score.parts), 4)
 
 
 class SetTest(unittest.TestCase):

@@ -20,10 +20,12 @@ output = "*.musicxml"
 
 [engines.transcoda]
 # Writes <page>_pred.krn next to the page and prints only progress lines.
-# Its output always has two staves, so it suits piano music best.
+# Its header always names two staves, whatever the music has, so the bench
+# rewrites the header to match.
 command = ["uv", "run", "--directory", "~/omr/transcoda", "scripts/inference.py",
            "--weights", "~/omr/transcoda/weights/model.ckpt", "--image", "{image}"]
 output = "*_pred.krn"
+kern_header = true
 
 [engines.flat]
 # Paid, 1 credit a page. Needs FLAT_TOKEN with the omr scope.
