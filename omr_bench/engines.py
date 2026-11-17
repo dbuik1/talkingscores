@@ -31,6 +31,7 @@ class Engine:
     output: str = "stdout"      # a glob inside the work folder, or stdout
     suffix: str = ".musicxml"   # file type of printed output
     extract: str = ""           # kern or abc: drop log lines printed before the music
+    kern_header: bool = False   # rewrite the **kern header to one entry per column of music
     timeout: int = DEFAULT_TIMEOUT
     env: dict = field(default_factory=dict)
 
@@ -94,7 +95,38 @@ def run_command(engine, item, out_dir):
             raise RuntimeError(f"wrote no file matching {engine.output}")
         target = out_dir / f"{item.key}{found[0].suffix}"
         shutil.copyfile(found[0], target)
+        tidy_output(engine, target)
         return target
+
+
+def fix_kern_header(text):
+    """Give the **kern header line as many columns as the music under it.
+
+    A reader that always writes a two-column header makes a one-staff or
+    four-staff answer unreadable, though the music itself is right.
+    """
+    lines = text.splitlines()
+    header = next((index for index, line in enumerate(lines) if line.startswith("**")), None)
+    if header is None:
+        return text
+    body = next((line for line in lines[header + 1:] if line.strip() and not line.startswith("!")), None)
+    if body is None:
+        return text
+    columns = len(body.split("\t"))
+    # A header that already fits is kept, with any **dynam or **text columns it names.
+    if len(lines[header].split("\t")) == columns:
+        return text
+    lines[header] = "\t".join(["**kern"] * columns)
+    return "\n".join(lines) + "\n"
+
+
+def tidy_output(engine, path):
+    """Apply the engine's fixes to an answer it saved. Running it twice changes nothing."""
+    if engine.kern_header and path.exists():
+        text = path.read_text(encoding="utf-8")
+        fixed = fix_kern_header(text)
+        if fixed != text:
+            path.write_text(fixed, encoding="utf-8")
 
 
 def extract_music(text, kind):

@@ -75,7 +75,7 @@ def command_sync_engines(args):
 
 
 def command_run(args):
-    from omr_bench.engines import load_engines, run
+    from omr_bench.engines import load_engines, run, tidy_output
     from omr_bench.sets import load_items
 
     engines = load_engines(args.engines)
@@ -93,6 +93,8 @@ def command_run(args):
         done = read_log(log_path)
         for item in items:
             if not args.force and done.get(item.key, {}).get("ok"):
+                # Answers saved before an engine fix was added get the fix without a fresh read.
+                tidy_output(engines[name], out_dir / done[item.key]["output"])
                 continue
             result = run(engines[name], item, out_dir)
             entry = {"key": item.key, "ok": result.ok, "seconds": round(result.seconds, 2),
