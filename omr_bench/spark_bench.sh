@@ -23,6 +23,11 @@ JDK="$OMR/jdk"
 JDK_URL="https://api.adoptium.net/v3/binary/latest/25/ga/linux/aarch64/jdk/hotspot/normal/eclipse"
 TESSDATA="$OMR/tessdata"
 TESS_LANGS="eng deu fra ita"
+# Audiveris runs Tesseract's legacy engine, which the tessdata_fast and
+# tessdata_best models leave out; without it no lyric or title text is read.
+TESSDATA_URL="https://github.com/tesseract-ocr/tessdata/raw/main"
+TESS_STAMP="$TESSDATA/.full-models"
+REREAD_AUDIVERIS="$OMR/.reread-audiveris"
 TORCH_INDEX="https://download.pytorch.org/whl/cu130"
 READER_MEMORY="24G"
 MIN_FREE_GB=40
@@ -117,6 +122,23 @@ sync_engines() {
 }
 
 # --- readers -------------------------------------------------------------------
+setup_tessdata() {
+  mkdir -p "$TESSDATA"
+  if [ ! -f "$TESS_STAMP" ]; then
+    rm -f "$TESSDATA"/*.traineddata
+    # Pages Audiveris read with the old models have no lyrics, so they are read again.
+    [ -d "$REPO/omr_bench/runs" ] && touch "$REREAD_AUDIVERIS"
+  fi
+  for lang in $TESS_LANGS; do
+    [ -s "$TESSDATA/$lang.traineddata" ] && continue
+    curl -fsSL -o "$TESSDATA/$lang.traineddata.part" "$TESSDATA_URL/$lang.traineddata" \
+      && mv "$TESSDATA/$lang.traineddata.part" "$TESSDATA/$lang.traineddata" \
+      || { failed "lyric text data for $lang didn't download; run this again"; return; }
+  done
+  touch "$TESS_STAMP"
+  already "lyric and title text data for: $TESS_LANGS"
+}
+
 setup_audiveris() {
   if [ ! -x "$JDK/bin/java" ]; then
     mkdir -p "$JDK"
@@ -126,12 +148,7 @@ setup_audiveris() {
     already "JDK $("$JDK/bin/java" -version 2>&1 | head -1 | cut -d'"' -f2) in $JDK"
   fi
 
-  mkdir -p "$TESSDATA"
-  for lang in $TESS_LANGS; do
-    [ -s "$TESSDATA/$lang.traineddata" ] || curl -fsSL -o "$TESSDATA/$lang.traineddata" \
-      "https://github.com/tesseract-ocr/tessdata_fast/raw/main/$lang.traineddata"
-  done
-  already "lyric and title text data for: $TESS_LANGS"
+  setup_tessdata
 
   if [ -x "$OMR/audiveris/bin/Audiveris" ]; then
     already "Audiveris built in $OMR/audiveris"
@@ -235,15 +252,25 @@ smoke_test() {
 }
 
 full_run() {
+  local reread=0 reread_ok=1
+  [ -f "$REREAD_AUDIVERIS" ] && reread=1
   for set in ours smb; do
     [ -f "$REPO/omr_bench/sets/$set/manifest.csv" ] || continue
     for reader in $(readers); do
       [ "$reader" = flat ] && [ -z "${FLAT_TOKEN:-}" ] && continue
-      capped bash -c "cd '$REPO' && JAVA_HOME='$JDK' TESSDATA_PREFIX='$TESSDATA' '$OMR/bench-venv/bin/python' -m omr_bench.bench run --set omr_bench/sets/$set --engine '$reader'" \
-        || failed "$reader stopped part-way through the $set pages"
+      local force=""
+      [ "$reader" = audiveris ] && [ "$reread" = 1 ] && force="--force"
+      if ! capped bash -c "cd '$REPO' && JAVA_HOME='$JDK' TESSDATA_PREFIX='$TESSDATA' '$OMR/bench-venv/bin/python' -m omr_bench.bench run --set omr_bench/sets/$set --engine '$reader' $force"; then
+        failed "$reader stopped part-way through the $set pages"
+        [ "$reader" = audiveris ] && reread_ok=0
+      fi
     done
     bench score --set "omr_bench/sets/$set" && done_ "scored the $set pages: $REPO/omr_bench/runs/$set/summary.md"
   done
+  if [ "$reread" = 1 ] && [ "$reread_ok" = 1 ]; then
+    rm -f "$REREAD_AUDIVERIS"
+    done_ "Audiveris read every page again with the full text models"
+  fi
 }
 
 case "$MODE" in
@@ -260,6 +287,7 @@ case "$MODE" in
   run)
     [ -x "$OMR/bench-venv/bin/python" ] || die "the bench isn't installed yet. Run this script with no arguments first."
     sync_engines
+    setup_tessdata
     full_run
     ;;
   *)
