@@ -6,7 +6,8 @@
 # Usage:  spark_bench.sh          install everything and read one page with each reader
 #         spark_bench.sh run      read every page with every reader and write the scores
 # Changes: everything lives in ~/omr (about 30 GB with the models): a JDK, the
-#          bench and its own Python environment, Audiveris, homr and Transcoda.
+#          bench and its own Python environment, Audiveris (with
+#          audiveris-part-names.patch), homr and Transcoda.
 #          Installs libcairo2, fontconfig and freetype with apt, and
 #          Verovio's Leipzig font in ~/.local/share/fonts. Nothing else on the
 #          machine changes. Undo: rm -rf ~/omr.
@@ -150,12 +151,23 @@ setup_audiveris() {
 
   setup_tessdata
 
+  local src="$OMR/audiveris-src" patch="$REPO/omr_bench/audiveris-part-names.patch"
+  [ -d "$src/.git" ] || git clone -q --depth 1 https://github.com/Audiveris/audiveris.git "$src"
+  if ! git -C "$src" apply --check --reverse "$patch" 2>/dev/null; then
+    if git -C "$src" apply "$patch"; then
+      # The installed copy lacks the patch, so it is rebuilt and its pages read again.
+      rm -rf "$OMR/audiveris"
+      [ -d "$REPO/omr_bench/runs" ] && touch "$REREAD_AUDIVERIS"
+      done_ "patched Audiveris so a part named in full on one system and abbreviated on the next stays one part"
+    else
+      failed "the part-name patch doesn't apply to the Audiveris source in $src; send this summary back"
+      return
+    fi
+  fi
   if [ -x "$OMR/audiveris/bin/Audiveris" ]; then
     already "Audiveris built in $OMR/audiveris"
     return
   fi
-  local src="$OMR/audiveris-src"
-  [ -d "$src/.git" ] || git clone -q --depth 1 https://github.com/Audiveris/audiveris.git "$src"
   if (cd "$src" && JAVA_HOME="$JDK" ./gradlew -q build -x test); then
     local archive
     archive=$(ls "$src"/app/build/distributions/*.tar | head -1)
@@ -287,7 +299,7 @@ case "$MODE" in
   run)
     [ -x "$OMR/bench-venv/bin/python" ] || die "the bench isn't installed yet. Run this script with no arguments first."
     sync_engines
-    setup_tessdata
+    setup_audiveris
     full_run
     ;;
   *)
