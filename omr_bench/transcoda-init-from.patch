@@ -1,0 +1,98 @@
+diff --git a/train.py b/train.py
+index ebaa441..5824a59 100644
+--- a/train.py
++++ b/train.py
+@@ -9,6 +9,7 @@ from typing import Any
+ import fire
+ import torch
+ from rich.console import Console
++from rich.markup import escape
+ from transformers import PreTrainedTokenizerFast
+ 
+ from src.artifacts import (
+@@ -202,6 +203,26 @@ def _collect_launch_command() -> str:
+     return " ".join(shlex.quote(part) for part in sys.argv)
+ 
+ 
++def _load_model_weights(model_wrapper, checkpoint_path: str) -> None:
++    """Copy a checkpoint's model weights into a freshly built trainer module."""
++    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
++    compile_prefix = "_compiled_forward_model._orig_mod."
++    state_dict = {
++        key.replace(compile_prefix, ""): value
++        for key, value in checkpoint["state_dict"].items()
++        if key.startswith("model.")
++    }
++    missing, unexpected = model_wrapper.load_state_dict(state_dict, strict=False)
++    missing = [key for key in missing if key.startswith("model.")]
++    # Any model weight left unmatched means the architecture differs from the checkpoint.
++    if missing or unexpected:
++        raise RuntimeError(
++            f"Checkpoint {checkpoint_path} does not match the model: "
++            f"missing {missing[:5]}, unexpected {unexpected[:5]}"
++        )
++    console.print(f"[green]Loaded {len(state_dict):,} weight tensors from {escape(checkpoint_path)}[/green]")
++
++
+ def _resolve_checkpoint_path_for_fit(
+     config: ExperimentConfig,
+     explicit_checkpoint_path: str | None,
+@@ -272,6 +293,7 @@ def main(
+     validate_only: bool = False,
+     seed: int = 42,
+     fresh_run: bool = False,
++    init_from: str | None = None,
+     **overrides: Any,
+ ):
+     """
+@@ -347,6 +369,15 @@ def main(
+         )
+         config = experiment_config_from_dict(config_dict)
+ 
++    # init_from starts a new run from a checkpoint's weights only: its optimizer,
++    # scheduler and step count are left behind, so the new run has its own schedule.
++    if init_from is not None and resolved_checkpoint_path is None and not validate_only:
++        console.print(f"[bold yellow]Starting from the weights in {escape(init_from)}[/bold yellow]")
++        config_dict = _apply_checkpoint_model_defaults(config_dict, init_from, overrides)
++        config = experiment_config_from_dict(config_dict)
++    else:
++        init_from = None
++
+     # Disable trackers that aren't DDP-aware. RunawayMonitorTracker and
+     # OMRNEDTracker accumulate Python-side state and don't all-reduce across
+     # ranks, so under DDP each rank would compute partial aggregates that
+@@ -386,6 +417,8 @@ def main(
+             w2i=w2i,
+             i2w=i2w,
+         )
++    if init_from:
++        _verify_checkpoint_tokenizer_compatibility(checkpoint_path=init_from, w2i=w2i, i2w=i2w)
+ 
+     # ----- datamodule -----
+     console.print("[yellow]Loading dataset...")
+@@ -503,6 +536,9 @@ def main(
+         pad_token_id=int(tokenizer.pad_token_id),
+     )
+ 
++    if init_from:
++        _load_model_weights(model_wrapper, init_from)
++
+     # ----- logging / trainer -----
+     callbacks, primary_checkpointer = setup_callbacks(
+         config=config,
+@@ -642,6 +678,7 @@ def launch(
+     validate_only: bool = False,
+     seed: int = 42,
+     fresh_run: bool = False,
++    init_from: str | None = None,
+     **overrides: Any,
+ ):
+     """
+@@ -674,6 +711,7 @@ def launch(
+         validate_only,
+         seed,
+         fresh_run=fresh_run,
++        init_from=init_from,
+         **overrides,
+     )
+ 

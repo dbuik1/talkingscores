@@ -78,6 +78,22 @@ bash omr_bench/spark_bench.sh run      # score it against the other readers
 Camera-PrIMuS is licensed CC BY-NC 4.0, so the trained model is for
 non-commercial use.
 
+`spark_transcoda.sh` keeps training Transcoda's released model on freshly
+drawn pages and adds the result to the bench as the reader `transcoda-spark`.
+Transcoda's own training started from an image encoder that was never
+published, so this starts from the released weights instead
+(`transcoda-init-from.patch` adds `--init_from` to its `train.py`). Pages are
+drawn from OpenScore Lieder and String Quartets and from GrandStaff:
+60,000 to train on (`TRAIN_PAGES` changes it) and 500 to check progress.
+It runs at low priority under the same memory cap.
+
+```
+bash omr_bench/spark_transcoda.sh          # set up, then draw pages and train in the background
+bash omr_bench/spark_transcoda.sh status   # progress and GPU use
+bash omr_bench/spark_transcoda.sh stop     # stop; starting again resumes from the last checkpoint
+bash omr_bench/spark_transcoda.sh export   # add the best checkpoint to the bench
+```
+
 ## Running it
 
 On the DGX Spark, `spark_bench.sh` installs everything in `~/omr` and reads
