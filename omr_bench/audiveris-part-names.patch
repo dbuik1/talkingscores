@@ -1,0 +1,22 @@
+diff --git a/app/src/main/java/org/audiveris/omr/score/PartCollation.java b/app/src/main/java/org/audiveris/omr/score/PartCollation.java
+index cfbf72a..1b86172 100644
+--- a/app/src/main/java/org/audiveris/omr/score/PartCollation.java
++++ b/app/src/main/java/org/audiveris/omr/score/PartCollation.java
+@@ -301,14 +301,9 @@ public class PartCollation
+                     continue;
+                 }
+ 
+-                // Check candidate name
+-                final String name = partRef.getName();
+-                if ((name != null) //
+-                        && !name.equalsIgnoreCase(logical.getName()) //
+-                        && !name.equalsIgnoreCase(logical.getAbbreviation())) {
+-                    logger.debug("    Name incompatibility");
+-                    continue;
+-                }
++                // Part names are not checked: OCR reads a full name on the first system and an
++                // abbreviation on later ones, and treating those as different instruments
++                // splits every part in two. Staff configuration and order decide instead.
+ 
+                 logger.debug("    Success");
+                 record.partRefs.add(partRef);
